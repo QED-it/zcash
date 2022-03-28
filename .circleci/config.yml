@@ -21,7 +21,7 @@ jobs:
             ls -l;
             pwd;
             sudo apt update && sudo apt install libncurses5 automake libtool;
-#            ./zcutil/build.sh;
+            ./zcutil/build.sh;
 #            cargo test;
 
 
