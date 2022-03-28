@@ -17,7 +17,6 @@ jobs:
       - run:
           name: "Build all"
           command: | 
-            cargo --version;
             ls -l;
             pwd;
             sudo apt update && sudo apt install libncurses5 automake libtool bsdmainutils;
