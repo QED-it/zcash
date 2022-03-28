@@ -15,12 +15,13 @@ jobs:
     steps:
       - checkout
       - run:
-          name: "Say hello"
+          name: "Build all"
           command: | 
             cargo --version;
             ls -l;
             pwd;
-            ./zcutil/build.sh;
+            sudo apt install libncurses5 automake libtool;
+#            ./zcutil/build.sh;
 #            cargo test;
 
 
