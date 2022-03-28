@@ -20,7 +20,7 @@ jobs:
             cargo --version;
             ls -l;
             pwd;
-            sudo apt install libncurses5 automake libtool;
+            sudo apt update && sudo apt install libncurses5 automake libtool;
 #            ./zcutil/build.sh;
 #            cargo test;
 
