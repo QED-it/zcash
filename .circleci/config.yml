@@ -9,7 +9,7 @@ jobs:
     # Specify the execution environment. You can specify an image from Dockerhub or use one of our Convenience Images from CircleCI's Developer Hub.
     # See: https://circleci.com/docs/2.0/configuration-reference/#docker-machine-macos-windows-executor
     docker:
-      - image: cimg/rust:1.59.0
+      - image: cimg/base:2022.03
     # Add steps to the job
     # See: https://circleci.com/docs/2.0/configuration-reference/#steps
     steps:
@@ -22,7 +22,9 @@ jobs:
             pwd;
             sudo apt update && sudo apt install libncurses5 automake libtool bsdmainutils;
             ./zcutil/build.sh -j8
-#            cargo test;
+      - store_artifacts:
+          path: /home/circleci/project/src/zcashd
+
 
 
 # Invoke jobs via workflows
