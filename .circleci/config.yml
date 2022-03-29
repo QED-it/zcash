@@ -20,9 +20,15 @@ jobs:
             ls -l;
             pwd;
             sudo apt update && sudo apt install libncurses5 automake libtool bsdmainutils;
-            ./zcutil/build.sh -j8
+            CONFIGURE_FLAGS=--enable-online-rust ./zcutil/build.sh
+#            ./zcutil/build.sh -j8
+      - run:
+          name: Compress Artifacts
+          command: tar -cvzf zcashd-artifact.tar ./src/zcashd ./src/zcash-cli ./src/zcashd-wallet-tool ./src/zcash-tx
+
       - store_artifacts:
-          path: /home/circleci/project/src/zcashd
+          path: /home/circleci/project/zcashd-artifact.tar
+
 
 
 
