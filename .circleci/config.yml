@@ -20,7 +20,7 @@ jobs:
             ls -l;
             pwd;
             sudo apt update && sudo apt install libncurses5 automake libtool bsdmainutils;
-            CONFIGURE_FLAGS=--enable-online-rust ./zcutil/build.sh
+            CONFIGURE_FLAGS=--enable-online-rust ./zcutil/build.sh -j8
 #            ./zcutil/build.sh -j8
       - run:
           name: Compress Artifacts
