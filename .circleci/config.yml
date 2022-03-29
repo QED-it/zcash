@@ -28,6 +28,24 @@ jobs:
 
       - store_artifacts:
           path: /home/circleci/project/zcashd-artifact.tar
+  gtest:
+    docker:
+      - image: cimg/base:2022.03
+    steps:
+      - checkout
+      - run:
+          name: "gtest all"
+          command: |
+            ./src/zcash-gtest --gtest_break_on_failure
+  pytest:
+    docker:
+      - image: cimg/python:3.10.4
+    steps:
+      - checkout
+      - run:
+          name: "python tests all"
+          command: |
+            ./qa/pull-tester/rpc-tests.py
 
 
 
@@ -38,3 +56,9 @@ workflows:
   build-workflow:
     jobs:
       - build
+      - gtest:
+          requires:
+            - build
+      - pytest:
+          requires:
+            - build
