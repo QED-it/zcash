@@ -4813,6 +4813,14 @@ CAmount CWallet::GetImmatureWatchOnlyBalance() const
     return nTotal;
 }
 
+// Calculate ZSA balance.
+CAmount CWallet::GetAssetBalance(const isminefilter& filter, const int min_depth) const
+{
+    // TODO: Currently just returning zero balance. Add functionality.
+    CAmount nTotal = 0;
+    return nTotal;
+}
+
 // Calculate total balance in a different way from GetBalance. The biggest
 // difference is that GetBalance sums up all unspent TxOuts paying to the
 // wallet, while this sums up both spent and unspent TxOuts paying to the
