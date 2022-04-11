@@ -92,7 +92,8 @@ UniValue getinfo(const UniValue& params, bool fHelp)
 #ifdef ENABLE_WALLET
     if (pwalletMain) {
         obj.pushKV("walletversion", pwalletMain->GetVersion());
-        obj.pushKV("balance",       ValueFromAmount(pwalletMain->GetBalance()));
+        obj.pushKV("zec_balance",   ValueFromAmount(pwalletMain->GetBalance()));
+        obj.pushKV("asset_balance", pwalletMain->GetAssetBalance());
     }
 #endif
     obj.pushKV("blocks",        (int)chainActive.Height());

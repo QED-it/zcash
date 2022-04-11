@@ -4814,11 +4814,14 @@ CAmount CWallet::GetImmatureWatchOnlyBalance() const
 }
 
 // Calculate ZSA balance.
-CAmount CWallet::GetAssetBalance(const isminefilter& filter, const int min_depth) const
+UniValue CWallet::GetAssetBalance(const isminefilter& filter, const int min_depth) const
 {
     // TODO: Currently just returning zero balance. Add functionality.
-    CAmount nTotal = 0;
-    return nTotal;
+    UniValue a_bal(UniValue::VOBJ);
+    for ( int i = 0 ; i < 3 ; i++ ) {
+        a_bal.pushKV(("token_" + to_string(i)), 0);
+    }
+    return a_bal;
 }
 
 // Calculate total balance in a different way from GetBalance. The biggest

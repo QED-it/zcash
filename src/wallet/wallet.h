@@ -1687,7 +1687,7 @@ public:
     CAmount GetImmatureBalance() const;
     CAmount GetUnconfirmedWatchOnlyBalance() const;
     CAmount GetImmatureWatchOnlyBalance() const;
-    CAmount GetAssetBalance(const isminefilter& filter=ISMINE_SPENDABLE, const int min_depth=0) const;
+    UniValue GetAssetBalance(const isminefilter& filter=ISMINE_SPENDABLE, const int min_depth=0) const;
     CAmount GetLegacyBalance(const isminefilter& filter, int minDepth) const;
 
     /**
