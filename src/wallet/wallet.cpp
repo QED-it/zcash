@@ -4813,8 +4813,19 @@ CAmount CWallet::GetImmatureWatchOnlyBalance() const
     return nTotal;
 }
 
-// Calculate ZSA balance.
+// Calculate the confirmed ZSA balance.
 UniValue CWallet::GetAssetBalance(const isminefilter& filter, const int min_depth) const
+{
+    // TODO: Currently just returning zero balance. Add functionality.
+    UniValue a_bal(UniValue::VOBJ);
+    for ( int i = 0 ; i < 3 ; i++ ) {
+        a_bal.pushKV(("token_" + to_string(i)), 0);
+    }
+    return a_bal;
+}
+
+// Calculate the unconfirmed ZSA balance.
+UniValue CWallet::GetUnconfirmedAssetBalance(const isminefilter& filter, const int min_depth) const
 {
     // TODO: Currently just returning zero balance. Add functionality.
     UniValue a_bal(UniValue::VOBJ);

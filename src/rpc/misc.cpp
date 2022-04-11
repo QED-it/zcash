@@ -55,7 +55,8 @@ UniValue getinfo(const UniValue& params, bool fHelp)
             "  \"subversion\": xxxxx,        (string)  the server sub-version identifier\n"
             "  \"protocolversion\": xxxxx,   (numeric) the protocol version\n"
             "  \"walletversion\": xxxxx,     (numeric, optional) the wallet version, if wallet functionality is enabled\n"
-            "  \"balance\": xxxxxxx,         (numeric, optional) the total Zcash balance of the wallet, if wallet functionality is enabled\n"
+            "  \"zec_balance\": xxxxxxx,     (numeric, optional) the total Zcash balance of the wallet, if wallet functionality is enabled\n
+            "  \"asset_balance\": xxxxxxx,   (numeric, optional) the total balance shielded assets in the wallet, if wallet functionality is enabled\n"
             "  \"blocks\": xxxxxx,           (numeric) the current number of blocks processed in the server\n"
             "  \"timeoffset\": xxxxx,        (numeric) the time offset (deprecated; always 0)\n"
             "  \"connections\": xxxxx,       (numeric) the number of connections\n"
