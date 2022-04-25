@@ -55,7 +55,7 @@ UniValue getinfo(const UniValue& params, bool fHelp)
             "  \"subversion\": xxxxx,        (string)  the server sub-version identifier\n"
             "  \"protocolversion\": xxxxx,   (numeric) the protocol version\n"
             "  \"walletversion\": xxxxx,     (numeric, optional) the wallet version, if wallet functionality is enabled\n"
-            "  \"zec_balance\": xxxxxxx,     (numeric, optional) the total Zcash balance of the wallet, if wallet functionality is enabled\n"
+            "  \"balance\": xxxxxxx,     (numeric, optional) the total Zcash balance of the wallet, if wallet functionality is enabled\n"
             "  \"asset_balance\": xxxxxxx,   (numeric, optional) the total balance shielded assets in the wallet, if wallet functionality is enabled\n"
             "  \"blocks\": xxxxxx,           (numeric) the current number of blocks processed in the server\n"
             "  \"timeoffset\": xxxxx,        (numeric) the time offset (deprecated; always 0)\n"
@@ -93,7 +93,7 @@ UniValue getinfo(const UniValue& params, bool fHelp)
 #ifdef ENABLE_WALLET
     if (pwalletMain) {
         obj.pushKV("walletversion", pwalletMain->GetVersion());
-        obj.pushKV("zec_balance",   ValueFromAmount(pwalletMain->GetBalance()));
+        obj.pushKV("balance",   ValueFromAmount(pwalletMain->GetBalance()));
         obj.pushKV("asset_balance", pwalletMain->GetAssetBalance());
     }
 #endif

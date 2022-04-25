@@ -2268,9 +2268,7 @@ UniValue getwalletinfo(const UniValue& params, bool fHelp)
     obj.pushKV("shielded_balance",    FormatMoney(getBalanceZaddr(std::nullopt, 1, INT_MAX)));
     obj.pushKV("shielded_unconfirmed_balance", FormatMoney(getBalanceZaddr(std::nullopt, 0, 0)));
     obj.pushKV("asset_balance", pwalletMain->GetAssetBalance());
-    obj.pushKV("unconfirmed_asset_balance", pwalletMain->GetUnconfirmedAssetBalance());
     obj.pushKV("txcount",       (int)pwalletMain->mapWallet.size());
-
     obj.pushKV("keypoololdest", pwalletMain->GetOldestKeyPoolTime());
     obj.pushKV("keypoolsize",   (int)pwalletMain->GetKeyPoolSize());
     if (pwalletMain->IsCrypted())

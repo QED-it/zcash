@@ -4861,17 +4861,6 @@ UniValue CWallet::GetAssetBalance(const isminefilter& filter, const int min_dept
     return a_bal;
 }
 
-// Calculate the unconfirmed ZSA balance.
-UniValue CWallet::GetUnconfirmedAssetBalance(const isminefilter& filter, const int min_depth) const
-{
-    // TODO: Currently just returning zero balance. Add functionality.
-    UniValue a_bal(UniValue::VOBJ);
-    for ( int i = 0 ; i < 3 ; i++ ) {
-        a_bal.pushKV(("token_" + to_string(i)), 0);
-    }
-    return a_bal;
-}
-
 // Calculate total balance in a different way from GetBalance. The biggest
 // difference is that GetBalance sums up all unspent TxOuts paying to the
 // wallet, while this sums up both spent and unspent TxOuts paying to the
