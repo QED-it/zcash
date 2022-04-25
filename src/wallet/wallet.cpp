@@ -4852,13 +4852,29 @@ CAmount CWallet::GetImmatureWatchOnlyBalance() const
 
 // Calculate the confirmed ZSA balance.
 UniValue CWallet::GetAssetBalance(const isminefilter& filter, const int min_depth) const
+//UniValue CWallet::GetAssetBalance() const
 {
-    // TODO: Currently just returning zero balance. Add functionality.
+    // TODO: Currently hardcoding a list of tokenNames inside this function.
+    // TODO: Need to make it a Pallas point, and store it in the wallet / block DB.
+    vector<string> tokenList{ "token1", "token2", "token3" };
     UniValue a_bal(UniValue::VOBJ);
-    for ( int i = 0 ; i < 3 ; i++ ) {
-        a_bal.pushKV(("token_" + to_string(i)), 0);
+    for ( string tk : tokenList ) {
+        a_bal.pushKV(tk, GetOSATokenDetails(tk));
     }
     return a_bal;
+}
+
+// Obtain the details of the specified OSA token
+UniValue CWallet::GetOSATokenDetails(const string tokenName, const isminefilter& filter, const int min_depth) const
+//UniValue CWallet::GetOSATokenDetails(const string tokenName) const
+{
+    // TODO: Currently just returning zero balances. Add functionality.
+    UniValue osa_bal(UniValue::VOBJ);
+    osa_bal.pushKV("name", tokenName);
+    osa_bal.pushKV("confirmed_balance", 0);
+    osa_bal.pushKV("unconfirmed_balance", 0);
+    osa_bal.pushKV("immature_balance", 0);
+    return osa_bal;
 }
 
 // Calculate total balance in a different way from GetBalance. The biggest
