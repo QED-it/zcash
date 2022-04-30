@@ -4879,9 +4879,11 @@ UniValue CWallet::GetOSATokenDetails(const string tokenName, const isminefilter&
         osa_bal.pushKV("unconfirmed_balance", GetUnconfirmedBalance());
         osa_bal.pushKV("immature_balance", GetImmatureBalance());
     }
-    osa_bal.pushKV("confirmed_balance", 0);
-    osa_bal.pushKV("unconfirmed_balance", 0);
-    osa_bal.pushKV("immature_balance", 0);
+    else {
+        osa_bal.pushKV("confirmed_balance", 0);
+        osa_bal.pushKV("unconfirmed_balance", 0);
+        osa_bal.pushKV("immature_balance", 0);
+    }
     return osa_bal;
 }
 
