@@ -4858,6 +4858,7 @@ UniValue CWallet::GetAssetBalance(const isminefilter& filter, const int min_dept
     // TODO: Need to make it a Pallas point, and store it in the wallet / block DB.
     vector<string> tokenList{ "token1", "token2", "token3" };
     UniValue a_bal(UniValue::VOBJ);
+    a_bal.pushKV("ZEC", GetOSATokenDetails());
     for ( string tk : tokenList ) {
         a_bal.pushKV(tk, GetOSATokenDetails(tk));
     }
@@ -4871,6 +4872,13 @@ UniValue CWallet::GetOSATokenDetails(const string tokenName, const isminefilter&
     // TODO: Currently just returning zero balances. Add functionality.
     UniValue osa_bal(UniValue::VOBJ);
     osa_bal.pushKV("name", tokenName);
+
+    //TODO: Remove this if block and add it to the behaviour of the new Get__Balance functions
+    if (tokenName == "ZEC") {
+        osa_bal.pushKV("confirmed_balance", GetBalance());
+        osa_bal.pushKV("unconfirmed_balance", GetUnconfirmedBalance());
+        osa_bal.pushKV("immature_balance", GetImmatureBalance());
+    }
     osa_bal.pushKV("confirmed_balance", 0);
     osa_bal.pushKV("unconfirmed_balance", 0);
     osa_bal.pushKV("immature_balance", 0);
