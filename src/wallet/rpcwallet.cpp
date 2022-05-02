@@ -2241,8 +2241,7 @@ UniValue getwalletinfo(const UniValue& params, bool fHelp)
             "  \"immature_balance\": xxxxxx, (numeric) the total immature transparent balance of the wallet in " + CURRENCY_UNIT + "\n"
             "  \"shielded_balance\": xxxxxxx,  (numeric) the total confirmed shielded balance of the wallet in " + CURRENCY_UNIT + "\n"
             "  \"shielded_unconfirmed_balance\": xxx, (numeric) the total unconfirmed shielded balance of the wallet in " + CURRENCY_UNIT + "\n"
-            "  \"asset_balance\": xxx,       (numeric) the total confirmed shielded asset balance of the wallet \n"
-            "  \"unconfirmed_asset_balance\": xxx,       (numeric) the total unconfirmed shielded asset balance of the wallet \n"
+            "  \"shielded_asset_balance\": xxx,       (JSON object) the total shielded asset balance of the wallet \n"
             "  \"txcount\": xxxxxxx,         (numeric) the total number of transactions in the wallet\n"
             "  \"keypoololdest\": xxxxxx,    (numeric) the timestamp (seconds since GMT epoch) of the oldest pre-generated key in the key pool\n"
             "  \"keypoolsize\": xxxx,        (numeric) how many new keys are pre-generated\n"
@@ -2267,7 +2266,7 @@ UniValue getwalletinfo(const UniValue& params, bool fHelp)
     obj.pushKV("immature_balance",    ValueFromAmount(pwalletMain->GetImmatureBalance()));
     obj.pushKV("shielded_balance",    FormatMoney(getBalanceZaddr(std::nullopt, 1, INT_MAX)));
     obj.pushKV("shielded_unconfirmed_balance", FormatMoney(getBalanceZaddr(std::nullopt, 0, 0)));
-    obj.pushKV("asset_balance", pwalletMain->GetAssetBalance());
+    obj.pushKV("shielded_asset_balance", pwalletMain->GetAssetBalance());
     obj.pushKV("txcount",       (int)pwalletMain->mapWallet.size());
     obj.pushKV("keypoololdest", pwalletMain->GetOldestKeyPoolTime());
     obj.pushKV("keypoolsize",   (int)pwalletMain->GetKeyPoolSize());
