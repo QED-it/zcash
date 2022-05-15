@@ -242,6 +242,7 @@ struct RawOrchardNoteMetadata {
     uint32_t actionIdx;
     OrchardRawAddressPtr* addr;
     CAmount noteValue;
+    unsigned char noteType[32];
     unsigned char memo[512];
 };
 
@@ -279,7 +280,7 @@ struct RawOrchardActionSpend {
     uint32_t outpointActionIdx;
     OrchardRawAddressPtr* receivedAt;
     CAmount noteValue;
-};
+};  //TODO: add noteType?
 
 /**
  * A C struct used to transfer Orchard action output information across the FFI boundary.
@@ -292,7 +293,7 @@ struct RawOrchardActionOutput {
     CAmount noteValue;
     unsigned char memo[512];
     bool isOutgoing;
-};
+};  //TODO: add noteType?
 
 typedef void (*push_spend_t)(void* callbackReceiver, const RawOrchardActionSpend data);
 
