@@ -18,7 +18,7 @@ use zcash_primitives::{
 use orchard::{
     bundle::Authorized,
     keys::{FullViewingKey, IncomingViewingKey, OutgoingViewingKey, Scope, SpendingKey},
-    note::Nullifier,
+    note::{NoteType, Nullifier},
     tree::{MerkleHashOrchard, MerklePath},
     Address, Bundle, Note,
 };
@@ -1033,6 +1033,7 @@ pub struct FFINoteMetadata {
     action_idx: u32,
     recipient: *mut Address,
     note_value: i64,
+    note_type: [u8; 32], // only passing the byte representation of the type
     memo: [u8; 512],
 }
 
@@ -1058,6 +1059,7 @@ pub extern "C" fn orchard_wallet_get_filtered_notes(
             action_idx: outpoint.action_idx as u32,
             recipient: Box::into_raw(Box::new(dnote.note.recipient())),
             note_value: dnote.note.value().inner() as i64,
+            note_type: dnote.note.note_type().to_bytes(),
             memo: dnote.memo,
         };
         unsafe { (push_cb.unwrap())(result, metadata) };
@@ -1074,7 +1076,7 @@ pub struct FFIActionSpend {
     outpoint_action_idx: u32,
     received_at: *mut Address,
     value: i64,
-}
+} //TODO: add note_type?
 
 /// A type used to pass decrypted output information across the FFI boundary.
 /// This must have the same representation as `struct RawOrchardOutputData`
@@ -1086,7 +1088,7 @@ pub struct FFIActionOutput {
     value: i64,
     memo: [u8; 512],
     is_outgoing: bool,
-}
+} //TODO: add note_type?
 
 /// A C++-allocated function pointer that can send a FFIActionSpend value
 /// to a receiver.
