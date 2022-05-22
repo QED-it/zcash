@@ -22,7 +22,7 @@ use orchard::{
     tree::{MerkleHashOrchard, MerklePath},
     Address, Bundle, Note,
 };
-use orchard::note::NoteType;
+// use orchard::note::NoteType;
 
 use crate::{
     builder_ffi::OrchardSpendInfo,
