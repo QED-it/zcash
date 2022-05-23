@@ -17,6 +17,12 @@ NoteType::NoteType(char tid[]) {
     strcpy(type_id, tid);
 }
 
+//NoteType::NoteType(unsigned char tid[]) {
+//    char normal_tid[] = reinterpret_cast<char[]> (tid);
+//    strcpy(type_id, normal_tid);
+//}
+
+
 //NoteType::NoteType(unsigned char* tid) {
 //    type_id = *tid;
 //}

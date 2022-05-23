@@ -41,7 +41,7 @@ libc = "0.2"
 jubjub = "0.9"
 memuse = "0.2"
 nonempty = "0.7"
-orchard = "0.1"
+orchard = "0.1.0-beta.3"
 secp256k1 = "0.21"
 subtle = "2.2"
 rand_core = "0.6"
@@ -82,3 +82,6 @@ features = ["ansi", "env-filter", "fmt", "time"]
 lto = true
 panic = 'abort'
 codegen-units = 1
+
+[patch.crates-io]
+orchard = {git = "https://github.com/QED-it/orchard.git", rev = "100b644a25c879b9de7c3607005cbc5a466b0958"}

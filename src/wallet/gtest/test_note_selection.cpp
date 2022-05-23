@@ -38,10 +38,10 @@ SpendableInputs FakeSpendableInputs(
         auto address = sk.ToFullViewingKey().ToIncomingViewingKey().Address(j);
         for (int i = 0; i < 10; i++) {
             OrchardOutPoint op;
-//            NoteType nt;
+            NoteType nt;
             inputs.orchardNoteMetadata.push_back(OrchardNoteMetadata{
                 op, address, 1,
-//                nt,
+                nt,
                 {}});
         }
     }
