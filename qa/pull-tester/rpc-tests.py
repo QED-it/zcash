@@ -72,6 +72,7 @@ BASE_SCRIPTS= [
     'wallet_addresses.py',
     'wallet_anchorfork.py',
     'wallet_changeindicator.py',
+    'wallet_deprecation.py',
     'wallet_doublespend.py',
     'wallet_import_export.py',
     'wallet_isfromme.py',
@@ -140,6 +141,7 @@ BASE_SCRIPTS= [
     'wallet_broadcast.py',
     'wallet_z_sendmany.py',
     'wallet_zero_value.py',
+    'threeofthreerestore.py',
 ]
 
 ZMQ_SCRIPTS = [
@@ -273,8 +275,8 @@ def run_tests(test_list, src_dir, build_dir, exeext, jobs=1, enable_coverage=Fal
         BOLD = ('\033[0m', '\033[1m')
 
     #Set env vars
-    if "BITCOIND" not in os.environ:
-        os.environ["BITCOIND"] = build_dir + '/src/zcashd' + exeext
+    if "ZCASHD" not in os.environ:
+        os.environ["ZCASHD"] = build_dir + '/src/zcashd' + exeext
 
     tests_dir = src_dir + '/qa/rpc-tests/'
 

@@ -51,7 +51,8 @@ unsigned int nTxConfirmTarget = DEFAULT_TX_CONFIRM_TARGET;
 bool bSpendZeroConfChange = DEFAULT_SPEND_ZEROCONF_CHANGE;
 bool fSendFreeTransactions = DEFAULT_SEND_FREE_TRANSACTIONS;
 bool fPayAtLeastCustomFee = true;
-unsigned int nOrchardAnchorConfirmations = DEFAULT_ORCHARD_ANCHOR_CONFIRMATIONS;
+unsigned int nAnchorConfirmations = DEFAULT_ANCHOR_CONFIRMATIONS;
+unsigned int nOrchardActionLimit = DEFAULT_ORCHARD_ACTION_LIMIT;
 
 const char * DEFAULT_WALLET_DAT = "wallet.dat";
 
@@ -525,7 +526,7 @@ std::pair<UnifiedFullViewingKey, libzcash::AccountId> CWallet::GenerateNewUnifie
         auto account = hdChain.IncrementAccountCounter();
         if (!account.has_value()) {
             throw std::runtime_error(
-                    "CWallet::GenerateNewUnifiedSpendingKey(): Already generated the maxiumum number of accounts (2^31 - 2) for this wallet's mnemonic phrase. Congratulations, you need to create a new wallet!");
+                    "CWallet::GenerateNewUnifiedSpendingKey(): Already generated the maximum number of accounts (2^31 - 2) for this wallet's mnemonic phrase. Congratulations, you need to create a new wallet!");
         }
 
         if (generated.has_value()) {
@@ -3529,9 +3530,10 @@ bool CWallet::IsSaplingNullifierFromMe(const uint256& nullifier) const
     return false;
 }
 
-void CWallet::GetSproutNoteWitnesses(const std::vector<JSOutPoint>& notes,
+bool CWallet::GetSproutNoteWitnesses(const std::vector<JSOutPoint>& notes,
+                                     unsigned int confirmations,
                                      std::vector<std::optional<SproutWitness>>& witnesses,
-                                     uint256 &final_anchor)
+                                     uint256 &final_anchor) const
 {
     LOCK(cs_wallet);
     witnesses.resize(notes.size());
@@ -3539,9 +3541,16 @@ void CWallet::GetSproutNoteWitnesses(const std::vector<JSOutPoint>& notes,
     int i = 0;
     for (JSOutPoint note : notes) {
         if (mapWallet.count(note.hash) &&
-                mapWallet[note.hash].mapSproutNoteData.count(note) &&
-                mapWallet[note.hash].mapSproutNoteData[note].witnesses.size() > 0) {
-            witnesses[i] = mapWallet[note.hash].mapSproutNoteData[note].witnesses.front();
+                mapWallet.at(note.hash).mapSproutNoteData.count(note) &&
+                mapWallet.at(note.hash).mapSproutNoteData.at(note).witnesses.size() > 0) {
+            auto noteWitnesses = mapWallet.at(note.hash).mapSproutNoteData.at(note).witnesses;
+            auto it = noteWitnesses.cbegin(), end = noteWitnesses.cend();
+            for (int i = 1; i < confirmations; i++) {
+                if (it == end) return false;
+                ++it;
+            }
+            if (it == end) return false;
+            witnesses[i] = *it;
             if (!rt) {
                 rt = witnesses[i]->root();
             } else {
@@ -3554,11 +3563,13 @@ void CWallet::GetSproutNoteWitnesses(const std::vector<JSOutPoint>& notes,
     if (rt) {
         final_anchor = *rt;
     }
+    return true;
 }
 
-void CWallet::GetSaplingNoteWitnesses(const std::vector<SaplingOutPoint>& notes,
+bool CWallet::GetSaplingNoteWitnesses(const std::vector<SaplingOutPoint>& notes,
+                                      unsigned int confirmations,
                                       std::vector<std::optional<SaplingWitness>>& witnesses,
-                                      uint256 &final_anchor)
+                                      uint256 &final_anchor) const
 {
     LOCK(cs_wallet);
     witnesses.resize(notes.size());
@@ -3566,9 +3577,16 @@ void CWallet::GetSaplingNoteWitnesses(const std::vector<SaplingOutPoint>& notes,
     int i = 0;
     for (SaplingOutPoint note : notes) {
         if (mapWallet.count(note.hash) &&
-                mapWallet[note.hash].mapSaplingNoteData.count(note) &&
-                mapWallet[note.hash].mapSaplingNoteData[note].witnesses.size() > 0) {
-            witnesses[i] = mapWallet[note.hash].mapSaplingNoteData[note].witnesses.front();
+                mapWallet.at(note.hash).mapSaplingNoteData.count(note) &&
+                mapWallet.at(note.hash).mapSaplingNoteData.at(note).witnesses.size() > 0) {
+            auto noteWitnesses = mapWallet.at(note.hash).mapSaplingNoteData.at(note).witnesses;
+            auto it = noteWitnesses.cbegin(), end = noteWitnesses.cend();
+            for (int i = 1; i < confirmations; i++) {
+                if (it == end) return false;
+                ++it;
+            }
+            if (it == end) return false;
+            witnesses[i] = *it;
             if (!rt) {
                 rt = witnesses[i]->root();
             } else {
@@ -3581,13 +3599,15 @@ void CWallet::GetSaplingNoteWitnesses(const std::vector<SaplingOutPoint>& notes,
     if (rt) {
         final_anchor = *rt;
     }
+    return true;
 }
 
 std::vector<std::pair<libzcash::OrchardSpendingKey, orchard::SpendInfo>> CWallet::GetOrchardSpendInfo(
-    const std::vector<OrchardNoteMetadata>& orchardNoteMetadata) const
+    const std::vector<OrchardNoteMetadata>& orchardNoteMetadata,
+    uint256 anchor) const
 {
     AssertLockHeld(cs_wallet);
-    return orchardWallet.GetSpendInfo(orchardNoteMetadata);
+    return orchardWallet.GetSpendInfo(orchardNoteMetadata, anchor);
 }
 
 isminetype CWallet::IsMine(const CTxIn &txin) const
@@ -6314,10 +6334,11 @@ std::string CWallet::GetWalletHelpString(bool showDebug)
     strUsage += HelpMessageOpt("-migrationdestaddress=<zaddr>", _("Set the Sapling migration address"));
     strUsage += HelpMessageOpt("-mintxfee=<amt>", strprintf(_("Fees (in %s/kB) smaller than this are considered zero fee for transaction creation (default: %s)"),
                                                             CURRENCY_UNIT, FormatMoney(DEFAULT_TRANSACTION_MINFEE)));
+    strUsage += HelpMessageOpt("-orchardactionlimit=<n>", strprintf(_("Set the maximum number of Orchard actions permitted in a transaction (default %u)"), DEFAULT_ORCHARD_ACTION_LIMIT));
     strUsage += HelpMessageOpt("-paytxfee=<amt>", strprintf(_("Fee (in %s/kB) to add to transactions you send (default: %s)"),
                                                             CURRENCY_UNIT, FormatMoney(payTxFee.GetFeePerK())));
     strUsage += HelpMessageOpt("-rescan", _("Rescan the block chain for missing wallet transactions on startup"));
-    strUsage += HelpMessageOpt("-salvagewallet", _("Attempt to recover private keys from a corrupt wallet on startup"));
+    strUsage += HelpMessageOpt("-salvagewallet", _("Attempt to recover private keys from a corrupt wallet on startup (implies -rescan)"));
     strUsage += HelpMessageOpt("-sendfreetransactions", strprintf(_("Send transactions as zero-fee transactions if possible (default: %u)"), DEFAULT_SEND_FREE_TRANSACTIONS));
     strUsage += HelpMessageOpt("-spendzeroconfchange", strprintf(_("Spend unconfirmed change when sending transactions (default: %u)"), DEFAULT_SPEND_ZEROCONF_CHANGE));
     strUsage += HelpMessageOpt("-txconfirmtarget=<n>", strprintf(_("If paytxfee is not set, include enough fee so transactions begin confirmation on average within n blocks (default: %u)"), DEFAULT_TX_CONFIRM_TARGET));
@@ -6574,12 +6595,22 @@ bool CWallet::ParameterInteraction(const CChainParams& params)
             return UIError(_("-migrationdestaddress must be a valid Sapling address."));
         }
     }
-    if (mapArgs.count("-orchardanchorconfirmations")) {
-        int64_t confirmations = atoi64(mapArgs["-orchardanchorconfirmations"]);
+    if (mapArgs.count("-anchorconfirmations")) {
+        int64_t confirmations = atoi64(mapArgs["-anchorconfirmations"]);
         if (confirmations < 1) {
-            return UIError(strprintf(_("Invalid value for -orchardanchorconfirmations='%u' (must be least 1)"), confirmations));
+            return UIError(strprintf(_("Invalid value for -anchorconfirmations='%u' (must be least 1)"), confirmations));
         }
-        nOrchardAnchorConfirmations = confirmations;
+        if (confirmations > 100) {
+            return UIError(strprintf(_("Invalid value for -anchorconfirmations='%u' (must be at most 100)"), confirmations));
+        }
+        nAnchorConfirmations = confirmations;
+    }
+    if (mapArgs.count("-orchardactionlimit")) {
+        int64_t limit = atoi64(mapArgs["-orchardactionlimit"]);
+        if (limit < 1) {
+            return UIError(strprintf(_("Invalid value for -orchardactionlimit='%u' (must be least 1)"), limit));
+        }
+        nOrchardActionLimit = limit;
     }
 
     return true;

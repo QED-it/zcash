@@ -7,6 +7,7 @@
 #include "consensus/upgrades.h"
 #include "consensus/params.h"
 #include "core_io.h"
+#include "deprecation.h"
 #include "experimental_features.h"
 #include "init.h"
 #include "key_io.h"
@@ -47,6 +48,7 @@
 
 #include <univalue.h>
 
+#include <algorithm>
 #include <numeric>
 #include <optional>
 #include <variant>
@@ -156,23 +158,32 @@ UniValue getnewaddress(const UniValue& params, bool fHelp)
     if (!EnsureWalletIsAvailable(fHelp))
         return NullUniValue;
 
+    if (!fEnableGetNewAddress)
+        throw runtime_error(
+            "getnewaddress is DEPRECATED and will be removed in a future release\n"
+            "\nUse z_getnewaccount and z_getaddressforaccount instead, or restart \n"
+            "with `-allowdeprecated=getnewaddress` if you require backward compatibility.\n"
+            "See https://zcash.github.io/zcash/user/deprecation.html for more information.");
+
     if (fHelp || params.size() > 1)
         throw runtime_error(
             "getnewaddress ( \"\" )\n"
-            "\nDEPRECATED\n"
-            "\nReturns a new Zcash address for receiving payments.\n"
+            "\nDEPRECATED. Use z_getnewaccount and z_getaddressforaccount instead.\n"
+            "\nReturns a new transparent Zcash address.\n"
+            "Payments received by this API are visible on-chain and do not otherwise\n"
+            "provide privacy protections; they should only be used in circumstances \n"
+            "where it is necessary to interoperate with legacy Bitcoin infrastructure.\n"
 
             "\nArguments:\n"
             "1. (dummy)       (string, optional) DEPRECATED. If provided, it MUST be set to the empty string \"\". Passing any other string will result in an error.\n"
 
             "\nResult:\n"
-            "\"zcashaddress\"    (string) The new Zcash address\n"
+            "\"zcashaddress\"    (string) The new transparent Zcash address\n"
 
             "\nExamples:\n"
             + HelpExampleCli("getnewaddress", "")
             + HelpExampleRpc("getnewaddress", "")
         );
-
 
     const UniValue& dummy_value = params[0];
     if (!dummy_value.isNull() && dummy_value.get_str() != "") {
@@ -202,13 +213,25 @@ UniValue getrawchangeaddress(const UniValue& params, bool fHelp)
     if (!EnsureWalletIsAvailable(fHelp))
         return NullUniValue;
 
+    if (!fEnableGetRawChangeAddress)
+        throw runtime_error(
+            "getrawchangeaddress is DEPRECATED and will be removed in a future release\n"
+            "\nChange addresses are a wallet-internal feature. Use a unified address for\n"
+            "a dedicated change account instead, or restart with `-allowdeprecated=getrawchangeaddress` \n"
+            "if you require backward compatibility.\n"
+            "See https://zcash.github.io/zcash/user/deprecation.html for more information.");
+
     if (fHelp || params.size() > 1)
         throw runtime_error(
             "getrawchangeaddress\n"
-            "\nReturns a new Zcash address, for receiving change.\n"
-            "This is for use with raw transactions, NOT normal use.\n"
+            "\nDEPRECATED. Change addresses are a wallet-internal feature. Use a unified"
+            "\naddress for a dedicated change account instead.\n"
+            "\nReturns a new transparent Zcash address for receiving change.\n"
+            "This is for use with raw transactions, NOT normal use. Additionally,\n"
+            "the resulting address does not correspond to the \"change\" HD derivation\n"
+            "path.\n"
             "\nResult:\n"
-            "\"address\"    (string) The address\n"
+            "\"address\"    (string) The transparent address\n"
             "\nExamples:\n"
             + HelpExampleCli("getrawchangeaddress", "")
             + HelpExampleRpc("getrawchangeaddress", "")
@@ -274,10 +297,14 @@ UniValue sendtoaddress(const UniValue& params, bool fHelp)
     if (fHelp || params.size() < 2 || params.size() > 5)
         throw runtime_error(
             "sendtoaddress \"zcashaddress\" amount ( \"comment\" \"comment-to\" subtractfeefromamount )\n"
-            "\nSend an amount to a given address. The amount is a real and is rounded to the nearest 0.00000001\n"
+            "\nSend an amount to a given transparent address. The amount is interpreted as a real number\n"
+            "and is rounded to the nearest 0.00000001. This API will only select funds from the transparent\n"
+            "pool, and all the details of the transaction, including sender, recipient, and amount will be\n"
+            "permanently visible on the public chain. THIS API PROVIDES NO PRIVACY, and should only be\n"
+            "used when interoperability with legacy Bitcoin infrastructure is required.\n"
             + HelpRequiringPassphrase() +
             "\nArguments:\n"
-            "1. \"zcashaddress\"  (string, required) The Zcash address to send to.\n"
+            "1. \"zcashaddress\"  (string, required) The transparent Zcash address to send to.\n"
             "2. \"amount\"      (numeric, required) The amount in " + CURRENCY_UNIT + " to send. eg 0.1\n"
             "3. \"comment\"     (string, optional) A comment used to store what the transaction is for. \n"
             "                             This is not part of the transaction, just kept in your wallet.\n"
@@ -342,7 +369,9 @@ UniValue listaddresses(const UniValue& params, bool fHelp)
             "and addresses derived from the wallet's mnemonic seed for releases \n"
             "version 4.7.0 and above. \n"
             "\nREMINDER: It is recommended that you back up your wallet.dat file \n"
-            "regularly!\n"
+            "regularly. If your wallet was created using zcashd version 4.7.0 \n"
+            "or later and you have not imported externally produced keys, it only \n"
+            "necessary to have backed up the wallet's emergency recovery phrase.\n"
             "\nResult:\n"
             "[\n"
             "  {\n"
@@ -401,12 +430,14 @@ UniValue listaddresses(const UniValue& params, bool fHelp)
 
     // Split transparent addresses into several categories:
     // - Generated randomly.
+    // - Imported
     // - Imported watchonly.
     // - Derived from mnemonic seed.
     std::set<CTxDestination> t_generated_dests;
     std::set<CTxDestination> t_generated_change_dests;
     std::set<CTxDestination> t_mnemonic_dests;
     std::set<CTxDestination> t_mnemonic_change_dests;
+    std::set<CTxDestination> t_imported_dests;
     std::set<CTxDestination> t_watchonly_dests;
     // Get the CTxDestination values for all the entries in the transparent address book.
     // This will include any address that has been generated by this wallet.
@@ -425,6 +456,9 @@ UniValue listaddresses(const UniValue& params, bool fHelp)
             switch (source.value()) {
                 case PaymentAddressSource::Random:
                     t_generated_dests.insert(item.first);
+                    break;
+                case PaymentAddressSource::Imported:
+                    t_imported_dests.insert(item.first);
                     break;
                 case PaymentAddressSource::ImportedWatchOnly:
                     t_watchonly_dests.insert(item.first);
@@ -446,6 +480,7 @@ UniValue listaddresses(const UniValue& params, bool fHelp)
     for (const std::pair<CTxDestination, CAmount>& item : pwalletMain->GetAddressBalances()) {
         if (t_generated_dests.count(item.first) == 0 &&
             t_mnemonic_dests.count(item.first) == 0 &&
+            t_imported_dests.count(item.first) == 0 &&
             t_watchonly_dests.count(item.first) == 0)
         {
             std::optional<PaymentAddressSource> source;
@@ -599,6 +634,19 @@ UniValue listaddresses(const UniValue& params, bool fHelp)
         entry.pushKV("source", "imported");
 
         bool hasData = false;
+
+        if (!t_imported_dests.empty()) {
+            UniValue t_imported_addrs(UniValue::VARR);
+            for (const CTxDestination& dest: t_imported_dests) {
+                t_imported_addrs.push_back(keyIO.EncodeDestination(dest));
+            }
+
+            UniValue imported_t(UniValue::VOBJ);
+            imported_t.pushKV("addresses", t_imported_addrs);
+
+            entry.pushKV("transparent", imported_t);
+            hasData = true;
+        }
 
         {
             UniValue imported_sprout_addrs(UniValue::VARR);
@@ -789,9 +837,8 @@ UniValue listaddressgroupings(const UniValue& params, bool fHelp)
     if (fHelp)
         throw runtime_error(
             "listaddressgroupings\n"
-            "\nLists groups of addresses which have had their common ownership\n"
-            "made public by common use as inputs or as the resulting change\n"
-            "in past transactions\n"
+            "\nLists groups of transparent addresses which have had their common ownership\n"
+            "made public by common use as inputs or as the resulting change in past transactions.\n"
             "\nResult:\n"
             "[\n"
             "  [\n"
@@ -843,10 +890,11 @@ UniValue signmessage(const UniValue& params, bool fHelp)
             "\nSign a message with the private key of a t-addr"
             + HelpRequiringPassphrase() + "\n"
             "\nArguments:\n"
-            "1. \"t-addr\"  (string, required) The transparent address to use for the private key.\n"
-            "2. \"message\"         (string, required) The message to create a signature of.\n"
+            "1. \"t-addr\"  (string, required) The transparent address to use to look up the private key.\n"
+            "   that will be used to sign the message.\n"
+            "2. \"message\" (string, required) The message to create a signature of.\n"
             "\nResult:\n"
-            "\"signature\"          (string) The signature of the message encoded in base 64\n"
+            "\"signature\"  (string) The signature of the message encoded in base 64\n"
             "\nExamples:\n"
             "\nUnlock the wallet for 30 seconds\n"
             + HelpExampleCli("walletpassphrase", "\"mypassphrase\" 30") +
@@ -900,7 +948,7 @@ UniValue getreceivedbyaddress(const UniValue& params, bool fHelp)
     if (fHelp || params.size() < 1 || params.size() > 3)
         throw runtime_error(
             "getreceivedbyaddress \"zcashaddress\" ( minconf ) ( inZat )\n"
-            "\nReturns the total amount received by the given Zcash address in transactions with at least minconf confirmations.\n"
+            "\nReturns the total amount received by the given transparent Zcash address in transactions with at least minconf confirmations.\n"
             "\nArguments:\n"
             "1. \"zcashaddress\"  (string, required) The Zcash address for transactions.\n"
             "2. minconf         (numeric, optional, default=1) Only include transactions confirmed at least this many times.\n"
@@ -967,7 +1015,9 @@ UniValue getbalance(const UniValue& params, bool fHelp)
     if (fHelp || params.size() > 4)
         throw runtime_error(
             "getbalance ( \"(dummy)\" minconf includeWatchonly inZat )\n"
-            "\nReturns the server's total available balance.\n"
+            "\nReturns the wallet's available transparent balance. This total\n"
+            "currently includes transparent balances associated with unified\n"
+            "accounts. Prefer to use `z_getbalanceforaccount` instead.\n"
             "\nArguments:\n"
             "1. (dummy)          (string, optional) Remains for backward compatibility. Must be excluded or set to \"*\" or \"\".\n"
             "2. minconf          (numeric, optional, default=1) Only include transactions confirmed at least this many times.\n"
@@ -1017,7 +1067,7 @@ UniValue getunconfirmedbalance(const UniValue &params, bool fHelp)
     if (fHelp || params.size() > 0)
         throw runtime_error(
                 "getunconfirmedbalance\n"
-                "Returns the server's total unconfirmed balance\n");
+                "Returns the server's total unconfirmed transparent balance\n");
 
     LOCK2(cs_main, pwalletMain->cs_wallet);
 
@@ -1033,7 +1083,12 @@ UniValue sendmany(const UniValue& params, bool fHelp)
     if (fHelp || params.size() < 2 || params.size() > 5)
         throw runtime_error(
             "sendmany \"\" {\"address\":amount,...} ( minconf \"comment\" [\"address\",...] )\n"
-            "\nSend multiple times. Amounts are decimal numbers with at most 8 digits of precision."
+            "\nSend to multiple transparent recipients, using funds from the legacy transparent\n"
+            "value pool. Amounts are decimal numbers with at most 8 digits of precision.\n"
+            "Payments sent using this API are visible on-chain and do not otherwise\n"
+            "provide privacy protections; it should only be used in circumstances \n"
+            "where it is necessary to interoperate with legacy Bitcoin infrastructure.\n"
+            "Prefer to use `z_sendmany` instead.\n"
             + HelpRequiringPassphrase() + "\n"
             "\nArguments:\n"
             "1. \"dummy\"               (string, required) Must be set to \"\" for backwards compatibility.\n"
@@ -1150,8 +1205,8 @@ UniValue addmultisigaddress(const UniValue& params, bool fHelp)
     if (fHelp || params.size() < 2 || params.size() > 3)
     {
         string msg = "addmultisigaddress nrequired [\"key\",...] ( \"\" )\n"
-            "\nAdd a nrequired-to-sign multisignature address to the wallet.\n"
-            "Each key is a Zcash address or hex-encoded public key.\n"
+            "\nAdd a nrequired-to-sign transparent multisignature address to the wallet.\n"
+            "Each key is a transparent Zcash address or hex-encoded secp256k1 public key.\n"
 
             "\nArguments:\n"
             "1. nrequired        (numeric, required) The number of required signatures out of the n keys or addresses.\n"
@@ -1305,7 +1360,10 @@ UniValue listreceivedbyaddress(const UniValue& params, bool fHelp)
     if (fHelp || params.size() > 3)
         throw runtime_error(
             "listreceivedbyaddress ( minconf includeempty includeWatchonly)\n"
-            "\nList balances by receiving address.\n"
+            "\nList balances by transparent receiving address. This API does not provide\n"
+            "any information for associated with shielded addresses and should only be used\n"
+            "in circumstances where it is necessary to interoperate with legacy Bitcoin\n"
+            "infrastructure.\n"
             "\nArguments:\n"
             "1. minconf       (numeric, optional, default=1) The minimum number of confirmations before payments are included.\n"
             "2. includeempty  (numeric, optional, default=false) Whether to include addresses that haven't received any payments.\n"
@@ -1315,7 +1373,7 @@ UniValue listreceivedbyaddress(const UniValue& params, bool fHelp)
             "[\n"
             "  {\n"
             "    \"involvesWatchonly\" : true,        (bool) Only returned if imported addresses were involved in transaction\n"
-            "    \"address\" : \"receivingaddress\",  (string) The receiving address\n"
+            "    \"address\" : \"receivingaddress\",  (string) The receiving transparent address\n"
             "    \"amount\" : x.xxx,                  (numeric) The total amount in " + CURRENCY_UNIT + " received by the address\n"
             "    \"amountZat\" : xxxx                 (numeric) The amount in " + MINOR_CURRENCY_UNIT + "\n"
             "    \"confirmations\" : n                (numeric) The number of confirmations of the most recent transaction included\n"
@@ -1429,7 +1487,12 @@ UniValue listtransactions(const UniValue& params, bool fHelp)
     if (fHelp || params.size() > 4)
         throw runtime_error(
             "listtransactions ( \"dummy\" count from includeWatchonly)\n"
-            "\nReturns up to 'count' most recent transactions skipping the first 'from' transactions.\n"
+            "\nReturns up to 'count' of the most recent transactions associated with legacy transparent\n"
+            "addresses of this wallet, skipping the first 'from' transactions.\n"
+            "\nThis API does not provide any information about transactions containing shielded inputs\n"
+            "or outputs, and should only be used in circumstances where it is necessary to interoperate\n"
+            "with legacy Bitcoin infrastructure. Use z_listreceivedbyaddress to obtain information about\n"
+            "the wallet's shielded transactions.\n"
             "\nArguments:\n"
             "1. (dummy)        (string, optional) If set, should be \"*\" for backwards compatibility.\n"
             "2. count          (numeric, optional, default=10) The number of transactions to return\n"
@@ -1637,7 +1700,7 @@ UniValue gettransaction(const UniValue& params, bool fHelp)
     if (fHelp || params.size() < 1 || params.size() > 2)
         throw runtime_error(
             "gettransaction \"txid\" ( includeWatchonly )\n"
-            "\nGet detailed information about in-wallet transaction <txid>\n"
+            "\nReturns detailed information about in-wallet transaction <txid>.\n"
             "\nArguments:\n"
             "1. \"txid\"    (string, required) The transaction id\n"
             "2. \"includeWatchonly\"    (bool, optional, default=false) Whether to include watchonly addresses in balance calculation and details[]\n"
@@ -1772,7 +1835,8 @@ UniValue keypoolrefill(const UniValue& params, bool fHelp)
     if (fHelp || params.size() > 1)
         throw runtime_error(
             "keypoolrefill ( newsize )\n"
-            "\nFills the keypool."
+            "\nFills the keypool associated with the legacy transparent value pool. This should only be\n"
+            "used when interoperability with legacy Bitcoin infrastructure is required.\n"
             + HelpRequiringPassphrase() + "\n"
             "\nArguments\n"
             "1. newsize     (numeric, optional, default=100) The new keypool size\n"
@@ -1819,11 +1883,13 @@ UniValue walletpassphrase(const UniValue& params, bool fHelp)
         throw runtime_error(
             "walletpassphrase \"passphrase\" timeout\n"
             "\nStores the wallet decryption key in memory for 'timeout' seconds.\n"
-            "This is needed prior to performing transactions related to private keys such as sending Zcash\n"
+            "If the wallet is locked, this API must be invoked prior to performing operations\n"
+            "that require the availability of private keys, such as sending Zcash.\n"
+            "zcashd wallet encryption is experimental, and should be used with caution.\n"
             "\nArguments:\n"
             "1. \"passphrase\"     (string, required) The wallet passphrase\n"
             "2. timeout            (numeric, required) The time to keep the decryption key in seconds.\n"
-            "\nNote:\n"
+            "\nNotes:\n"
             "Issuing the walletpassphrase command while the wallet is already unlocked will set a new unlock\n"
             "time that overrides the old one.\n"
             "\nExamples:\n"
@@ -2016,6 +2082,7 @@ UniValue encryptwallet(const UniValue& params, bool fHelp)
             "Use the walletpassphrase call for this, and then walletlock call.\n"
             "If the wallet is already encrypted, use the walletpassphrasechange call.\n"
             "Note that this will shutdown the server.\n"
+            "Wallet encryption is experimental, and this API should be used with caution.\n"
             "\nArguments:\n"
             "1. \"passphrase\"    (string) The pass phrase to encrypt the wallet with. It must be at least 1 character, but should be long.\n"
             "\nExamples:\n"
@@ -2071,7 +2138,7 @@ UniValue lockunspent(const UniValue& params, bool fHelp)
         throw runtime_error(
             "lockunspent unlock [{\"txid\":\"txid\",\"vout\":n},...]\n"
             "\nUpdates list of temporarily unspendable outputs.\n"
-            "Temporarily lock (unlock=false) or unlock (unlock=true) specified transaction outputs.\n"
+            "Temporarily lock (unlock=false) or unlock (unlock=true) specified transparent transaction outputs.\n"
             "A locked transaction output will not be chosen by automatic coin selection, when spending Zcash.\n"
             "Locks are stored in memory only. Nodes start with zero locked outputs, and the locked output list\n"
             "is always cleared (by virtue of process exit) when a node stops or fails.\n"
@@ -2154,7 +2221,7 @@ UniValue listlockunspent(const UniValue& params, bool fHelp)
     if (fHelp || params.size() > 0)
         throw runtime_error(
             "listlockunspent\n"
-            "\nReturns list of temporarily unspendable outputs.\n"
+            "\nReturns list of temporarily unspendable transparent outputs.\n"
             "See the lockunspent call to lock and unlock transactions for spending.\n"
             "\nResult:\n"
             "[\n"
@@ -2232,7 +2299,7 @@ UniValue getwalletinfo(const UniValue& params, bool fHelp)
     if (fHelp || params.size() != 0)
         throw runtime_error(
             "getwalletinfo\n"
-            "Returns an object containing various wallet state info.\n"
+            "Returns wallet state information.\n"
             "\nResult:\n"
             "{\n"
             "  \"walletversion\": xxxxx,     (numeric) the wallet version\n"
@@ -2316,11 +2383,10 @@ UniValue listunspent(const UniValue& params, bool fHelp)
     if (fHelp || params.size() > 3)
         throw runtime_error(
             "listunspent ( minconf maxconf  [\"address\",...] )\n"
-            "\nReturns array of unspent transaction outputs\n"
-            "with between minconf and maxconf (inclusive) confirmations.\n"
-            "Optionally filter to only include txouts paid to specified addresses.\n"
-            "Results are an array of Objects, each of which has:\n"
-            "{txid, vout, scriptPubKey, amount, confirmations}\n"
+            "\nReturns array of unspent transparent transaction outputs with between minconf and\n"
+            "maxconf (inclusive) confirmations. Use `z_listunspent` instead to see information\n"
+            "related to unspent shielded notes. Results may be optionally filtered to only include\n"
+            "txouts paid to specified addresses.\n"
             "\nArguments:\n"
             "1. minconf          (numeric, optional, default=1) The minimum confirmations to filter\n"
             "2. maxconf          (numeric, optional, default=9999999) The maximum confirmations to filter\n"
@@ -2429,9 +2495,11 @@ UniValue z_listunspent(const UniValue& params, bool fHelp)
     if (fHelp || params.size() > 4)
         throw runtime_error(
             "z_listunspent ( minconf maxconf includeWatchonly [\"zaddr\",...] )\n"
-            "\nReturns array of unspent shielded notes with between minconf and maxconf (inclusive) confirmations.\n"
-            "Optionally filter to only include notes sent to specified addresses.\n"
-            "When minconf is 0, unspent notes with zero confirmations are returned, even though they are not immediately spendable.\n"
+            "\nReturns an array of unspent shielded notes with between minconf and maxconf (inclusive)\n"
+            "confirmations. Results may be optionally filtered to only include notes sent to specified\n"
+            "addresses.\n"
+            "When minconf is 0, unspent notes with zero confirmations are returned, even though they are\n"
+            "not immediately spendable.\n"
             "\nArguments:\n"
             "1. minconf          (numeric, optional, default=1) The minimum confirmations to filter\n"
             "2. maxconf          (numeric, optional, default=9999999) The maximum confirmations to filter\n"
@@ -2569,7 +2637,9 @@ UniValue z_listunspent(const UniValue& params, bool fHelp)
         UniValue obj(UniValue::VOBJ);
         obj.pushKV("txid", entry.op.hash.ToString());
         obj.pushKV("pool", ADDR_TYPE_SAPLING);
-        obj.pushKV("type", ADDR_TYPE_SAPLING); //deprecated
+        if (fEnableAddrTypeField) {
+            obj.pushKV("type", ADDR_TYPE_SAPLING); //deprecated
+        }
         obj.pushKV("outindex", (int)entry.op.n);
         obj.pushKV("confirmations", entry.confirmations);
         bool hasSaplingSpendingKey = pwalletMain->HaveSaplingSpendingKeyForAddress(entry.address);
@@ -2634,35 +2704,35 @@ UniValue fundrawtransaction(const UniValue& params, bool fHelp)
 
     if (fHelp || params.size() < 1 || params.size() > 2)
         throw runtime_error(
-                            "fundrawtransaction \"hexstring\" includeWatching\n"
-                            "\nAdd inputs to a transaction until it has enough in value to meet its out value.\n"
-                            "This will not modify existing inputs, and will add one change output to the outputs.\n"
-                            "Note that inputs which were signed may need to be resigned after completion since in/outputs have been added.\n"
-                            "The inputs added will not be signed, use signrawtransaction for that.\n"
-                            "Note that all existing inputs must have their previous output transaction be in the wallet.\n"
-                            "Note that all inputs selected must be of standard form and P2SH scripts must be"
-                            "in the wallet using importaddress or addmultisigaddress (to calculate fees).\n"
-                            "Only pay-to-pubkey, multisig, and P2SH versions thereof are currently supported for watch-only\n"
-                            "\nArguments:\n"
-                            "1. \"hexstring\"     (string, required) The hex string of the raw transaction\n"
-                            "2. includeWatching (boolean, optional, default false) Also select inputs which are watch only\n"
-                            "\nResult:\n"
-                            "{\n"
-                            "  \"hex\":       \"value\", (string)  The resulting raw transaction (hex-encoded string)\n"
-                            "  \"fee\":       n,         (numeric) The fee added to the transaction\n"
-                            "  \"changepos\": n          (numeric) The position of the added change output, or -1\n"
-                            "}\n"
-                            "\"hex\"             \n"
-                            "\nExamples:\n"
-                            "\nCreate a transaction with no inputs\n"
-                            + HelpExampleCli("createrawtransaction", "\"[]\" \"{\\\"myaddress\\\":0.01}\"") +
-                            "\nAdd sufficient unsigned inputs to meet the output value\n"
-                            + HelpExampleCli("fundrawtransaction", "\"rawtransactionhex\"") +
-                            "\nSign the transaction\n"
-                            + HelpExampleCli("signrawtransaction", "\"fundedtransactionhex\"") +
-                            "\nSend the transaction\n"
-                            + HelpExampleCli("sendrawtransaction", "\"signedtransactionhex\"")
-                            );
+            "fundrawtransaction \"hexstring\" includeWatching\n"
+            "\nAdd transparent inputs to a transaction until it has enough in value to meet its out value.\n"
+            "This will not modify existing inputs, and will add one change output to the outputs.\n"
+            "Note that inputs which were signed may need to be resigned after completion since in/outputs have been added.\n"
+            "The inputs added will not be signed, use signrawtransaction for that.\n"
+            "Note that all existing inputs must have their previous output transaction be in the wallet.\n"
+            "Note that all inputs selected must be of standard form and P2SH scripts must be"
+            "in the wallet using importaddress or addmultisigaddress (to calculate fees).\n"
+            "Only pay-to-pubkey, multisig, and P2SH versions thereof are currently supported for watch-only\n"
+            "\nArguments:\n"
+            "1. \"hexstring\"     (string, required) The hex string of the raw transaction\n"
+            "2. includeWatching (boolean, optional, default false) Also select inputs which are watch only\n"
+            "\nResult:\n"
+            "{\n"
+            "  \"hex\":       \"value\", (string)  The resulting raw transaction (hex-encoded string)\n"
+            "  \"fee\":       n,         (numeric) The fee added to the transaction\n"
+            "  \"changepos\": n          (numeric) The position of the added change output, or -1\n"
+            "}\n"
+            "\"hex\"             \n"
+            "\nExamples:\n"
+            "\nCreate a transaction with no inputs\n"
+            + HelpExampleCli("createrawtransaction", "\"[]\" \"{\\\"myaddress\\\":0.01}\"") +
+            "\nAdd sufficient unsigned inputs to meet the output value\n"
+            + HelpExampleCli("fundrawtransaction", "\"rawtransactionhex\"") +
+            "\nSign the transaction\n"
+            + HelpExampleCli("signrawtransaction", "\"fundedtransactionhex\"") +
+            "\nSend the transaction\n"
+            + HelpExampleCli("sendrawtransaction", "\"signedtransactionhex\"")
+            );
 
     RPCTypeCheck(params, boost::assign::list_of(UniValue::VSTR)(UniValue::VBOOL));
 
@@ -2857,6 +2927,12 @@ UniValue zc_raw_receive(const UniValue& params, bool fHelp)
         return NullUniValue;
     }
 
+    if (!fEnableZCRawReceive)
+        throw runtime_error(
+            "zcrawreceive is DEPRECATED and will be removed in a future release\n"
+            "\nrestart with `-allowdeprecated=zcrawreceive` if you require backward compatibility.\n"
+            "See https://zcash.github.io/zcash/user/deprecation.html for more information.");
+
     if (fHelp || params.size() != 2) {
         throw runtime_error(
             "zcrawreceive zcsecretkey encryptednote\n"
@@ -2944,6 +3020,12 @@ UniValue zc_raw_joinsplit(const UniValue& params, bool fHelp)
     if (!EnsureWalletIsAvailable(fHelp)) {
         return NullUniValue;
     }
+
+    if (!fEnableZCRawJoinSplit)
+        throw runtime_error(
+            "zcrawjoinsplit is DEPRECATED and will be removed in a future release\n"
+            "\nrestart with `-allowdeprecated=zcrawjoinsplit` if you require backward compatibility.\n"
+            "See https://zcash.github.io/zcash/user/deprecation.html for more information.");
 
     if (fHelp || params.size() != 5) {
         throw runtime_error(
@@ -3161,6 +3243,12 @@ UniValue zc_raw_keygen(const UniValue& params, bool fHelp)
         return NullUniValue;
     }
 
+    if (!fEnableZCRawKeygen)
+        throw runtime_error(
+            "zcrawkeygen is DEPRECATED and will be removed in a future release\n"
+            "\nrestart with `-allowdeprecated=zcrawkeygen` if you require backward compatibility.\n"
+            "See https://zcash.github.io/zcash/user/deprecation.html for more information.");
+
     if (fHelp || params.size() != 0) {
         throw runtime_error(
             "zcrawkeygen\n"
@@ -3192,6 +3280,13 @@ UniValue z_getnewaddress(const UniValue& params, bool fHelp)
 {
     if (!EnsureWalletIsAvailable(fHelp))
         return NullUniValue;
+
+    if (!fEnableZGetNewAddress)
+        throw runtime_error(
+            "z_getnewaddress is DEPRECATED and will be removed in a future release\n"
+            "\nUse z_getnewaccount and z_getaddressforaccount instead, or restart \n"
+            "with `-allowdeprecated=z_getnewaddress` if you require backward compatibility.\n"
+            "See https://zcash.github.io/zcash/user/deprecation.html for more information.");
 
     std::string defaultType = ADDR_TYPE_SAPLING;
 
@@ -3268,6 +3363,7 @@ UniValue z_getnewaccount(const UniValue& params, bool fHelp)
     LOCK(pwalletMain->cs_wallet);
 
     EnsureWalletIsUnlocked();
+    EnsureWalletIsBackedUp(Params());
 
     // Generate the new account.
     auto ufvkNew = pwalletMain->GenerateNewUnifiedSpendingKey();
@@ -3363,6 +3459,7 @@ UniValue z_getaddressforaccount(const UniValue& params, bool fHelp)
     }
 
     EnsureWalletIsUnlocked();
+    EnsureWalletIsBackedUp(Params());
 
     auto res = pwalletMain->GenerateUnifiedAddress(account, receiverTypes, j);
 
@@ -3454,7 +3551,7 @@ UniValue z_listaccounts(const UniValue& params, bool fHelp)
     if (fHelp || params.size() > 1)
         throw runtime_error(
             "z_listaccounts\n"
-            "\nReturns the list of accounts created through z_getnewaccount.\n"
+            "\nReturns the list of accounts created with z_getnewaccount.\n"
             "\nResult:\n"
             "[\n"
             "   {\n"
@@ -3517,10 +3614,17 @@ UniValue z_listaddresses(const UniValue& params, bool fHelp)
     if (!EnsureWalletIsAvailable(fHelp))
         return NullUniValue;
 
+    if (!fEnableZListAddresses)
+        throw runtime_error(
+            "z_listaddresses is DEPRECATED and will be removed in a future release\n"
+            "\nUse listaddresses or restart with `-allowdeprecated=z_listaddresses`\n"
+            "if you require backward compatibility.\n"
+            "See https://zcash.github.io/zcash/user/deprecation.html for more information.");
+
     if (fHelp || params.size() > 1)
         throw runtime_error(
             "z_listaddresses ( includeWatchonly )\n"
-            "\nDEPRECATED\n"
+            "\nDEPRECATED. Use `listaddresses` instead.\n"
             "\nReturns the list of shielded addresses belonging to the wallet.\n"
             "\nThis never returns Unified Addresses; see 'listaddresses' for them.\n"
             "\nArguments:\n"
@@ -3954,10 +4058,19 @@ UniValue z_getbalance(const UniValue& params, bool fHelp)
     if (!EnsureWalletIsAvailable(fHelp))
         return NullUniValue;
 
+    if (!fEnableZGetBalance)
+        throw runtime_error(
+            "z_getbalance is DEPRECATED and will be removed in a future release\n\n"
+            "Use z_getbalanceforaccount, z_getbalanceforviewingkey, or getbalance (for\n"
+            "legacy transparent balance) instead, or restart with `-allowdeprecated=z_getbalance`\n"
+            "if you require backward compatibility.\n"
+            "See https://zcash.github.io/zcash/user/deprecation.html for more information.");
+
     if (fHelp || params.size() == 0 || params.size() > 3)
         throw runtime_error(
             "z_getbalance \"address\" ( minconf inZat )\n"
-            "\nDEPRECATED; please use z_getbalanceforviewingkey instead.`\n"
+            "\nDEPRECATED; please use z_getbalanceforaccount, z_getbalanceforviewingkey,\n"
+            "or getbalance (for legacy transparent balance) instead.\n"
             "\nReturns the balance of a taddr or zaddr belonging to the node's wallet.\n"
             "\nCAUTION: If the wallet has only an incoming viewing key for this address, then spends cannot be"
             "\ndetected, and so the returned balance may be larger than the actual balance."
@@ -4256,10 +4369,17 @@ UniValue z_gettotalbalance(const UniValue& params, bool fHelp)
     if (!EnsureWalletIsAvailable(fHelp))
         return NullUniValue;
 
+    if (!fEnableZGetTotalBalance)
+        throw runtime_error(
+            "z_gettotalbalance is DEPRECATED and will be removed in a future release\n\n"
+            "Use z_getbalanceforaccount, or getbalance (for legacy transparent balance) instead, or\n"
+            "restart with `-allowdeprecated=z_gettotalbalance if you require backward compatibility.\n"
+            "See https://zcash.github.io/zcash/user/deprecation.html for more information.");
+
     if (fHelp || params.size() > 2)
         throw runtime_error(
             "z_gettotalbalance ( minconf includeWatchonly )\n"
-            "\nDEPRECATED. Please use the z_getbalanceforaccount RPC instead.\n"
+            "\nDEPRECATED. Please use z_getbalanceforaccount or getbalance (for legacy transparent balance) instead.\n"
             "\nReturn the total value of funds stored in the node's wallet.\n"
             "\nCAUTION: If the wallet contains any addresses for which it only has incoming viewing keys,"
             "\nthe returned private balance may be larger than the actual balance, because spends cannot"
@@ -4422,7 +4542,9 @@ UniValue z_viewtransaction(const UniValue& params, bool fHelp)
 
             UniValue entry(UniValue::VOBJ);
             entry.pushKV("pool", ADDR_TYPE_SPROUT);
-            entry.pushKV("type", ADDR_TYPE_SPROUT); //deprecated
+            if (fEnableAddrTypeField) {
+                entry.pushKV("type", ADDR_TYPE_SPROUT); //deprecated
+            }
             entry.pushKV("js", (int)i);
             entry.pushKV("jsSpend", (int)j);
             entry.pushKV("txidPrev", jsop.hash.GetHex());
@@ -4446,7 +4568,9 @@ UniValue z_viewtransaction(const UniValue& params, bool fHelp)
 
         UniValue entry(UniValue::VOBJ);
         entry.pushKV("pool", ADDR_TYPE_SPROUT);
-        entry.pushKV("type", ADDR_TYPE_SPROUT); //deprecated
+        if (fEnableAddrTypeField) {
+            entry.pushKV("type", ADDR_TYPE_SPROUT); //deprecated
+        }
         entry.pushKV("js", (int)jsop.js);
         entry.pushKV("jsOutput", (int)jsop.n);
         entry.pushKV("address", keyIO.EncodePaymentAddress(pa));
@@ -4530,7 +4654,9 @@ UniValue z_viewtransaction(const UniValue& params, bool fHelp)
 
         UniValue entry(UniValue::VOBJ);
         entry.pushKV("pool", ADDR_TYPE_SAPLING);
-        entry.pushKV("type", ADDR_TYPE_SAPLING); //deprecated
+        if (fEnableAddrTypeField) {
+            entry.pushKV("type", ADDR_TYPE_SAPLING); //deprecated
+        }
         entry.pushKV("spend", (int)i);
         entry.pushKV("txidPrev", op.hash.GetHex());
         entry.pushKV("outputPrev", (int)op.n);
@@ -4584,7 +4710,9 @@ UniValue z_viewtransaction(const UniValue& params, bool fHelp)
 
         UniValue entry(UniValue::VOBJ);
         entry.pushKV("pool", ADDR_TYPE_SAPLING);
-        entry.pushKV("type", ADDR_TYPE_SAPLING); //deprecated
+        if (fEnableAddrTypeField) {
+            entry.pushKV("type", ADDR_TYPE_SAPLING); //deprecated
+        }
         entry.pushKV("output", (int)op.n);
         entry.pushKV("outgoing", isOutgoing);
         entry.pushKV("walletInternal", addr.second == RecipientType::WalletInternalAddress);
@@ -4616,7 +4744,9 @@ UniValue z_viewtransaction(const UniValue& params, bool fHelp)
 
         UniValue entry(UniValue::VOBJ);
         entry.pushKV("pool", ADDR_TYPE_ORCHARD);
-        entry.pushKV("type", ADDR_TYPE_ORCHARD); //deprecated
+        if (fEnableAddrTypeField) {
+            entry.pushKV("type", ADDR_TYPE_ORCHARD); //deprecated
+        }
         entry.pushKV("action", (int) actionIdx);
         entry.pushKV("txidPrev", outpoint.hash.GetHex());
         entry.pushKV("actionPrev", (int) outpoint.n);
@@ -4644,7 +4774,9 @@ UniValue z_viewtransaction(const UniValue& params, bool fHelp)
 
         UniValue entry(UniValue::VOBJ);
         entry.pushKV("pool", ADDR_TYPE_ORCHARD);
-        entry.pushKV("type", ADDR_TYPE_ORCHARD); //deprecated
+        if (fEnableAddrTypeField) {
+            entry.pushKV("type", ADDR_TYPE_ORCHARD); //deprecated
+        }
         entry.pushKV("action", (int) actionIdx);
         entry.pushKV("outgoing", orchardActionOutput.IsOutgoing());
         entry.pushKV("walletInternal", addr.second == RecipientType::WalletInternalAddress);
@@ -4875,7 +5007,7 @@ UniValue z_sendmany(const UniValue& params, bool fHelp)
             "      \"amount\":amount    (numeric, required) The numeric amount in " + CURRENCY_UNIT + " is the value\n"
             "      \"memo\":memo        (string, optional) If the address is a zaddr, raw data represented in hexadecimal string format\n"
             "    }, ... ]\n"
-            "3. minconf               (numeric, optional, default=1) Only use funds confirmed at least this many times.\n"
+            "3. minconf               (numeric, optional, default=" + strprintf("%u", DEFAULT_NOTE_CONFIRMATIONS) + ") Only use funds confirmed at least this many times.\n"
             "4. fee                   (numeric, optional, default=" + strprintf("%s", FormatMoney(DEFAULT_FEE)) + ") The fee amount to attach to this transaction.\n"
             "5. privacyPolicy         (string, optional, default=\"LegacyCompat\") Policy for what information leakage is acceptable.\n"
             "                         One of the following strings:\n"
@@ -4996,6 +5128,7 @@ UniValue z_sendmany(const UniValue& params, bool fHelp)
     std::set<RecipientAddress> recipientAddrs;
     std::vector<SendManyRecipient> recipients;
     CAmount nTotalOut = 0;
+    size_t nOrchardOutputs = 0;
     for (const UniValue& o : outputs.getValues()) {
         if (!o.isObject())
             throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid parameter, expected object");
@@ -5061,6 +5194,22 @@ UniValue z_sendmany(const UniValue& params, bool fHelp)
             involvesUnifiedAddress = true;
         }
 
+        if (std::holds_alternative<libzcash::OrchardRawAddress>(addr.value())) {
+            nOrchardOutputs += 1;
+            if (nOrchardOutputs > nOrchardActionLimit) {
+                throw JSONRPCError(
+                    RPC_INVALID_PARAMETER,
+                    strprintf(
+                        "Attempting to create %u Orchard outputs would exceed the current limit "
+                        "of %u notes, which exists to prevent memory exhaustion. Restart with "
+                        "`-orchardactionlimit=N` where N >= %u to allow the wallet to attempt "
+                        "to construct this transaction.",
+                        nOrchardOutputs,
+                        nOrchardActionLimit,
+                        nOrchardOutputs));
+            }
+        }
+
         recipients.push_back(SendManyRecipient(ua, addr.value(), nAmount, memo));
         nTotalOut += nAmount;
     }
@@ -5072,7 +5221,7 @@ UniValue z_sendmany(const UniValue& params, bool fHelp)
     // evaluating the strategy.
     TransactionStrategy strategy = maybeStrategy.value_or(
         // Default privacy policy is "LegacyCompat".
-        involvesUnifiedAddress ?
+        (involvesUnifiedAddress || !fEnableLegacyPrivacyStrategy) ?
             TransactionStrategy(PrivacyPolicy::FullPrivacy) :
             TransactionStrategy(PrivacyPolicy::AllowFullyTransparent)
     );
@@ -5087,7 +5236,7 @@ UniValue z_sendmany(const UniValue& params, bool fHelp)
     }
 
     // Minimum confirmations
-    int nMinDepth = 1;
+    int nMinDepth = DEFAULT_NOTE_CONFIRMATIONS;
     if (params.size() > 2) {
         nMinDepth = params[2].get_int();
     }
@@ -5132,12 +5281,12 @@ UniValue z_sendmany(const UniValue& params, bool fHelp)
     UniValue contextInfo = o;
 
     std::optional<uint256> orchardAnchor;
-    if (!ztxoSelector.SelectsSprout()) {
-        // Allow Orchard recipients by setting an Orchard anchor.
-        // TODO: Add an orchardAnchorHeight field to ZTXOSelector so we can ensure the
-        // same anchor is used for witnesses of any selected Orchard note.
-        auto orchardAnchorHeight = nextBlockHeight - nOrchardAnchorConfirmations;
-        orchardAnchor = chainActive[orchardAnchorHeight]->hashFinalOrchardRoot;
+    auto nAnchorDepth = std::min((unsigned int) nMinDepth, nAnchorConfirmations);
+    if (!ztxoSelector.SelectsSprout() && nAnchorDepth > 0) {
+        auto orchardAnchorHeight = nextBlockHeight - nAnchorDepth;
+        if (chainparams.GetConsensus().NetworkUpgradeActive(orchardAnchorHeight, Consensus::UPGRADE_NU5)) {
+            orchardAnchor = chainActive[orchardAnchorHeight]->hashFinalOrchardRoot;
+        }
     }
     TransactionBuilder builder(chainparams.GetConsensus(), nextBlockHeight, orchardAnchor, pwalletMain);
 
@@ -5145,7 +5294,7 @@ UniValue z_sendmany(const UniValue& params, bool fHelp)
     std::shared_ptr<AsyncRPCQueue> q = getAsyncRPCQueue();
     std::shared_ptr<AsyncRPCOperation> operation(
             new AsyncRPCOperation_sendmany(
-                std::move(builder), ztxoSelector, recipients, nMinDepth, strategy, nFee, contextInfo)
+                std::move(builder), ztxoSelector, recipients, nMinDepth, nAnchorDepth, strategy, nFee, contextInfo)
             );
     q->addOperation(operation);
     AsyncRPCOperationId operationId = operation->getId();
@@ -5493,8 +5642,10 @@ UniValue z_shieldcoinbase(const UniValue& params, bool fHelp)
     std::optional<uint256> orchardAnchor;
     if (canopyActive) {
         // Allow Orchard recipients by setting an Orchard anchor.
-        auto orchardAnchorHeight = nextBlockHeight - nOrchardAnchorConfirmations;
-        orchardAnchor = chainActive[orchardAnchorHeight]->hashFinalOrchardRoot;
+        auto orchardAnchorHeight = nextBlockHeight - nAnchorConfirmations;
+        if (Params().GetConsensus().NetworkUpgradeActive(orchardAnchorHeight, Consensus::UPGRADE_NU5)) {
+            orchardAnchor = chainActive[orchardAnchorHeight]->hashFinalOrchardRoot;
+        }
     }
     TransactionBuilder builder = TransactionBuilder(
         Params().GetConsensus(), nextBlockHeight, orchardAnchor, pwalletMain);
@@ -5828,7 +5979,7 @@ UniValue z_mergetoaddress(const UniValue& params, bool fHelp)
             useAnySprout || useAnySapling ?
                 std::nullopt :
                 std::optional(NoteFilter::ForPaymentAddresses(zaddrs));
-        pwalletMain->GetFilteredNotes(sproutEntries, saplingEntries, orchardEntries, noteFilter);
+        pwalletMain->GetFilteredNotes(sproutEntries, saplingEntries, orchardEntries, noteFilter, nAnchorConfirmations);
 
         // If Sapling is not active, do not allow sending from a sapling addresses.
         if (!saplingActive && saplingEntries.size() > 0) {
@@ -5970,8 +6121,10 @@ UniValue z_mergetoaddress(const UniValue& params, bool fHelp)
             // Allow Orchard recipients by setting an Orchard anchor.
             // TODO: Add an orchardAnchorHeight field to ZTXOSelector so we can ensure the
             // same anchor is used for witnesses of any selected Orchard note.
-            auto orchardAnchorHeight = nextBlockHeight - nOrchardAnchorConfirmations;
-            orchardAnchor = chainActive[orchardAnchorHeight]->hashFinalOrchardRoot;
+            auto orchardAnchorHeight = nextBlockHeight - nAnchorConfirmations;
+            if (Params().GetConsensus().NetworkUpgradeActive(orchardAnchorHeight, Consensus::UPGRADE_NU5)) {
+                orchardAnchor = chainActive[orchardAnchorHeight]->hashFinalOrchardRoot;
+            }
         }
         builder = TransactionBuilder(Params().GetConsensus(), nextBlockHeight, orchardAnchor, pwalletMain);
     }

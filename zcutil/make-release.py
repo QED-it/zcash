@@ -24,6 +24,7 @@ def main(args=sys.argv[1:]):
 
     try:
         main_logged(
+            opts.REVISION,
             opts.RELEASE_VERSION,
             opts.RELEASE_PREV,
             opts.RELEASE_FROM,
@@ -53,9 +54,14 @@ def parse_args(args):
         help='Use if this is a hotfix release from a non-master branch.',
     )
     p.add_argument(
+        'REVISION',
+        type=GitHash.parse_arg,
+        help='The git commit hash from which to construct the release.',
+    )
+    p.add_argument(
         'RELEASE_VERSION',
         type=Version.parse_arg,
-        help='The release version: vX.Y.Z-N',
+        help='The release version: vX.Y.Z',
     )
     p.add_argument(
         'RELEASE_PREV',
@@ -76,16 +82,16 @@ def parse_args(args):
 
 
 # Top-level flow:
-def main_logged(release, releaseprev, releasefrom, releaseheight, hotfix):
+def main_logged(revision, release, releaseprev, releasefrom, releaseheight, hotfix):
     verify_dependencies([
         ('help2man', None),
         ('debchange', 'devscripts'),
     ])
 
-    verify_tags(releaseprev, releasefrom)
+    verify_tags(revision, releaseprev, releasefrom)
     verify_version(release, releaseprev, hotfix)
     verify_dependency_updates()
-    initialize_git(release, hotfix)
+    initialize_git(revision, release, hotfix)
     patch_version_in_files(release, releaseprev)
     patch_release_height(releaseheight)
     commit('Versioning changes for {}.'.format(release.novtext))
@@ -131,10 +137,10 @@ def verify_dependency_updates():
     try:
         sh_log('./qa/zcash/updatecheck.py')
     except SystemExit:
-        raise SystemExit("Dependency update check found updates that have not been correctly postponed.")
+        raise SystemExit("Dependency update check failed. Either some updates have not been correctly postponed, or the .updatecheck-token file is missing.")
 
 @phase('Checking tags.')
-def verify_tags(releaseprev, releasefrom):
+def verify_tags(revision, releaseprev, releasefrom):
     candidates = []
 
     # Any tag beginning with a 'v' followed by [1-9] must be a version
@@ -143,20 +149,28 @@ def verify_tags(releaseprev, releasefrom):
     # ignored. Any other tag is silently ignored.
     candidatergx = re.compile('^v[1-9].*$')
 
-    for tag in sh_out('git', 'tag', '--list').splitlines():
+    for tag in sh_out('git', 'tag', '--list', '--merged', revision.value).splitlines():
         if candidatergx.match(tag):
-            candidates.append(Version.parse_arg(tag))
+            v = Version.parse(tag)
+            if v is not None:
+                candidates.append(v)
 
     candidates.sort()
     try:
         latest = candidates[-1]
     except IndexError:
-        raise SystemExit('No previous releases found by `git tag --list`.')
+        raise SystemExit(
+            'No previous releases found by `git tag --list --merged {}`.'
+            .format(
+                revision.value
+            ),
+        )
 
     if releaseprev != latest:
         raise SystemExit(
-            'The latest candidate in `git tag --list` is {} not {}'
+            'The latest candidate in `git tag --list --merged {} is {} not {}'
             .format(
+                revision.value,
                 latest.vtext,
                 releaseprev.vtext,
             ),
@@ -171,9 +185,10 @@ def verify_tags(releaseprev, releasefrom):
             prev_tags.append(candidate)
     else:
         raise SystemExit(
-            '{} does not appear in `git tag --list`'
+            '{} does not appear in `git tag --list --merged {}`'
             .format(
                 releasefrom.vtext,
+                revision.value,
             ),
         )
 
@@ -196,9 +211,9 @@ def verify_version(release, releaseprev, hotfix):
     expected = Version(
         releaseprev.major,
         releaseprev.minor,
-        releaseprev.patch,
+        releaseprev.patch + 1,
         releaseprev.betarc,
-        releaseprev.hotfix + 1 if releaseprev.hotfix else 1,
+        None
     )
     if release != expected:
         raise SystemExit(
@@ -209,29 +224,20 @@ def verify_version(release, releaseprev, hotfix):
 
 
 @phase('Initializing git.')
-def initialize_git(release, hotfix):
+def initialize_git(revision, release, hotfix):
     junk = sh_out('git', 'status', '--porcelain')
     if junk.strip():
         raise SystemExit('There are uncommitted changes:\n' + junk)
 
-    branch = sh_out('git', 'rev-parse', '--abbrev-ref', 'HEAD').strip()
-    if hotfix:
-        expected = 'hotfix-' + release.vtext
-    else:
-        expected = 'master'
-    if branch != expected:
-        raise SystemExit(
-            "Expected branch {!r}, found branch {!r}".format(
-                expected, branch,
-            ),
-        )
-
-    logging.info('Pulling to latest master.')
-    sh_log('git', 'pull', '--ff-only')
-
     branch = 'release-' + release.vtext
-    logging.info('Creating release branch: %r', branch)
-    sh_log('git', 'checkout', '-b', branch)
+    logging.info(
+        'Creating release branch {} from revision {}.'
+        .format(
+            branch,
+            revision.value
+        )
+    )
+    sh_log('git', 'checkout', '-b', branch, revision.value)
     return branch
 
 
@@ -479,6 +485,30 @@ def sh_progress(markers, *args):
     if status != 0:
         raise SystemExit('Nonzero exit status: {!r}'.format(status))
 
+class GitHash (object):
+    '''A git commit hash.'''
+    RGX = re.compile(
+        r'^([0-9a-f]{10,40})$',
+    )
+
+    @staticmethod
+    def parse_arg(text):
+        m = GitHash.RGX.match(text)
+        if m is None:
+            raise argparse.ArgumentTypeError(
+                'Could not parse revision {!r} against regex {}'.format(
+                    text,
+                    GitHash.RGX.pattern,
+                ),
+            )
+        else:
+            assert len(m.groups()) == 1
+            [value] = m.groups()
+            return GitHash(value)
+
+    def __init__(self, value):
+        assert GitHash.RGX.match(value) is not None
+        self.value = value
 
 class Version (object):
     '''A release version.'''
@@ -488,9 +518,24 @@ class Version (object):
     )
 
     @staticmethod
-    def parse_arg(text):
+    def parse(text):
         m = Version.RGX.match(text)
         if m is None:
+            return None
+        else:
+            [major, minor, patch, _, betarc, hyphen] = m.groups()
+            return Version(
+                int(major),
+                int(minor),
+                int(patch),
+                betarc,
+                int(hyphen) if hyphen is not None else None,
+            )
+
+    @staticmethod
+    def parse_arg(text):
+        v = Version.parse(text)
+        if v is None:
             raise argparse.ArgumentTypeError(
                 'Could not parse version {!r} against regex {}'.format(
                     text,
@@ -498,39 +543,32 @@ class Version (object):
                 ),
             )
         else:
-            [major, minor, patch, _, betarc, hotfix] = m.groups()
-            return Version(
-                int(major),
-                int(minor),
-                int(patch),
-                betarc,
-                int(hotfix) if hotfix is not None else None,
-            )
+            return v
 
-    def __init__(self, major, minor, patch, betarc, hotfix):
+    def __init__(self, major, minor, patch, betarc, hyphen):
         for i in [major, minor, patch]:
             assert type(i) is int, i
         assert betarc in {None, 'rc', 'beta'}, betarc
-        assert hotfix is None or type(hotfix) is int, hotfix
+        assert hyphen is None or type(hyphen) is int, hyphen
         if betarc is not None:
-            assert hotfix is not None, (betarc, hotfix)
+            assert hyphen is not None, (betarc, hyphen)
 
         self.major = major
         self.minor = minor
         self.patch = patch
         self.betarc = betarc
-        self.hotfix = hotfix
+        self.hyphen = hyphen
 
-        if hotfix is None:
+        if hyphen is None:
             self.build = 50
         else:
-            assert hotfix > 0, hotfix
+            assert hyphen > 0, hyphen
             if betarc is None:
-                assert hotfix < 50, hotfix
-                self.build = 50 + hotfix
+                assert hyphen < 50, hyphen
+                self.build = 50 + hyphen
             else:
-                assert hotfix < 26, hotfix
-                self.build = {'beta': 0, 'rc': 25}[betarc] + hotfix - 1
+                assert hyphen < 26, hyphen
+                self.build = {'beta': 0, 'rc': 25}[betarc] + hyphen - 1
 
     @property
     def novtext(self):
@@ -547,29 +585,29 @@ class Version (object):
     def _novtext(self, debian):
         novtext = '{}.{}.{}'.format(self.major, self.minor, self.patch)
 
-        if self.hotfix is None:
+        if self.hyphen is None:
             return novtext
         else:
-            assert self.hotfix > 0, self.hotfix
+            assert self.hyphen > 0, self.hyphen
             if self.betarc is None:
-                assert self.hotfix < 50, self.hotfix
+                assert self.hyphen < 50, self.hyphen
                 sep = '+' if debian else '-'
-                return '{}{}{}'.format(novtext, sep, self.hotfix)
+                return '{}{}{}'.format(novtext, sep, self.hyphen)
             else:
-                assert self.hotfix < 26, self.hotfix
+                assert self.hyphen < 26, self.hyphen
                 sep = '~' if debian else '-'
                 return '{}{}{}{}'.format(
                     novtext,
                     sep,
                     self.betarc,
-                    self.hotfix,
+                    self.hyphen,
                 )
 
     def __repr__(self):
         return '<Version {}>'.format(self.vtext)
 
     def _sort_tup(self):
-        if self.hotfix is None:
+        if self.hyphen is None:
             prio = 2
         else:
             prio = {'beta': 0, 'rc': 1, None: 3}[self.betarc]
@@ -579,7 +617,7 @@ class Version (object):
             self.minor,
             self.patch,
             prio,
-            self.hotfix,
+            self.hyphen,
         )
 
     def __lt__(self, other):
@@ -642,11 +680,17 @@ class TestVersion (unittest.TestCase):
             v = Version.parse_arg(case)
             self.assertEqual(v.vtext, case)
 
+    def test_rev_parse(self):
+        sample = '958bcf2dac6d81d17797c0f58f176262a496cfd4'
+        rev = GitHash.parse_arg(sample)
+        self.assertEqual(rev.value, sample)
+
     def test_arg_parse_negatives(self):
         cases = [
             'v07.0.0',
             'v1.0.03',
-            'v1.2.3-0',  # Hotfix numbers must begin w/ 1
+            'v1.2.3-0',
+            'v1.2.3-foobar',
             'v1.2.3~0',
             'v1.2.3+0',
             '1.2.3',
@@ -686,7 +730,7 @@ if __name__ == '__main__':
 
         print('=== Self Test ===')
         try:
-            unittest.main()
+            unittest.main(verbosity=2)
         except SystemExit as e:
             if e.args[0] != 0:
                 raise

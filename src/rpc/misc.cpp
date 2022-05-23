@@ -825,7 +825,7 @@ static void getHeightRange(const UniValue& params, int& start, int& end)
             }
             if (end < start) {
                 throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY,
-                    "End value is expected to be greater than start");
+                    "End value is expected to be greater than or equal to start");
             }
         }
     }
@@ -997,7 +997,7 @@ UniValue getaddressbalance(const UniValue& params, bool fHelp)
             + disabledMsg +
             "\nArguments:\n"
             "{\n"
-            "  \"addresses:\"\n"
+            "  \"addresses\":\n"
             "    [\n"
             "      \"address\"  (string) The base58check encoded address\n"
             "      ,...\n"

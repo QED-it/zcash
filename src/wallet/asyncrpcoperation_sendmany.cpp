@@ -48,11 +48,12 @@ AsyncRPCOperation_sendmany::AsyncRPCOperation_sendmany(
         ZTXOSelector ztxoSelector,
         std::vector<SendManyRecipient> recipients,
         int minDepth,
+        unsigned int anchorDepth,
         TransactionStrategy strategy,
         CAmount fee,
         UniValue contextInfo) :
         builder_(std::move(builder)), ztxoSelector_(ztxoSelector), recipients_(recipients),
-        mindepth_(minDepth), strategy_(strategy), fee_(fee),
+        mindepth_(minDepth), anchordepth_(anchorDepth), strategy_(strategy), fee_(fee),
         contextinfo_(contextInfo)
 {
     assert(fee_ >= 0);
@@ -289,9 +290,23 @@ uint256 AsyncRPCOperation_sendmany::main_impl() {
                 "Resubmit with the `privacyPolicy` parameter set to `AllowRevealedAmounts` "
                 "or weaker if you wish to allow this transaction to proceed anyway.");
         }
+
         // Sending from Orchard to transparent will be caught above in the
         // AllowRevealedRecipients check; sending to Sprout is disallowed
         // entirely.
+
+        if (spendable.orchardNoteMetadata.size() > nOrchardActionLimit) {
+            throw JSONRPCError(
+                RPC_INVALID_PARAMETER,
+                strprintf(
+                    "Attempting to spend %u Orchard notes would exceed the current limit "
+                    "of %u notes, which exists to prevent memory exhaustion. Restart with "
+                    "`-orchardactionlimit=N` where N >= %u to allow the wallet to attempt "
+                    "to construct this transaction.",
+                    spendable.orchardNoteMetadata.size(),
+                    nOrchardActionLimit,
+                    spendable.orchardNoteMetadata.size()));
+        }
     }
 
     spendable.LogInputs(getId());
@@ -496,8 +511,14 @@ uint256 AsyncRPCOperation_sendmany::main_impl() {
     std::vector<std::pair<libzcash::OrchardSpendingKey, orchard::SpendInfo>> orchardSpendInfo;
     {
         LOCK2(cs_main, pwalletMain->cs_wallet);
-        pwalletMain->GetSaplingNoteWitnesses(saplingOutPoints, witnesses, anchor);
-        orchardSpendInfo = pwalletMain->GetOrchardSpendInfo(spendable.orchardNoteMetadata);
+        if (!pwalletMain->GetSaplingNoteWitnesses(saplingOutPoints, anchordepth_, witnesses, anchor)) {
+            // This error should not appear once we're nAnchorConfirmations blocks past
+            // Sapling activation.
+            throw JSONRPCError(RPC_WALLET_ERROR, "Insufficient Sapling witnesses.");
+        }
+        if (builder_.GetOrchardAnchor().has_value()) {
+            orchardSpendInfo = pwalletMain->GetOrchardSpendInfo(spendable.orchardNoteMetadata, builder_.GetOrchardAnchor().value());
+        }
     }
 
     // Add Orchard spends
@@ -546,7 +567,6 @@ uint256 AsyncRPCOperation_sendmany::main_impl() {
             [&](const libzcash::OrchardRawAddress& addr) {
                 auto value = r.amount;
                 auto memo = r.memo.has_value() ? std::optional(get_memo_from_hex_string(r.memo.value())) : std::nullopt;
-
                 builder_.AddOrchardOutput(ovks.second, addr, value, memo);
             }
         }, r.address);
@@ -582,7 +602,11 @@ uint256 AsyncRPCOperation_sendmany::main_impl() {
 
         // inputAnchor is not needed by builder_.AddSproutInput as it is for Sapling.
         uint256 inputAnchor;
-        pwalletMain->GetSproutNoteWitnesses(vOutPoints, vSproutWitnesses, inputAnchor);
+        if (!pwalletMain->GetSproutNoteWitnesses(vOutPoints, anchordepth_, vSproutWitnesses, inputAnchor)) {
+            // This error should not appear once we're nAnchorConfirmations blocks past
+            // Sprout activation.
+            throw JSONRPCError(RPC_WALLET_ERROR, "Insufficient Sprout witnesses.");
+        }
     }
 
     // Add Sprout spends

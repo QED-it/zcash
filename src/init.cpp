@@ -14,6 +14,7 @@
 #include "compat/sanity.h"
 #include "consensus/upgrades.h"
 #include "consensus/validation.h"
+#include "deprecation.h"
 #include "experimental_features.h"
 #include "fs.h"
 #include "httpserver.h"
@@ -332,6 +333,7 @@ std::string HelpMessage(HelpMessageMode mode)
     strUsage += HelpMessageOpt("-?", _("This help message"));
     strUsage += HelpMessageOpt("-alerts", strprintf(_("Receive and display P2P network alerts (default: %u)"), DEFAULT_ALERTS));
     strUsage += HelpMessageOpt("-alertnotify=<cmd>", _("Execute command when a relevant alert is received or we see a really long fork (%s in cmd is replaced by message)"));
+    strUsage += HelpMessageOpt("-allowdeprecated=<feature>", strprintf(_("Explicitly allow the use of the specified deprecated feature. Multiple instances of this parameter are permitted; values for <feature> must be selected from among {%s}"), GetAllowableDeprecatedFeatures()));
     strUsage += HelpMessageOpt("-blocknotify=<cmd>", _("Execute command when the best block changes (%s in cmd is replaced by block hash)"));
     if (showDebug)
         strUsage += HelpMessageOpt("-blocksonly", strprintf(_("Whether to reject transactions from network peers. Automatic broadcast and rebroadcast of any transactions from inbound peers is disabled, unless '-whitelistforcerelay' is '1', in which case whitelisted peers' transactions will be relayed. RPC transactions are not affected. (default: %u)"), DEFAULT_BLOCKSONLY));
@@ -360,8 +362,13 @@ std::string HelpMessage(HelpMessageMode mode)
     strUsage += HelpMessageOpt("-prune=<n>", strprintf(_("Reduce storage requirements by pruning (deleting) old blocks. This mode disables wallet support and is incompatible with -txindex. "
             "Warning: Reverting this setting requires re-downloading the entire blockchain. "
             "(default: 0 = disable pruning blocks, >%u = target size in MiB to use for block files)"), MIN_DISK_SPACE_FOR_BLOCK_FILES / 1024 / 1024));
+#ifdef ENABLE_WALLET
+    strUsage += HelpMessageOpt("-reindex-chainstate", _("Rebuild chain state from the currently indexed blocks (implies -rescan unless pruning or unless -rescan=0 is explicitly specified)"));
+    strUsage += HelpMessageOpt("-reindex", _("Rebuild chain state and block index from the blk*.dat files on disk (implies -rescan unless pruning or unless -rescan=0 is explicitly specified)"));
+#else
     strUsage += HelpMessageOpt("-reindex-chainstate", _("Rebuild chain state from the currently indexed blocks"));
     strUsage += HelpMessageOpt("-reindex", _("Rebuild chain state and block index from the blk*.dat files on disk"));
+#endif
 #ifndef WIN32
     strUsage += HelpMessageOpt("-sysperms", _("Create new files with system default permissions, instead of umask 077 (only effective with disabled wallet functionality)"));
 #endif
@@ -604,7 +611,7 @@ void CleanupBlockRevFiles()
 
 void ThreadStartWalletNotifier()
 {
-    CBlockIndex *pindexLastTip;
+    CBlockIndex *pindexLastTip{nullptr};
 
     // If the wallet is compiled in and enabled, we want to start notifying
     // from the block which corresponds with the wallet's view of the chain
@@ -623,17 +630,21 @@ void ThreadStartWalletNotifier()
         }
 
         if (walletBestBlockHash.has_value()) {
-            int64_t slept;
+            int64_t slept{0};
             auto timedOut = [&]() -> bool {
-                MilliSleep(50);
-                slept += 50;
+                MilliSleep(500);
+                // once we're out of reindexing, we can start incrementing the slept counter
+                if (!IsInitialBlockDownload(Params().GetConsensus())) {
+                    slept += 500;
+                }
+
                 if (slept > WALLET_INITIAL_SYNC_TIMEOUT) {
                     auto errmsg = strprintf(
                             "The wallet's best block hash %s was not detected in restored chain state. "
                             "Giving up; please restart with `-rescan`.",
                             walletBestBlockHash.value().GetHex());
 
-                    LogPrintf("*** %s: %s", __func__, errmsg);
+                    LogError("main", "*** %s: %s", __func__, errmsg);
                     uiInterface.ThreadSafeMessageBox(
                         _("Error: A fatal wallet synchronization error occurred, see debug.log for details"),
                         "", CClientUIInterface::MSG_ERROR);
@@ -918,6 +929,9 @@ void InitParameterInteraction()
             LogPrintf("%s: parameter interaction: -externalip set -> setting -discover=0\n", __func__);
     }
 
+#ifdef ENABLE_WALLET
+    // -rescan only affects the wallet.
+
     if (GetBoolArg("-salvagewallet", false)) {
         // Rewrite just private keys: rescan to find transactions
         if (SoftSetBoolArg("-rescan", true))
@@ -928,6 +942,17 @@ void InitParameterInteraction()
         if (SoftSetBoolArg("-rescan", true))
             LogPrintf("%s: parameter interaction: -zapwallettxes=<mode> -> setting -rescan=1\n", __func__);
     }
+
+    if (GetBoolArg("-reindex", false) && !GetArg("-prune", 0)) {
+        if (SoftSetBoolArg("-rescan", true))
+            LogPrintf("%s: parameter interaction: -reindex=1 and not pruning -> setting -rescan=1\n", __func__);
+    }
+
+    if (GetBoolArg("-reindex-chainstate", false) && !GetArg("-prune", 0)) {
+        if (SoftSetBoolArg("-rescan", true))
+            LogPrintf("%s: parameter interaction: -reindex-chainstate=1 and not pruning -> setting -rescan=1\n", __func__);
+    }
+#endif
 
     // disable walletbroadcast and whitelistrelay in blocksonly mode
     if (GetBoolArg("-blocksonly", DEFAULT_BLOCKSONLY)) {
