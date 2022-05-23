@@ -13,12 +13,12 @@
 class NoteType
 {
 private:
-    unsigned char type_id[32];
+    char type_id[32];       //should it be unsigned?
 
 public:
 //    NoteType() : type_id(znt) { }
     NoteType();
-    NoteType(unsigned char tid[]);
+    NoteType(char tid[]);
 //    NoteType(unsigned char type_id): type_id(type_id) {}
 
 };
