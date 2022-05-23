@@ -28,7 +28,7 @@ private:
     OrchardOutPoint op;
     libzcash::OrchardRawAddress address;
     CAmount noteValue;
-//    NoteType noteType;
+    NoteType noteType;
     std::array<uint8_t, ZC_MEMO_SIZE> memo;
     int confirmations;
 public:
@@ -36,10 +36,10 @@ public:
         OrchardOutPoint op,
         const libzcash::OrchardRawAddress& address,
         CAmount noteValue,
-//        NoteType noteType,
+        NoteType noteType,
         const std::array<unsigned char, ZC_MEMO_SIZE>& memo):
         op(op), address(address), noteValue(noteValue),
-//        noteType(noteType),
+        noteType(noteType),
         memo(memo), confirmations(0) {}
 
     const OrchardOutPoint& GetOutPoint() const {
@@ -392,14 +392,16 @@ public:
         uint256 txid;
         std::move(std::begin(rawNoteMeta.txid), std::end(rawNoteMeta.txid), txid.begin());
         OrchardOutPoint op(txid, rawNoteMeta.actionIdx);
-//        NoteType nt(rawNoteMeta.noteType);
+        NoteType nt(rawNoteMeta.noteType);
+        std::cout<<"rawNoteMeta.noteType = "<<rawNoteMeta.noteType;
+//        NoteType nt;
         std::array<uint8_t, ZC_MEMO_SIZE> memo;
         std::move(std::begin(rawNoteMeta.memo), std::end(rawNoteMeta.memo), memo.begin());
         OrchardNoteMetadata noteMeta(
                 op,
                 libzcash::OrchardRawAddress(rawNoteMeta.addr),
                 rawNoteMeta.noteValue,
-//                nt,
+                nt,
                 memo);
 
         reinterpret_cast<std::vector<OrchardNoteMetadata>*>(orchardNotesRet)->push_back(noteMeta);

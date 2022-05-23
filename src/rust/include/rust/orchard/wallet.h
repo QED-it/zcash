@@ -242,7 +242,7 @@ struct RawOrchardNoteMetadata {
     uint32_t actionIdx;
     OrchardRawAddressPtr* addr;
     CAmount noteValue;
-    unsigned char noteType[32];
+    char noteType[32];
     unsigned char memo[512];
 };
 
