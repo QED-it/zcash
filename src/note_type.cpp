@@ -2,7 +2,7 @@
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or https://www.opensource.org/licenses/mit-license.php .
 
-#include "notetype.h"
+#include "note_type.h"
 
 #include <string.h>
 
@@ -29,4 +29,7 @@ NoteType::NoteType(char tid[]) {
 
 //NoteType::NoteType(char tid[]) {
 //    strcpy(type_id, reinterpret_cast<unsigned char[]> (tid));
+
+//void NoteType::set_type_id(unsigned char *tid) {
+//    std::move(std::begin(tid), std::end(tid), type_id.begin());
 //}
