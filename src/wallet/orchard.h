@@ -16,7 +16,7 @@
 #include "zcash/address/orchard.hpp"
 #include "zcash/IncrementalMerkleTree.hpp"
 
-#include "notetype.h"
+#include "note_type.h"
 
 class OrchardWallet;
 class OrchardWalletNoteCommitmentTreeWriter;
