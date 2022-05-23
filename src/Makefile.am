@@ -239,6 +239,7 @@ BITCOIN_CORE_H = \
   miner.h \
   net.h \
   netbase.h \
+  notetype.h \
   noui.h \
   policy/fees.h \
   policy/policy.h \
@@ -346,6 +347,7 @@ libbitcoin_server_a_SOURCES = \
   metrics.cpp \
   miner.cpp \
   net.cpp \
+  notetype.cpp \
   noui.cpp \
   policy/fees.cpp \
   policy/policy.cpp \
