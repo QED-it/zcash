@@ -7,21 +7,18 @@
 #include <string.h>
 
 //static const unsigned
-char znt[] = "\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0";
+unsigned char znt[32] = "\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0";
 
 NoteType::NoteType() { // default constructor TODO: Want to make the default constructor setting the note type to ZEC?
-    strcpy(type_id, znt);
+    std::move(std::begin(znt), std::end(znt), type_id.begin());
+//    strcpy(type_id, znt);
 }
 
-NoteType::NoteType(char tid[]) {
-    strcpy(type_id, tid);
+NoteType::NoteType(unsigned char tid[]) {
+    for (int i = 0; i < ZSA_NOTE_SIZE; i++) {
+        type_id[i] = tid[i];
+    }
 }
-
-//NoteType::NoteType(unsigned char tid[]) {
-//    char normal_tid[] = reinterpret_cast<char[]> (tid);
-//    strcpy(type_id, normal_tid);
-//}
-
 
 //NoteType::NoteType(unsigned char* tid) {
 //    type_id = *tid;
@@ -33,3 +30,6 @@ NoteType::NoteType(char tid[]) {
 //void NoteType::set_type_id(unsigned char *tid) {
 //    std::move(std::begin(tid), std::end(tid), type_id.begin());
 //}
+
+//void NoteType::set_type_id(unsigned char *tid) {
+//    std::move(std::begin(tid), std::end(tid), type_id.begin());//}

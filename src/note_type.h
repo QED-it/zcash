@@ -6,21 +6,25 @@
 #define ZCASH_NOTETYPE_H
 
 #include <stdlib.h>
+#include <array>
 #include <string>
+#include "zcash/Zcash.h"
+
+#include "zcash/Zcash.h"
 
 //static const unsigned char znt[32] = "\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0";
 
 class NoteType
 {
 private:
-    char type_id[32];       //should it be unsigned?
+    std::array<uint8_t, ZSA_NOTE_SIZE> type_id;
 
 public:
 //    NoteType() : type_id(znt) { }
     NoteType();
-    NoteType(char tid[]);
+    NoteType(unsigned char tid[ZSA_NOTE_SIZE]);
 //    NoteType(unsigned char type_id): type_id(type_id) {}
-
+//    void set_type_id(unsigned char tid[32]);
 };
 
 #endif //ZCASH_NOTETYPE_H
