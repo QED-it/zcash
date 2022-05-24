@@ -13,12 +13,12 @@
 class NoteType
 {
 private:
-    char type_id[32];       //should it be unsigned?
+    std::array<uint8_t, ZSA_NOTE_SIZE> type_id;
 
 public:
 //    NoteType() : type_id(znt) { }
     NoteType();
-    NoteType(char tid[]);
+    NoteType(unsigned char tid[]);
 //    NoteType(unsigned char type_id): type_id(type_id) {}
 
 };
