@@ -238,11 +238,11 @@ OrchardIncomingViewingKeyPtr* orchard_wallet_get_ivk_for_address(
  * orchard_ffi/wallet.rs.
  */
 struct RawOrchardNoteMetadata {
-     unsigned char txid[32];
+    unsigned char txid[32];
     uint32_t actionIdx;
     OrchardRawAddressPtr* addr;
     CAmount noteValue;
-    char noteType[32];
+    unsigned char noteType[32];
     unsigned char memo[512];
 };
 

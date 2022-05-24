@@ -390,11 +390,11 @@ public:
 
     static void PushOrchardNoteMeta(void* orchardNotesRet, RawOrchardNoteMetadata rawNoteMeta) {
         uint256 txid;
-        std::cout<<"rawNoteMeta.txid = "<<rawNoteMeta.txid;
+//        std::cout<<"rawNoteMeta.txid = "<<rawNoteMeta.txid;   //DEBUG PRINT
         std::move(std::begin(rawNoteMeta.txid), std::end(rawNoteMeta.txid), txid.begin());
         OrchardOutPoint op(txid, rawNoteMeta.actionIdx);
         NoteType nt(rawNoteMeta.noteType);
-        std::cout<<"rawNoteMeta.noteType = "<<rawNoteMeta.noteType;
+//        std::cout<<"rawNoteMeta.noteType = "<<rawNoteMeta.noteType; //DEBUG PRINT
 //        NoteType nt;
         std::array<uint8_t, ZC_MEMO_SIZE> memo;
         std::move(std::begin(rawNoteMeta.memo), std::end(rawNoteMeta.memo), memo.begin());
