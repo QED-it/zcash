@@ -394,8 +394,9 @@ public:
         std::move(std::begin(rawNoteMeta.txid), std::end(rawNoteMeta.txid), txid.begin());
         OrchardOutPoint op(txid, rawNoteMeta.actionIdx);
         NoteType nt(rawNoteMeta.noteType);
-//        std::cout<<"rawNoteMeta.noteType = "<<rawNoteMeta.noteType; //DEBUG PRINT
 //        NoteType nt;
+//        nt.set_type_id(rawNoteMeta.noteType);
+//        std::cout<<"rawNoteMeta.noteType = "<<rawNoteMeta.noteType; //DEBUG PRINT
         std::array<uint8_t, ZC_MEMO_SIZE> memo;
         std::move(std::begin(rawNoteMeta.memo), std::end(rawNoteMeta.memo), memo.begin());
         OrchardNoteMetadata noteMeta(
