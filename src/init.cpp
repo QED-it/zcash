@@ -71,6 +71,8 @@
 
 #include "librustzcash.h"
 
+#include <iostream>
+
 using namespace boost::placeholders;
 
 extern void ThreadSendAlert();
@@ -141,6 +143,7 @@ std::atomic<bool> fRequestShutdown(false);
 
 void StartShutdown()
 {
+    std::cout << "init.cpp:140:StartShutdown: This runs on calling zcash-cli stop" << std::endl;
     fRequestShutdown = true;
 }
 bool ShutdownRequested()

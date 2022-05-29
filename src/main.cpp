@@ -73,8 +73,6 @@ using namespace std;
  */
 RecursiveMutex cs_main;
 
-std::cout<<"does this run?"<<std::endl;
-
 BlockMap mapBlockIndex;
 CChain chainActive;
 CBlockIndex *pindexBestHeader = NULL;
