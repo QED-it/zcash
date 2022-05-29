@@ -40,6 +40,7 @@
 #include <atomic>
 #include <sstream>
 #include <variant>
+#include <iostream>
 
 #include <boost/algorithm/string/replace.hpp>
 #include <boost/math/distributions/poisson.hpp>
@@ -71,6 +72,8 @@ using namespace std;
  * chainstate at the same time.
  */
 RecursiveMutex cs_main;
+
+std::cout<<"does this run?"<<std::endl;
 
 BlockMap mapBlockIndex;
 CChain chainActive;
