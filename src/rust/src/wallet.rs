@@ -22,7 +22,7 @@ use orchard::{
     tree::{MerkleHashOrchard, MerklePath},
     Address, Bundle, Note,
 };
-// use orchard::note::NoteType;
+use orchard::note::NoteType;
 
 use crate::{
     builder_ffi::OrchardSpendInfo,
@@ -1400,4 +1400,13 @@ pub extern "C" fn orchard_wallet_init_from_frontier(
         );
         false
     }
+}
+
+// Note Type:
+
+/// Function to retrieve the native type (for ZEC notes).
+#[no_mangle]
+pub extern "C" fn zsa_get_native_note_type(
+) -> [u8; 32] {
+    NoteType::native().to_bytes()
 }
