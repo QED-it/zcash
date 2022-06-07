@@ -392,7 +392,7 @@ bool orchard_wallet_load_note_commitment_tree(
 /**
  * Return the native ZEC note type
  */
-unsigned char* zsa_get_native_note_type();
+const unsigned char* zsa_get_native_note_type();
 
 #ifdef __cplusplus
 }
