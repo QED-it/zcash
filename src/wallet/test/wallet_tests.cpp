@@ -14,6 +14,8 @@
 
 #include <boost/test/unit_test.hpp>
 
+#include "rust/include/rust/orchard/wallet.h"
+
 // how many times to run all the tests to have a chance to catch errors that only show up with particular random shuffles
 #define RUN_TESTS 100
 
@@ -323,6 +325,17 @@ BOOST_AUTO_TEST_CASE(coin_selection_tests)
         }
     }
     empty_wallet();
+
+    // Quick ZSA Test:
+    unsigned char* p = new unsigned char[32];
+    if (zsa_get_native_note_type(p)){
+        for (int i = 0; i < 32; i++){
+            printf("%u,",*p);
+    //        printf(",");
+            p++;
+        }
+    }
+//    printf("%u8",zsa_get_native_note_type());
 }
 
 BOOST_AUTO_TEST_SUITE_END()
