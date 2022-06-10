@@ -15,6 +15,7 @@ use zcash_primitives::{
     transaction::{components::Amount, TxId},
 };
 
+use orchard::note::NoteType;
 use orchard::{
     bundle::Authorized,
     keys::{FullViewingKey, IncomingViewingKey, OutgoingViewingKey, Scope, SpendingKey},
@@ -22,7 +23,6 @@ use orchard::{
     tree::{MerkleHashOrchard, MerklePath},
     Address, Bundle, Note,
 };
-use orchard::note::NoteType;
 
 use crate::{
     builder_ffi::OrchardSpendInfo,
@@ -1034,7 +1034,7 @@ pub struct FFINoteMetadata {
     action_idx: u32,
     recipient: *mut Address,
     note_value: i64,
-    note_type: [u8; 32],        // only passing the byte representation of the type
+    note_type: [u8; 32], // only passing the byte representation of the type
     memo: [u8; 512],
 }
 
@@ -1077,7 +1077,7 @@ pub struct FFIActionSpend {
     outpoint_action_idx: u32,
     received_at: *mut Address,
     value: i64,
-}   //TODO: add note_type?
+} //TODO: add note_type?
 
 /// A type used to pass decrypted output information across the FFI boundary.
 /// This must have the same representation as `struct RawOrchardOutputData`
@@ -1089,7 +1089,7 @@ pub struct FFIActionOutput {
     value: i64,
     memo: [u8; 512],
     is_outgoing: bool,
-}   //TODO: add note_type?
+} //TODO: add note_type?
 
 /// A C++-allocated function pointer that can send a FFIActionSpend value
 /// to a receiver.
@@ -1406,11 +1406,9 @@ pub extern "C" fn orchard_wallet_init_from_frontier(
 
 /// Function to retrieve the native type (for ZEC notes).
 #[no_mangle]
-pub extern "C" fn zsa_get_native_note_type(
-    note_type_ret: *mut [u8; 32],
-) -> bool {
+pub extern "C" fn zsa_get_native_note_type(note_type_ret: *mut [u8; 32]) -> bool {
     // println!("Rust: {:?}", NoteType::native().to_bytes());
-    unsafe{
+    unsafe {
         // assert!(!note_type_ret.is_null());
         *note_type_ret = NoteType::native().to_bytes();
     }
