@@ -2,8 +2,8 @@
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or https://www.opensource.org/licenses/mit-license.php .
 
-#ifndef ZCASH_NOTETYPE_H
-#define ZCASH_NOTETYPE_H
+#ifndef ZCASH_NOTE_TYPE_H
+#define ZCASH_NOTE_TYPE_H
 
 #include <stdlib.h>
 #include <array>
@@ -26,4 +26,4 @@ public:
 //    void set_type_id(unsigned char tid[32]);
 };
 
-#endif //ZCASH_NOTETYPE_H
+#endif //ZCASH_NOTE_TYPE_H
