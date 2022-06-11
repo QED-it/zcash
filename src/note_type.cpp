@@ -11,9 +11,16 @@
 unsigned char zz = '\0';
 
 NoteType::NoteType() { // default constructor TODO: Want to make the default constructor setting the note type to ZEC?
-    for (int i = 0; i < ZSA_NOTE_SIZE; i++) {
-        type_id[i] = zz;
+    unsigned char* note_type_ret = new unsigned char[ZSA_NOTE_SIZE];
+    if (zsa_get_native_note_type(note_type_ret)) {
+        for (int i = 0; i < ZSA_NOTE_SIZE; i++) {
+            type_id[i] = *note_type_ret;
+            note_type_ret++;
+        }
     }
+//    for (int i = 0; i < ZSA_NOTE_SIZE; i++) {
+//        type_id[i] = zz;
+//    }
 //    std::move(std::begin(znt), std::end(znt), type_id.begin());
 //    strcpy(type_id, znt);
 }
