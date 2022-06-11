@@ -5,6 +5,8 @@
 #ifndef ZCASH_RUST_INCLUDE_RUST_ORCHARD_WALLET_H
 #define ZCASH_RUST_INCLUDE_RUST_ORCHARD_WALLET_H
 
+#include "amount.h"
+
 #include "rust/orchard/incremental_merkle_tree.h"
 #include "rust/orchard/keys.h"
 #include "rust/builder.h"

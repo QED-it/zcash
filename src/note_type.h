@@ -11,6 +11,7 @@
 #include "zcash/Zcash.h"
 
 #include "zcash/Zcash.h"
+#include "rust/include/rust/orchard/wallet.h"
 
 //static const unsigned char znt[32] = "\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0";
 

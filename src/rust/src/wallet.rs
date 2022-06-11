@@ -15,7 +15,6 @@ use zcash_primitives::{
     transaction::{components::Amount, TxId},
 };
 
-use orchard::note::NoteType;
 use orchard::{
     bundle::Authorized,
     keys::{FullViewingKey, IncomingViewingKey, OutgoingViewingKey, Scope, SpendingKey},
