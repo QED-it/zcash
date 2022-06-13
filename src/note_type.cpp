@@ -4,13 +4,7 @@
 
 #include "note_type.h"
 
-#include <string.h>
-
-//static const unsigned
-//unsigned char znt[32] = "\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0";
-unsigned char zz = '\0';
-
-NoteType::NoteType() { // default constructor TODO: Want to make the default constructor setting the note type to ZEC?
+NoteType::NoteType() { // default constructor
     unsigned char* note_type_ret = new unsigned char[ZSA_NOTE_SIZE];
     if (zsa_get_native_note_type(note_type_ret)) {
         for (int i = 0; i < ZSA_NOTE_SIZE; i++) {
@@ -18,11 +12,6 @@ NoteType::NoteType() { // default constructor TODO: Want to make the default con
             note_type_ret++;
         }
     }
-//    for (int i = 0; i < ZSA_NOTE_SIZE; i++) {
-//        type_id[i] = zz;
-//    }
-//    std::move(std::begin(znt), std::end(znt), type_id.begin());
-//    strcpy(type_id, znt);
 }
 
 NoteType::NoteType(unsigned char tid[]) {
@@ -30,7 +19,3 @@ NoteType::NoteType(unsigned char tid[]) {
         type_id[i] = tid[i];
     }
 }
-
-//void NoteType::set_type_id(unsigned char *tid) {
-//    std::move(std::begin(tid), std::end(tid), type_id.begin());
-//}
