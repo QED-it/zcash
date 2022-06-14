@@ -10,16 +10,16 @@
 #include <string>
 
 #include "zcash/Zcash.h"
-#include "rust/include/rust/orchard/wallet.h"
+#include "rust/orchard/wallet.h"
 
 class NoteType
 {
 private:
-    std::array<uint8_t, ZSA_NOTE_SIZE> type_id;
+    std::array<uint8_t, ZC_NOTE_TYPE_SIZE> type_id;
 
 public:
     NoteType();
-    NoteType(unsigned char tid[ZSA_NOTE_SIZE]);
+    NoteType(unsigned char tid[ZC_NOTE_TYPE_SIZE]);
 };
 
 #endif //ZCASH_NOTE_TYPE_H
