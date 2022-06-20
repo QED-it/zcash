@@ -326,16 +326,24 @@ BOOST_AUTO_TEST_CASE(coin_selection_tests)
     }
     empty_wallet();
 
-    // Quick ZSA Test:
-    unsigned char* p = new unsigned char[32];
-    if (zsa_get_native_note_type(p)){
+    // Quick ZSA Tests:
+    unsigned char* p1 = new unsigned char[32];
+    unsigned char* p2 = new unsigned char[32];
+
+
+    if (zsa_get_native_note_type(p1)){
+        printf("C++ ZEC:\n");
         for (int i = 0; i < 32; i++){
-            printf("%u,",*p);
+            printf("%u,",*p1);
     //        printf(",");
-            p++;
+            p1++;
         }
     }
-//    printf("%u8",zsa_get_native_note_type());
-}
+
+
+//    if (zsa_get_derived_note_type(ik, ad, len, p2)) {
+//
+//    }
+//}
 
 BOOST_AUTO_TEST_SUITE_END()
