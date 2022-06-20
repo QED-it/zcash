@@ -1408,10 +1408,9 @@ pub extern "C" fn orchard_wallet_init_from_frontier(
 
 /// Function to retrieve the native type (for ZEC notes).
 #[no_mangle]
-pub extern "C" fn zsa_get_native_note_type(note_type_ret: *mut [u8; 32]) -> bool {
-    // println!("Rust: {:?}", NoteType::native().to_bytes());
+pub extern "C" fn zsa_get_native_note_type(note_type_ret: *mut [u8; 32]) -> () {
     unsafe {
-        // assert!(!note_type_ret.is_null());
+        assert!(!note_type_ret.is_null());
         *note_type_ret = NoteType::native().to_bytes();
     }
     true
@@ -1426,8 +1425,10 @@ pub extern "C" fn zsa_get_derived_note_type(
     asset_desc_len: usize,
     note_type_ret: *mut [u8; 32],
 ) -> bool {
+    let mut asset_desc_vec = vec![];
     unsafe {
-        let mut asset_desc_vec = vec![];
+        assert!(!asset_desc_ptr.is_null());
+        assert!(!note_type_ret.is_null());
         for i in 0..asset_desc_len {
             asset_desc_vec.push(*asset_desc_ptr.add(i));
         }
