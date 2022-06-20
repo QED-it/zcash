@@ -396,6 +396,15 @@ bool orchard_wallet_load_note_commitment_tree(
  */
 bool zsa_get_native_note_type(unsigned char* note_type_ret);
 
+/**
+ * Return the derived note type
+ */
+bool zsa_get_derived_note_type(
+        ZSAIssuanceKeyPtr* ikPtr,
+        unsigned char* assetDescPtr,
+        size_t assetDescLen,
+        unsigned char* noteTypeRet);
+
 #ifdef __cplusplus
 }
 #endif

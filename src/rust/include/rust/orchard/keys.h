@@ -262,6 +262,13 @@ void orchard_spending_key_free(OrchardSpendingKeyPtr* ptr);
 OrchardFullViewingKeyPtr* orchard_spending_key_to_full_viewing_key(
     const OrchardSpendingKeyPtr* key);
 
+//
+// Issuance Keys
+//
+
+struct ZSAIssuanceKeyPtr;
+typedef struct ZSAIssuanceKeyPtr ZSAIssuanceKeyPtr;
+
 #ifdef __cplusplus
 }
 #endif

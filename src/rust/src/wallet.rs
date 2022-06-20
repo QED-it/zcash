@@ -17,7 +17,10 @@ use zcash_primitives::{
 
 use orchard::{
     bundle::Authorized,
-    keys::{FullViewingKey, IncomingViewingKey, OutgoingViewingKey, Scope, SpendingKey},
+    keys::{
+        FullViewingKey, IncomingViewingKey, IssuerValidatingKey, OutgoingViewingKey, Scope,
+        SpendingKey,
+    },
     note::{NoteType, Nullifier},
     tree::{MerkleHashOrchard, MerklePath},
     Address, Bundle, Note,
@@ -1410,6 +1413,24 @@ pub extern "C" fn zsa_get_native_note_type(note_type_ret: *mut [u8; 32]) -> bool
     unsafe {
         // assert!(!note_type_ret.is_null());
         *note_type_ret = NoteType::native().to_bytes();
+    }
+    true
+}
+
+/// Function to retrieve the derived type (for shielded assets).
+#[no_mangle]
+pub extern "C" fn zsa_get_derived_note_type(
+    ik_ptr: *mut IssuerValidatingKey,
+    asset_desc_ptr: *mut u8,
+    asset_desc_len: usize,
+    note_type_ret: *mut [u8; 32],
+) -> bool {
+    unsafe {
+        let mut asset_desc_vec = vec![];
+        for i in 0..asset_desc_len {
+            asset_desc_vec.push(*asset_desc_ptr.add(i));
+        }
+        *note_type_ret = NoteType::derive(&*ik_ptr, asset_desc_vec).to_bytes();
     }
     true
 }

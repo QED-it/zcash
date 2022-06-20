@@ -87,4 +87,5 @@ panic = 'abort'
 codegen-units = 1
 
 [patch.crates-io]
-orchard = {git = "https://github.com/QED-it/orchard.git", rev = "100b644a25c879b9de7c3607005cbc5a466b0958"}
+#orchard = {git = "https://github.com/QED-it/orchard.git", rev = "100b644a25c879b9de7c3607005cbc5a466b0958"}
+orchard = {git = "https://github.com/QED-it/orchard.git", rev = "8a6f59927eee1e456c6476c46ff7f6e6fb6fe497"}
