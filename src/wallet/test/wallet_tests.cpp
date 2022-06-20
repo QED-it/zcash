@@ -344,6 +344,7 @@ BOOST_AUTO_TEST_CASE(coin_selection_tests)
 //    if (zsa_get_derived_note_type(ik, ad, len, p2)) {
 //
 //    }
-//}
+
+}
 
 BOOST_AUTO_TEST_SUITE_END()
