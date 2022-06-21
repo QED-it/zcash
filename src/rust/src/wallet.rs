@@ -1426,10 +1426,10 @@ pub extern "C" fn zsa_get_derived_note_type(
     let mut asset_desc_vec = vec![];
     unsafe {
         assert!(!asset_desc_ptr.is_null());
+        assert!(!note_type_ret.is_null());
         for i in 0..asset_desc_len {
             asset_desc_vec.push(*asset_desc_ptr.add(i));
         }
-        assert!(!note_type_ret.is_null());
         *note_type_ret = NoteType::derive(&*ik_ptr, asset_desc_vec).to_bytes();
     }
     true
