@@ -405,6 +405,8 @@ bool zsa_get_derived_note_type(
         size_t assetDescLen,
         unsigned char* noteTypeRet);
 
+void generate_random_issuer_validating_key(ZSAIssuanceKeyPtr* ikPtr);
+
 #ifdef __cplusplus
 }
 #endif

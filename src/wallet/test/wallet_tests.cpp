@@ -327,23 +327,48 @@ BOOST_AUTO_TEST_CASE(coin_selection_tests)
     empty_wallet();
 
     // Quick ZSA Tests:
-    unsigned char* p1 = new unsigned char[32];
-    unsigned char* p2 = new unsigned char[32];
+    unsigned char* pZEC = new unsigned char[32];    //testing the native ZEC type
+    unsigned char* pBTC = new unsigned char[32];    //testing a derived type: zBTC
+    unsigned char* pETH = new unsigned char[32];    //testing a derived type: zETH
 
-
-    if (zsa_get_native_note_type(p1)){
+    if (zsa_get_native_note_type(pZEC)){
         printf("C++ ZEC:\n");
         for (int i = 0; i < 32; i++){
-            printf("%u,",*p1);
+            printf("%u,",*pZEC);
     //        printf(",");
-            p1++;
+            pZEC++;
         }
     }
 
+    // Let's start by generating a random issuer validating key `ik`
 
-//    if (zsa_get_derived_note_type(ik, ad, len, p2)) {
-//
-//    }
+    ZSAIssuanceKeyPtr* ikPtr; // = new ZSAIssuanceKeyPtr;
+    generate_random_issuer_validating_key(ikPtr);
+
+    unsigned char adBTC[] = "zBTC";
+    size_t lenBTC = sizeof(adBTC);
+    unsigned char adETH[] = "zETH";
+    size_t lenETH = sizeof(adETH);
+    unsigned char* adBTCPtr = &adBTC[0];
+    unsigned char* adETHPtr = &adETH[0];
+
+    if (zsa_get_derived_note_type(ikPtr, adBTCPtr, lenBTC, pBTC)) {
+        printf("C++ BTC:\n");
+        for (int i = 0; i < 32; i++){
+            printf("%u,",*pBTC);
+            //        printf(",");
+            pBTC++;
+        }
+    }
+
+    if (zsa_get_derived_note_type(ikPtr, adETHPtr, lenETH, pETH)) {
+        printf("C++ ETH:\n");
+        for (int i = 0; i < 32; i++){
+            printf("%u,",*pETH);
+            //        printf(",");
+            pETH++;
+        }
+    }
 
 }
 

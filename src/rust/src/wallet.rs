@@ -15,6 +15,7 @@ use zcash_primitives::{
     transaction::{components::Amount, TxId},
 };
 
+use orchard::keys::IssuerAuthorizingKey;
 use orchard::{
     bundle::Authorized,
     keys::{
@@ -25,6 +26,7 @@ use orchard::{
     tree::{MerkleHashOrchard, MerklePath},
     Address, Bundle, Note,
 };
+use rand_core::{OsRng, RngCore};
 
 use crate::{
     builder_ffi::OrchardSpendInfo,
@@ -1411,7 +1413,7 @@ pub extern "C" fn orchard_wallet_init_from_frontier(
 pub extern "C" fn zsa_get_native_note_type(note_type_ret: *mut [u8; 32]) -> bool {
     println!("Rust ZEC: {:?}", NoteType::native().to_bytes());
     unsafe {
-        // assert!(!note_type_ret.is_null());
+        assert!(!note_type_ret.is_null());
         *note_type_ret = NoteType::native().to_bytes();
     }
     true
@@ -1431,6 +1433,35 @@ pub extern "C" fn zsa_get_derived_note_type(
             asset_desc_vec.push(*asset_desc_ptr.add(i));
         }
         *note_type_ret = NoteType::derive(&*ik_ptr, asset_desc_vec).to_bytes();
+        println!("Rust derived: {:?}", *note_type_ret);
     }
     true
+}
+
+// For ZSA Derived type tests: we do not want to actually use these functions in reality (i.e.
+// beyond these tests), there are other ways to expose the `ik` key
+// To do this, I will first be generating a random spending key `sk` (as is done for dummy spend
+// notes). Then, I will use this spending key to generate a issuer authorization key `isk`. This
+// isk will then be used to generate the `ik` that I need.
+
+// Further note the SpendingKey::random function is not public outside the Orchard crate, so I
+// instead just re-implement the code here.
+
+#[no_mangle]
+pub extern "C" fn generate_random_issuer_validating_key(ik_ptr: *mut IssuerValidatingKey) -> () {
+    let mut rng = OsRng;
+    let sk = loop {
+        let mut bytes = [0; 32];
+        rng.fill_bytes(&mut bytes);
+        let sko = SpendingKey::from_bytes(bytes);
+        if sko.is_some().into() {
+            break sko.unwrap();
+        }
+    };
+    let isk = IssuerAuthorizingKey::from(&sk);
+    let ik = IssuerValidatingKey::from(&isk);
+
+    unsafe {
+        *ik_ptr = ik;
+    }
 }
