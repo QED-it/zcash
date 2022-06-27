@@ -5,6 +5,7 @@ use std::slice;
 use incrementalmerkletree::Hashable;
 use libc::size_t;
 use orchard::keys::SpendingKey;
+use orchard::note::NoteType;
 use orchard::{
     builder::{Builder, InProgress, Unauthorized, Unproven},
     bundle::{Authorized, Flags},
@@ -93,6 +94,7 @@ pub extern "C" fn orchard_builder_add_recipient(
     ovk: *const [u8; 32],
     recipient: *const orchard::Address,
     value: u64,
+    note_type: *const [u8; 32],
     memo: *const [u8; 512],
 ) -> bool {
     let builder = unsafe { builder.as_mut() }.expect("Builder may not be null.");
@@ -101,6 +103,7 @@ pub extern "C" fn orchard_builder_add_recipient(
         .map(OutgoingViewingKey::from);
     let recipient = unsafe { recipient.as_ref() }.expect("Recipient may not be null.");
     let value = NoteValue::from_raw(value);
+    let note_type = NoteType::native().to_bytes();
     let memo = unsafe { memo.as_ref() }.copied();
 
     match builder.add_recipient(ovk, *recipient, value, memo) {
