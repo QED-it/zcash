@@ -94,7 +94,7 @@ pub extern "C" fn orchard_builder_add_recipient(
     ovk: *const [u8; 32],
     recipient: *const orchard::Address,
     value: u64,
-    note_type: *const [u8; 32],
+    // note_type: *const [u8; 32],
     memo: *const [u8; 512],
 ) -> bool {
     let builder = unsafe { builder.as_mut() }.expect("Builder may not be null.");
@@ -103,10 +103,10 @@ pub extern "C" fn orchard_builder_add_recipient(
         .map(OutgoingViewingKey::from);
     let recipient = unsafe { recipient.as_ref() }.expect("Recipient may not be null.");
     let value = NoteValue::from_raw(value);
-    let note_type = NoteType::native().to_bytes();
+    let note_type = NoteType::native();
     let memo = unsafe { memo.as_ref() }.copied();
 
-    match builder.add_recipient(ovk, *recipient, value, memo) {
+    match builder.add_recipient(ovk, *recipient, value, note_type, memo) {
         Ok(()) => true,
         Err(e) => {
             error!("Failed to add Orchard recipient: {}", e);
