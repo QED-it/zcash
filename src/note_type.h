@@ -8,7 +8,6 @@
 #include <stdlib.h>
 #include <array>
 #include <string>
-#include "zcash/Zcash.h"
 
 #include "zcash/Zcash.h"
 #include "rust/orchard/wallet.h"
