@@ -6,7 +6,7 @@ replace-with = "vendored-sources"
 
 [source."https://github.com/QED-it/orchard.git"]
 git = "https://github.com/QED-it/orchard.git"
-rev = "ac71bc752847f36b23d25ad054f69b647cbed167"
+rev = "60a17a2179d0a4b539b23cd5410045b5d3107ef1"
 replace-with = "vendored-sources"
 
 [source.vendored-sources]
