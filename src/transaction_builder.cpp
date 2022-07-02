@@ -63,6 +63,7 @@ void Builder::AddOutput(
     const std::optional<uint256>& ovk,
     const libzcash::OrchardRawAddress& to,
     CAmount value,
+    NoteType noteType,
     const std::optional<std::array<unsigned char, ZC_MEMO_SIZE>>& memo)
 {
     if (!inner) {
@@ -74,6 +75,7 @@ void Builder::AddOutput(
         ovk.has_value() ? ovk->begin() : nullptr,
         to.inner.get(),
         value,
+        noteType.get_type(),
         memo.has_value() ? memo->data() : nullptr);
 
     hasActions = true;

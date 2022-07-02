@@ -18,3 +18,7 @@ NoteType::NoteType(unsigned char tid[]) {
         type_id[i] = tid[i];
     }
 }
+
+const unsigned char *NoteType::get_type() {
+    return type_ptr;
+}
