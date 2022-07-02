@@ -347,7 +347,8 @@ void TransactionBuilder::AddOrchardOutput(
         }
     }
 
-    orchardBuilder.value().AddOutput(ovk, to, value, memo);
+    NoteType noteTypeZEC;
+    orchardBuilder.value().AddOutput(ovk, to, value, noteTypeZEC, memo);
     valueBalanceOrchard -= value;
 }
 

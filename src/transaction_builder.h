@@ -19,6 +19,8 @@
 #include "zcash/Note.hpp"
 #include "zcash/NoteEncryption.hpp"
 
+#include "note_type.h"
+
 #include <optional>
 
 #include <rust/builder.h>
@@ -112,6 +114,7 @@ public:
         const std::optional<uint256>& ovk,
         const libzcash::OrchardRawAddress& to,
         CAmount value,
+        NoteType noteType,
         const std::optional<std::array<unsigned char, ZC_MEMO_SIZE>>& memo);
 
     /// Returns `true` if any spends or outputs have been added to this builder. This can

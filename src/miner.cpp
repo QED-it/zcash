@@ -271,8 +271,9 @@ public:
 
         // Shielded coinbase outputs must be recoverable with an all-zeroes ovk.
         uint256 ovk;
+        NoteType noteTypeZEC;
         auto miner_reward = SetFoundersRewardAndGetMinerValue(ctx);
-        builder.AddOutput(ovk, to, miner_reward, std::nullopt);
+        builder.AddOutput(ovk, to, miner_reward, noteTypeZEC, std::nullopt);
 
         // orchard::Builder pads to two Actions, but does so using a "no OVK" policy for
         // dummy outputs, which violates coinbase rules requiring all shielded outputs to
@@ -285,7 +286,7 @@ public:
             .ToFullViewingKey()
             .ToIncomingViewingKey()
             .Address(0);
-        builder.AddOutput(ovk, dummyTo, 0, std::nullopt);
+        builder.AddOutput(ovk, dummyTo, 0, noteTypeZEC, std::nullopt);
 
         auto bundle = builder.Build();
         if (!bundle.has_value()) {
