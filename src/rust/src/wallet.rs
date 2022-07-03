@@ -1079,7 +1079,8 @@ pub struct FFIActionSpend {
     outpoint_action_idx: u32,
     received_at: *mut Address,
     value: i64,
-} //TODO: add note_type?
+    note_type: [u8; 32],
+}
 
 /// A type used to pass decrypted output information across the FFI boundary.
 /// This must have the same representation as `struct RawOrchardOutputData`
@@ -1151,6 +1152,7 @@ pub extern "C" fn orchard_wallet_get_txdata(
                         outpoint_action_idx: outpoint.action_idx as u32,
                         received_at: Box::into_raw(Box::new(dnote.note.recipient())),
                         value: dnote.note.value().inner() as i64,
+                        note_type: dnote.note.note_type().to_bytes(),
                     })
             }) {
                 unsafe { (spend_push_cb.unwrap())(callback_receiver, spend) };

@@ -2347,7 +2347,6 @@ UniValue getwalletinfo(const UniValue& params, bool fHelp)
     obj.pushKV("txcount",       (int)pwalletMain->mapWallet.size());
     obj.pushKV("keypoololdest", pwalletMain->GetOldestKeyPoolTime());
     obj.pushKV("keypoolsize",   (int)pwalletMain->GetKeyPoolSize());
-//    obj.pushKV("zec_type", zsa_get_native_note_type());
     if (pwalletMain->IsCrypted())
         obj.pushKV("unlocked_until", nWalletUnlockTime);
     obj.pushKV("paytxfee",      ValueFromAmount(payTxFee.GetFeePerK()));

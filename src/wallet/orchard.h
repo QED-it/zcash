@@ -123,9 +123,10 @@ private:
     OrchardOutPoint outPoint;
     libzcash::OrchardRawAddress receivedAt;
     CAmount noteValue;
+    NoteType noteType;
 public:
-    OrchardActionSpend(OrchardOutPoint outPoint, libzcash::OrchardRawAddress receivedAt, CAmount noteValue):
-        outPoint(outPoint), receivedAt(receivedAt), noteValue(noteValue) { }
+    OrchardActionSpend(OrchardOutPoint outPoint, libzcash::OrchardRawAddress receivedAt, CAmount noteValue, NoteType noteType):
+        outPoint(outPoint), receivedAt(receivedAt), noteValue(noteValue), noteType(noteType) { }
 
     OrchardOutPoint GetOutPoint() const {
         return outPoint;
@@ -137,6 +138,10 @@ public:
 
     CAmount GetNoteValue() const {
         return noteValue;
+    }
+
+    NoteType GetNoteType() const {
+        return noteType;
     }
 };
 
@@ -467,7 +472,7 @@ public:
         auto spend = OrchardActionSpend(
                 OrchardOutPoint(txid, rawSpend.outpointActionIdx),
                 libzcash::OrchardRawAddress(rawSpend.receivedAt),
-                rawSpend.noteValue);
+                rawSpend.noteValue, NoteType(rawSpend.noteTypeRaw));
         reinterpret_cast<OrchardActions*>(receiver)->AddSpend(rawSpend.spendActionIdx, spend);
     }
 

@@ -282,7 +282,8 @@ struct RawOrchardActionSpend {
     uint32_t outpointActionIdx;
     OrchardRawAddressPtr* receivedAt;
     CAmount noteValue;
-};  //TODO: add noteType?
+    unsigned char noteTypeRaw[32];
+};
 
 /**
  * A C struct used to transfer Orchard action output information across the FFI boundary.
