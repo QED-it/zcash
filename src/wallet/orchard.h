@@ -149,12 +149,13 @@ class OrchardActionOutput {
 private:
     libzcash::OrchardRawAddress recipient;
     CAmount noteValue;
+    NoteType noteType;
     std::array<unsigned char, 512> memo;
     bool isOutgoing;
 public:
     OrchardActionOutput(
-            libzcash::OrchardRawAddress recipient, CAmount noteValue, std::array<unsigned char, 512> memo, bool isOutgoing):
-            recipient(recipient), noteValue(noteValue), memo(memo), isOutgoing(isOutgoing) { }
+            libzcash::OrchardRawAddress recipient, CAmount noteValue, NoteType noteType, std::array<unsigned char, 512> memo, bool isOutgoing):
+            recipient(recipient), noteValue(noteValue), noteType(noteType), memo(memo), isOutgoing(isOutgoing) { }
 
     const libzcash::OrchardRawAddress& GetRecipient() const {
         return recipient;
@@ -162,6 +163,10 @@ public:
 
     CAmount GetNoteValue() const {
         return noteValue;
+    }
+
+    NoteType GetNoteType() const {
+        return noteType;
     }
 
     const std::array<unsigned char, 512>& GetMemo() const {
@@ -479,9 +484,11 @@ public:
     static void PushOutputAction(void* receiver, RawOrchardActionOutput rawOutput) {
         std::array<unsigned char, 512> memo;
         std::move(std::begin(rawOutput.memo), std::end(rawOutput.memo), memo.begin());
+        NoteType noteType(rawOutput.noteTypeRaw);
         auto output = OrchardActionOutput(
                 libzcash::OrchardRawAddress(rawOutput.recipient),
                 rawOutput.noteValue,
+                noteType,
                 memo,
                 rawOutput.isOutgoing);
 

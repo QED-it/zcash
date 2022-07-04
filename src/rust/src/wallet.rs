@@ -1090,6 +1090,7 @@ pub struct FFIActionOutput {
     action_idx: u32,
     recipient: *mut Address,
     value: i64,
+    note_type: [u8; 32],
     memo: [u8; 512],
     is_outgoing: bool,
 } //TODO: add note_type?
@@ -1167,6 +1168,7 @@ pub extern "C" fn orchard_wallet_get_txdata(
                     action_idx: idx as u32,
                     recipient: Box::into_raw(Box::new(*addr)),
                     value: note.value().inner() as i64,
+                    note_type: note.note_type().to_bytes(),
                     memo: *memo,
                     is_outgoing,
                 };

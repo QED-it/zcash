@@ -294,6 +294,7 @@ struct RawOrchardActionOutput {
     uint32_t outputActionIdx;
     OrchardRawAddressPtr* recipient;
     CAmount noteValue;
+    unsigned char noteTypeRaw[32];
     unsigned char memo[512];
     bool isOutgoing;
 };  //TODO: add noteType?
