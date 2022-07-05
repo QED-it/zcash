@@ -70,12 +70,14 @@ void Builder::AddOutput(
         throw std::logic_error("orchard::Builder has already been used");
     }
 
+    unsigned char noteTypeVal[ZC_ORCHARD_NOTE_TYPE_SIZE];
+    noteType.getNoteType(noteTypeVal);
     orchard_builder_add_recipient(
         inner.get(),
         ovk.has_value() ? ovk->begin() : nullptr,
         to.inner.get(),
         value,
-        noteType.get_type(),
+        noteTypeVal,
         memo.has_value() ? memo->data() : nullptr);
 
     hasActions = true;

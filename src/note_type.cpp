@@ -19,6 +19,9 @@ NoteType::NoteType(unsigned char tid[]) {
     }
 }
 
-const unsigned char *NoteType::get_type() {
-    return type_ptr;
+void NoteType::getNoteType(unsigned char noteType[ZC_ORCHARD_NOTE_TYPE_SIZE]) {
+    for (int i = 0; i < ZC_ORCHARD_NOTE_TYPE_SIZE; i++) {
+        noteType[i] = type_id[i];
+    }
 }
+
