@@ -17,7 +17,6 @@ class NoteType
 private:
 //    std::array<uint8_t, ZC_ORCHARD_NOTE_TYPE_SIZE> type_id;
     unsigned char type_id[ZC_ORCHARD_NOTE_TYPE_SIZE];
-    const unsigned char* type_ptr = &type_id[0];
 
 public:
     NoteType();

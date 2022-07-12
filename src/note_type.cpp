@@ -26,5 +26,5 @@ void NoteType::getNoteType(unsigned char noteType[ZC_ORCHARD_NOTE_TYPE_SIZE]) {
 }
 
 const unsigned char *NoteType::get_type() {
-    return type_ptr;
+    return &type_id[0];
 }
