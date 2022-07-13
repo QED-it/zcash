@@ -3,6 +3,7 @@
 // file COPYING or https://www.opensource.org/licenses/mit-license.php .
 
 #include "note_type.h"
+#include <sstream>
 
 NoteType::NoteType() { // default constructor
     unsigned char* note_type_ret = new unsigned char[ZC_ORCHARD_NOTE_TYPE_SIZE];
@@ -27,4 +28,15 @@ void NoteType::getNoteType(unsigned char noteType[ZC_ORCHARD_NOTE_TYPE_SIZE]) {
 
 const unsigned char *NoteType::get_type() {
     return &type_id[0];
+}
+
+std::string NoteType::get_type_id_str() {
+    std::stringstream ss;
+    ss << std::hex;
+    for (int i = 0; i < ZC_ORCHARD_NOTE_TYPE_SIZE; i++) {
+        if ((int)type_id[i] < 16)
+            ss << "0";
+        ss << (int)type_id[i];
+    }
+    return ss.str();
 }

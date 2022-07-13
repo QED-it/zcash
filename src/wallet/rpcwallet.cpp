@@ -4757,6 +4757,7 @@ UniValue z_viewtransaction(const UniValue& params, bool fHelp)
         auto outpoint = orchardActionSpend.GetOutPoint();
         auto receivedAt = orchardActionSpend.GetReceivedAt();
         auto noteValue = orchardActionSpend.GetNoteValue();
+        auto noteType = orchardActionSpend.GetNoteType();
 
         std::optional<std::string> addrStr;
         auto addr = pwalletMain->GetPaymentAddressForRecipient(txid, receivedAt);
@@ -4777,12 +4778,14 @@ UniValue z_viewtransaction(const UniValue& params, bool fHelp)
         }
         entry.pushKV("value", ValueFromAmount(noteValue));
         entry.pushKV("valueZat", noteValue);
+        entry.pushKV("note_type_id", noteType.get_type_id_str());
         spends.push_back(entry);
     }
 
     // Orchard outputs
     for (const auto& [actionIdx, orchardActionOutput]  : orchardActions.GetOutputs()) {
         auto noteValue = orchardActionOutput.GetNoteValue();
+        auto noteType = orchardActionOutput.GetNoteType();
         auto recipient = orchardActionOutput.GetRecipient();
         auto memo = orchardActionOutput.GetMemo();
 
@@ -4807,6 +4810,7 @@ UniValue z_viewtransaction(const UniValue& params, bool fHelp)
         }
         entry.pushKV("value", ValueFromAmount(noteValue));
         entry.pushKV("valueZat", noteValue);
+        entry.pushKV("note_type_id", noteType.get_type_id_str());
         addMemo(entry, memo);
         outputs.push_back(entry);
     }

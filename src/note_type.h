@@ -24,6 +24,7 @@ public:
 
     const unsigned char* get_type();
     void getNoteType(unsigned char noteType[ZC_ORCHARD_NOTE_TYPE_SIZE]);
+    std::string get_type_id_str();
 };
 
 #endif //ZCASH_NOTE_TYPE_H
