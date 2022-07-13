@@ -135,7 +135,7 @@
 
                 <div id="content" class="content">
                     <main>
-                        <h1>Zcash 5.0.0
+                        <h1>Zcash 5.1.0
 <img align="right" width="120" height="80" src="doc/imgs/logo.png"></h1>
 <h2 id="what-is-zcash"><a class="header" href="#what-is-zcash">What is Zcash?</a></h2>
 <p><a href="https://z.cash/">Zcash</a> is an implementation of the &quot;Zerocash&quot; protocol.
@@ -193,13 +193,14 @@ releases for each tier 1 platform, and automated testing ensures that each tier 
 builds and passes tests after each change.</p>
 <p>&quot;End of Support&quot; dates are the latest currently-known date after which the platform will
 be removed from tier 1. These dates are subject to change.</p>
-<table><thead><tr><th>target</th><th>OS</th><th>End of Support</th></tr></thead><tbody>
+<div class="table-wrapper"><table><thead><tr><th>target</th><th>OS</th><th>End of Support</th></tr></thead><tbody>
 <tr><td><code>x86_64-pc-linux-gnu</code></td><td>CentOS 8</td><td>TBD</td></tr>
 <tr><td></td><td>Debian 10</td><td>June 2024</td></tr>
 <tr><td></td><td>Debian 11</td><td>June 2026</td></tr>
 <tr><td></td><td>Ubuntu 18.04</td><td>April 2023</td></tr>
 <tr><td></td><td>Ubuntu 20.04</td><td>April 2025</td></tr>
 </tbody></table>
+</div>
 <h2 id="tier-2"><a class="header" href="#tier-2">Tier 2</a></h2>
 <p>Tier 2 platforms can be thought of as &quot;guaranteed to build&quot;. ECC builds official binary
 releases for each tier 2 platform, and automated builds ensure that each tier 2 platform
@@ -208,21 +209,22 @@ produce a working build, but tier 2 platforms often work to quite a good degree,
 patches are always welcome!</p>
 <p>&quot;End of Support&quot; dates are the latest currently-known date after which the platform will
 be removed from tier 2. These dates are subject to change.</p>
-<table><thead><tr><th>target</th><th>OS</th><th>End of Support</th></tr></thead><tbody>
+<div class="table-wrapper"><table><thead><tr><th>target</th><th>OS</th><th>End of Support</th></tr></thead><tbody>
 <tr><td>N/A</td><td></td><td></td></tr>
 </tbody></table>
+</div>
 <h2 id="tier-3"><a class="header" href="#tier-3">Tier 3</a></h2>
 <p>Tier 3 platforms are those for which the <code>zcashd</code> codebase has support, but ECC does not
 require builds or tests to pass, so these may or may not work. Official builds are not
 available.</p>
-<table><thead><tr><th>target</th><th>OS</th><th>notes</th></tr></thead><tbody>
+<div class="table-wrapper"><table><thead><tr><th>target</th><th>OS</th><th>notes</th></tr></thead><tbody>
 <tr><td><code>x86_64-pc-linux-gnu</code></td><td>Arch</td><td></td></tr>
 <tr><td><code>x86_64-unknown-freebsd</code></td><td>FreeBSD</td><td></td></tr>
 <tr><td><code>x86_64-w64-mingw32</code></td><td>Windows</td><td>64-bit MinGW</td></tr>
 <tr><td><code>x86_64-apple-darwin16</code></td><td>macOS 10.14+</td><td></td></tr>
 <tr><td><code>aarch64-linux-gnu</code></td><td>ARM64 Linux</td><td></td></tr>
 </tbody></table>
-<div style="break-before: page; page-break-before: always;"></div><h1 id="zcashd-metrics"><a class="header" href="#zcashd-metrics">zcashd metrics</a></h1>
+</div><div style="break-before: page; page-break-before: always;"></div><h1 id="zcashd-metrics"><a class="header" href="#zcashd-metrics">zcashd metrics</a></h1>
 <h2 id="metrics-ui"><a class="header" href="#metrics-ui">Metrics UI</a></h2>
 <p>This is the user interface that <code>zcashd</code> displays by default when run. It
 displays a small selection of interesting metrics, but is not intended for
@@ -350,6 +352,11 @@ methods that return address metadata. It is recommended that applications
 using this metadata be updated to use the <code>pool</code> or <code>address_type</code>
 attributes, which have replaced the <code>type</code> attribute, as appropriate.</li>
 </ul>
+<h3 id="deprecated-in-510"><a class="header" href="#deprecated-in-510">Deprecated in 5.1.0</a></h3>
+<ul>
+<li><code>wallettxvjoinsplit</code> - The <code>vjoinsplit</code> attribute returned by the
+<code>gettransaction</code> RPC method is deprecated.</li>
+</ul>
 <h2 id="stage-2"><a class="header" href="#stage-2">Stage 2</a></h2>
 <p>Each feature in the lists below may be enabled by adding <code>-allowdeprecated=&lt;feature&gt;</code>
 to the CLI arguments when starting the node, or by adding an <code>allowdeprecated=&lt;feature&gt;</code>
@@ -361,11 +368,28 @@ line to <code>zcash.conf</code>.</p>
 <li><code>zcrawjoinsplit</code> - The <code>zcrawjoinsplit</code> RPC method is disabled.</li>
 <li><code>zcrawkeygen</code> - The <code>zcrawkeygen</code> RPC method is disabled.</li>
 </ul>
+<h3 id="disabled-in-501"><a class="header" href="#disabled-in-501">Disabled in 5.0.1</a></h3>
+<p>The following features are disabled by default, and will be removed in release 5.3.0.</p>
+<ul>
+<li><code>dumpwallet</code> - The <code>dumpwallet</code> RPC method is disabled.</li>
+</ul>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="developer-documentation"><a class="header" href="#developer-documentation">Developer Documentation</a></h1>
 <p>This section contains documentation aimed at contributors to the <code>zcashd</code> codebase.</p>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="rust-in-zcashd"><a class="header" href="#rust-in-zcashd">Rust in <code>zcashd</code></a></h1>
 <p><code>zcashd</code> is primarily a C++ codebase, but most new code is being written in Rust
 where possible.</p>
+<h2 id="auditing-rust-dependencies"><a class="header" href="#auditing-rust-dependencies">Auditing Rust dependencies</a></h2>
+<p>We use <a href="https://github.com/mozilla/cargo-vet"><code>cargo-vet</code></a> to audit our Rust dependencies. This means that after
+adding a new dependency, or updating existing dependencies with <code>cargo update</code>,
+CI will fail until corresponding audits have been added.</p>
+<p>We also have a significant number of pre-existing unaudited dependency versions
+that are excluded from auditing checks. We aim to reduce this list over time.
+New entries should not be added to the exclusion list without justification.</p>
+<p>To audit a dependency, first <a href="https://mozilla.github.io/cargo-vet/install.html">install <code>cargo-vet</code></a> and then follow the
+<a href="https://mozilla.github.io/cargo-vet/performing-audits.html">&quot;Performing Audits&quot; guide</a>. If you are updating a dependency then instead of
+auditing the new version in its entirety, you can optionally just audit the
+delta between the old and new versions - even if the old version is in the
+&quot;unaudited&quot; exclusion list.</p>
 <h2 id="adding-new-dependencies-in-online-rust-mode"><a class="header" href="#adding-new-dependencies-in-online-rust-mode">Adding new dependencies in online-Rust mode</a></h2>
 <p>The <code>zcashd</code> build system pins all dependencies, and in order to facilitate
 deterministic builds, <code>cargo</code> is configured to run in offline mode with vendored
