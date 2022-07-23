@@ -4779,6 +4779,7 @@ UniValue z_viewtransaction(const UniValue& params, bool fHelp)
         entry.pushKV("value", ValueFromAmount(noteValue));
         entry.pushKV("valueZat", noteValue);
         entry.pushKV("note_type_id", noteType.get_type_id_str());
+        entry.pushKV("note_type", noteType.get_type_name());
         spends.push_back(entry);
     }
 
@@ -4811,6 +4812,7 @@ UniValue z_viewtransaction(const UniValue& params, bool fHelp)
         entry.pushKV("value", ValueFromAmount(noteValue));
         entry.pushKV("valueZat", noteValue);
         entry.pushKV("note_type_id", noteType.get_type_id_str());
+        entry.pushKV("note_type", noteType.get_type_name());
         addMemo(entry, memo);
         outputs.push_back(entry);
     }

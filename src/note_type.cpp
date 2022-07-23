@@ -40,3 +40,9 @@ std::string NoteType::get_type_id_str() {
     }
     return ss.str();
 }
+
+std::string NoteType::get_type_name() {
+    if (this->get_type_id_str() == "6743f93a6ebda72a8c7c5a2b7fa304fe32b29b4f706aa8f7420f3d8e7a59702f")
+        return "ZEC";
+    return "Invalid type!";  //TODO: Add functionality for derived types
+}
