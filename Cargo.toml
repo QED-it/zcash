@@ -92,3 +92,6 @@ features = ["ansi", "env-filter", "fmt", "time"]
 lto = true
 panic = 'abort'
 codegen-units = 1
+
+[patch.crates-io]
+orchard = {git = "https://github.com/QED-it/orchard.git", rev = "ac71bc752847f36b23d25ad054f69b647cbed167"}
