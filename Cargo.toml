@@ -113,3 +113,5 @@ lto = true
 panic = 'abort'
 codegen-units = 1
 
+[patch.crates-io]
+orchard = { git = "https://github.com/QED-it/orchard", rev = "9405f801cd95ad4193c098eea6b47de954198461" } # branch = "zsa1"
