@@ -11,6 +11,7 @@
 #include "script/sign.h"
 #include "util/moneystr.h"
 #include "zcash/Note.hpp"
+#include "Asset.h"
 
 #include <librustzcash.h>
 #include <rust/builder.h>
@@ -87,10 +88,33 @@ void Builder::AddOutput(
         ovk.has_value() ? ovk->begin() : nullptr,
         to.inner.get(),
         value,
+        Asset::ZEC(),
         memo.has_value() ? memo.value().ToBytes().data() : nullptr);
 
     hasActions = true;
 }
+
+//void Builder::AddOutput(
+//    const std::optional<uint256>& ovk,
+//    const libzcash::OrchardRawAddress& to,
+//    CAmount value,
+//    const Asset& asset,
+//    const std::optional<std::array<unsigned char, ZC_MEMO_SIZE>>& memo)
+//{
+//    if (!inner) {
+//        throw std::logic_error("orchard::Builder has already been used");
+//    }
+//
+//    orchard_builder_add_recipient(
+//        inner.get(),
+//        ovk.has_value() ? ovk->begin() : nullptr,
+//        to.inner.get(),
+//        value,
+//        asset,
+//        memo.has_value() ? memo->data() : nullptr);
+//
+//    hasActions = true;
+//}
 
 std::optional<UnauthorizedBundle> Builder::Build() {
     if (!inner) {

@@ -8,6 +8,7 @@
 #include "rust/orchard.h"
 #include "rust/orchard/keys.h"
 #include "rust/transaction.h"
+#include "../Asset.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -63,6 +64,7 @@ bool orchard_builder_add_recipient(
     const unsigned char* ovk,
     const OrchardRawAddressPtr* recipient,
     uint64_t value,
+    Asset asset,
     const unsigned char* memo);
 
 /// Builds a bundle containing the given spent notes and recipients.

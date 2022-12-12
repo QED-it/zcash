@@ -97,6 +97,7 @@ pub extern "C" fn orchard_builder_add_recipient(
     ovk: *const [u8; 32],
     recipient: *const orchard::Address,
     value: u64,
+    asset: AssetId, // TODO check safety
     memo: *const [u8; 512],
 ) -> bool {
     let builder = unsafe { builder.as_mut() }.expect("Builder may not be null.");
