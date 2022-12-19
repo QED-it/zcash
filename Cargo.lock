@@ -411,6 +411,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1bfb12502f3fc46cca1bb51ac28df9d618d813cdc3d2f25b9fe775a34af26bb3"
 dependencies = [
  "generic-array",
+ "rand_core 0.6.4",
  "typenum",
 ]
 
@@ -539,7 +540,7 @@ checksum = "90e5c1c8368803113bf0c9584fc495a58b86dc8a29edbf8fe877d21d9507e797"
 [[package]]
 name = "equihash"
 version = "0.2.0"
-source = "git+https://github.com/QED-it/librustzcash?rev=f639bef6b08db8f5ec35a0f46e14ac1eb78dbab6#f639bef6b08db8f5ec35a0f46e14ac1eb78dbab6"
+source = "git+https://github.com/QED-it/librustzcash?rev=29ed0888e86d27268658935f4104dbb9f12a227a#29ed0888e86d27268658935f4104dbb9f12a227a"
 dependencies = [
  "blake2b_simd",
  "byteorder",
@@ -548,7 +549,7 @@ dependencies = [
 [[package]]
 name = "f4jumble"
 version = "0.1.0"
-source = "git+https://github.com/QED-it/librustzcash?rev=f639bef6b08db8f5ec35a0f46e14ac1eb78dbab6#f639bef6b08db8f5ec35a0f46e14ac1eb78dbab6"
+source = "git+https://github.com/QED-it/librustzcash?rev=29ed0888e86d27268658935f4104dbb9f12a227a#29ed0888e86d27268658935f4104dbb9f12a227a"
 dependencies = [
  "blake2b_simd",
 ]
@@ -2330,7 +2331,7 @@ dependencies = [
 [[package]]
 name = "zcash_address"
 version = "0.2.0"
-source = "git+https://github.com/QED-it/librustzcash?rev=f639bef6b08db8f5ec35a0f46e14ac1eb78dbab6#f639bef6b08db8f5ec35a0f46e14ac1eb78dbab6"
+source = "git+https://github.com/QED-it/librustzcash?rev=29ed0888e86d27268658935f4104dbb9f12a227a#29ed0888e86d27268658935f4104dbb9f12a227a"
 dependencies = [
  "bech32",
  "bs58",
@@ -2341,7 +2342,7 @@ dependencies = [
 [[package]]
 name = "zcash_encoding"
 version = "0.2.0"
-source = "git+https://github.com/QED-it/librustzcash?rev=f639bef6b08db8f5ec35a0f46e14ac1eb78dbab6#f639bef6b08db8f5ec35a0f46e14ac1eb78dbab6"
+source = "git+https://github.com/QED-it/librustzcash?rev=29ed0888e86d27268658935f4104dbb9f12a227a#29ed0888e86d27268658935f4104dbb9f12a227a"
 dependencies = [
  "byteorder",
  "nonempty",
@@ -2350,7 +2351,7 @@ dependencies = [
 [[package]]
 name = "zcash_history"
 version = "0.3.0"
-source = "git+https://github.com/QED-it/librustzcash?rev=f639bef6b08db8f5ec35a0f46e14ac1eb78dbab6#f639bef6b08db8f5ec35a0f46e14ac1eb78dbab6"
+source = "git+https://github.com/QED-it/librustzcash?rev=29ed0888e86d27268658935f4104dbb9f12a227a#29ed0888e86d27268658935f4104dbb9f12a227a"
 dependencies = [
  "blake2b_simd",
  "byteorder",
@@ -2360,7 +2361,7 @@ dependencies = [
 [[package]]
 name = "zcash_note_encryption"
 version = "0.2.0"
-source = "git+https://github.com/QED-it/librustzcash?rev=f639bef6b08db8f5ec35a0f46e14ac1eb78dbab6#f639bef6b08db8f5ec35a0f46e14ac1eb78dbab6"
+source = "git+https://github.com/QED-it/librustzcash?rev=29ed0888e86d27268658935f4104dbb9f12a227a#29ed0888e86d27268658935f4104dbb9f12a227a"
 dependencies = [
  "chacha20",
  "chacha20poly1305",
@@ -2371,8 +2372,8 @@ dependencies = [
 
 [[package]]
 name = "zcash_primitives"
-version = "0.9.1"
-source = "git+https://github.com/QED-it/librustzcash?rev=f639bef6b08db8f5ec35a0f46e14ac1eb78dbab6#f639bef6b08db8f5ec35a0f46e14ac1eb78dbab6"
+version = "0.8.1"
+source = "git+https://github.com/QED-it/librustzcash?rev=29ed0888e86d27268658935f4104dbb9f12a227a#29ed0888e86d27268658935f4104dbb9f12a227a"
 dependencies = [
  "aes",
  "bip0039",
@@ -2380,7 +2381,9 @@ dependencies = [
  "blake2b_simd",
  "blake2s_simd",
  "bls12_381",
+ "bs58",
  "byteorder",
+ "chacha20poly1305",
  "equihash",
  "ff",
  "fpe",
@@ -2406,12 +2409,13 @@ dependencies = [
 
 [[package]]
 name = "zcash_proofs"
-version = "0.9.0"
-source = "git+https://github.com/QED-it/librustzcash?rev=f639bef6b08db8f5ec35a0f46e14ac1eb78dbab6#f639bef6b08db8f5ec35a0f46e14ac1eb78dbab6"
+version = "0.8.0"
+source = "git+https://github.com/QED-it/librustzcash?rev=29ed0888e86d27268658935f4104dbb9f12a227a#29ed0888e86d27268658935f4104dbb9f12a227a"
 dependencies = [
  "bellman",
  "blake2b_simd",
  "bls12_381",
+ "byteorder",
  "directories",
  "group",
  "jubjub",
@@ -2446,4 +2450,4 @@ dependencies = [
 [[patch.unused]]
 name = "zcash_extensions"
 version = "0.0.0"
-source = "git+https://github.com/QED-it/librustzcash?rev=f639bef6b08db8f5ec35a0f46e14ac1eb78dbab6#f639bef6b08db8f5ec35a0f46e14ac1eb78dbab6"
+source = "git+https://github.com/QED-it/librustzcash?rev=29ed0888e86d27268658935f4104dbb9f12a227a#29ed0888e86d27268658935f4104dbb9f12a227a"

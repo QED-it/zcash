@@ -1652,8 +1652,8 @@ TEST(ChecktransactionTests, NU5EnforcesOrchardRulesOnShieldedCoinbase) {
     // Test the success case.
     {
         // The unmodified coinbase transaction should pass non-contextual checks.
-        CValidationState state;
-        EXPECT_FALSE(CheckTransactionWithoutProofVerification(tx, state));
+        MockCValidationState state;
+        EXPECT_TRUE(CheckTransactionWithoutProofVerification(tx, state));
         // TODO Why are we getting "bad-orchard-nullifiers-duplicate" out of nowhere?
         // EXPECT_EQ(state.GetRejectReason(), "oink");
 
