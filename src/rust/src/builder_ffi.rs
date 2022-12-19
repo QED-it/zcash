@@ -13,6 +13,7 @@ use orchard::{
     value::NoteValue,
     Bundle, Note,
 };
+use orchard::note::AssetId;
 use rand_core::OsRng;
 use tracing::error;
 use zcash_primitives::{
@@ -106,7 +107,7 @@ pub extern "C" fn orchard_builder_add_recipient(
     let value = NoteValue::from_raw(value);
     let memo = unsafe { memo.as_ref() }.copied();
 
-    match builder.add_recipient(ovk, *recipient, value, memo) {
+    match builder.add_recipient(ovk, *recipient, value, AssetId::native(), memo) {
         Ok(()) => true,
         Err(e) => {
             error!("Failed to add Orchard recipient: {}", e);
