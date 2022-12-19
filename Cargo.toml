@@ -61,7 +61,7 @@ zcash_address = "0.2"
 zcash_encoding = "0.2"
 zcash_history = "0.3"
 zcash_note_encryption = "0.2"
-zcash_primitives = { version = "0.8.1", features = ["transparent-inputs"] }
+zcash_primitives = { version = "0.7.0", features = ["transparent-inputs"] }
 zcash_proofs = { version = "0.8", features = ["directories"] }
 ed25519-zebra = "3"
 zeroize = "1.4.2"
@@ -114,4 +114,7 @@ panic = 'abort'
 codegen-units = 1
 
 [patch.crates-io]
-orchard = { git = "https://github.com/QED-it/orchard", rev = "9405f801cd95ad4193c098eea6b47de954198461" } # branch = "zsa1"
+orchard = { git = "https://github.com/QED-it/orchard", rev = "5a50fb8d11361d3f7d1f3b2f6c0a468f88c0db49" } # branch = "zsa1"
+zcash_primitives = { git = "https://github.com/QED-it/librustzcash", rev = "f639bef6b08db8f5ec35a0f46e14ac1eb78dbab6" }
+equihash = { git = "https://github.com/QED-it/librustzcash", rev = "f639bef6b08db8f5ec35a0f46e14ac1eb78dbab6" }
+f4jumble = { git = "https://github.com/QED-it/librustzcash", rev = "f639bef6b08db8f5ec35a0f46e14ac1eb78dbab6" }
