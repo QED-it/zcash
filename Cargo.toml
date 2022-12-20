@@ -115,11 +115,11 @@ codegen-units = 1
 
 [patch.crates-io]
 orchard = { git = "https://github.com/QED-it/orchard", rev = "5a50fb8d11361d3f7d1f3b2f6c0a468f88c0db49" } # branch = "zsa1"
-zcash_primitives = { git = "https://github.com/QED-it/librustzcash", rev = "29ed0888e86d27268658935f4104dbb9f12a227a" }
-equihash = { git = "https://github.com/QED-it/librustzcash", rev = "29ed0888e86d27268658935f4104dbb9f12a227a" }
-zcash_address = { git = "https://github.com/QED-it/librustzcash", rev = "29ed0888e86d27268658935f4104dbb9f12a227a" }
-zcash_encoding = { git = "https://github.com/QED-it/librustzcash", rev = "29ed0888e86d27268658935f4104dbb9f12a227a" }
-zcash_note_encryption = { git = "https://github.com/QED-it/librustzcash", rev = "29ed0888e86d27268658935f4104dbb9f12a227a" }
-zcash_proofs = { git = "https://github.com/QED-it/librustzcash", rev = "29ed0888e86d27268658935f4104dbb9f12a227a" }
-zcash_history = { git = "https://github.com/QED-it/librustzcash", rev = "29ed0888e86d27268658935f4104dbb9f12a227a" }
-zcash_extensions = { git = "https://github.com/QED-it/librustzcash", rev = "29ed0888e86d27268658935f4104dbb9f12a227a" }
+zcash_primitives = { git = "https://github.com/QED-it/librustzcash", rev = "d00636435f5d97b7b29ca51948e252fef887673c" }
+equihash = { git = "https://github.com/QED-it/librustzcash", rev = "d00636435f5d97b7b29ca51948e252fef887673c" }
+zcash_address = { git = "https://github.com/QED-it/librustzcash", rev = "d00636435f5d97b7b29ca51948e252fef887673c" }
+zcash_encoding = { git = "https://github.com/QED-it/librustzcash", rev = "d00636435f5d97b7b29ca51948e252fef887673c" }
+zcash_note_encryption = { git = "https://github.com/QED-it/librustzcash", rev = "d00636435f5d97b7b29ca51948e252fef887673c" }
+zcash_proofs = { git = "https://github.com/QED-it/librustzcash", rev = "d00636435f5d97b7b29ca51948e252fef887673c" }
+zcash_history = { git = "https://github.com/QED-it/librustzcash", rev = "d00636435f5d97b7b29ca51948e252fef887673c" }
+zcash_extensions = { git = "https://github.com/QED-it/librustzcash", rev = "d00636435f5d97b7b29ca51948e252fef887673c" }
