@@ -1620,8 +1620,6 @@ TEST(ChecktransactionTests, NU5EnforcesOrchardRulesOnShieldedCoinbase) {
         // The unmodified coinbase transaction should pass non-contextual checks.
         MockCValidationState state;
         EXPECT_TRUE(CheckTransactionWithoutProofVerification(tx, state));
-        // TODO Why are we getting "bad-orchard-nullifiers-duplicate" out of nowhere?
-        // EXPECT_EQ(state.GetRejectReason(), "oink");
 
         // Coinbase transaction should pass contextual checks, as bindingSigOrchard
         // consensus rule is not enforced here.
