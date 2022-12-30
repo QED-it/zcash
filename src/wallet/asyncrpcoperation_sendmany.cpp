@@ -29,6 +29,7 @@
 #include "zcash/IncrementalMerkleTree.hpp"
 #include "miner.h"
 #include "wallet/wallet_tx_builder.h"
+#include "Asset.h"
 
 #include <array>
 #include <iostream>

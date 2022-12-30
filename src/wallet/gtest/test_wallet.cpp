@@ -16,6 +16,7 @@
 #include "zcash/JoinSplit.hpp"
 #include "zcash/Note.hpp"
 #include "zcash/NoteEncryption.hpp"
+#include "Asset.h"
 
 #include <optional>
 
@@ -823,7 +824,7 @@ TEST(WalletTests, GetConflictedOrchardNotes) {
     // Generate a bundle containing output note A.
     auto builder = TransactionBuilder(Params(), 1, orchardAnchor, &keystore);
     builder.AddTransparentInput(COutPoint(uint256(), 0), scriptPubKey, 5000);
-    builder.AddOrchardOutput(std::nullopt, recipient, 4000, {});
+    builder.AddOrchardOutput(std::nullopt, recipient, 4000, Asset::ZEC(), {});
     auto maybeTx = builder.Build();
     EXPECT_TRUE(maybeTx.IsTx());
     if (maybeTx.IsError()) {
