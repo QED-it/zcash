@@ -18,6 +18,7 @@
 #include "zcash/JoinSplit.hpp"
 #include "zcash/Note.hpp"
 #include "zcash/NoteEncryption.hpp"
+#include "Asset.h"
 
 #include <optional>
 
@@ -113,6 +114,7 @@ public:
         const std::optional<uint256>& ovk,
         const libzcash::OrchardRawAddress& to,
         CAmount value,
+        const Asset& asset,
         const std::optional<std::array<unsigned char, ZC_MEMO_SIZE>>& memo);
 
     /// Returns `true` if any spends or outputs have been added to this builder. This can
@@ -356,6 +358,7 @@ public:
         const std::optional<uint256>& ovk,
         const libzcash::OrchardRawAddress& to,
         CAmount value,
+        Asset& asset,
         const std::optional<std::array<unsigned char, ZC_MEMO_SIZE>>& memo);
 
     // Throws if the anchor does not match the anchor used by

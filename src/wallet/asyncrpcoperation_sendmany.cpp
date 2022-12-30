@@ -31,6 +31,7 @@
 #include "miner.h"
 #include "wallet/paymentdisclosuredb.h"
 #include "wallet/wallet_tx_builder.h"
+#include "Asset.h"
 
 #include <array>
 #include <iostream>
@@ -562,7 +563,7 @@ uint256 AsyncRPCOperation_sendmany::main_impl() {
             },
             [&](const libzcash::OrchardRawAddress& addr) {
                 builder_.AddOrchardOutput(
-                        ovks.second, addr, r.amount,
+                        ovks.second, addr, r.amount, Asset::ZEC(),
                         r.memo.has_value() ? std::optional(r.memo.value().ToBytes()) : std::nullopt);
             }
         }, r.address);
