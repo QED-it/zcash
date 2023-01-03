@@ -76,7 +76,7 @@ void Builder::AddOutput(
         ovk.has_value() ? ovk->begin() : nullptr,
         to.inner.get(),
         value,
-        asset,
+        (unsigned char *)asset.id,
         memo.has_value() ? memo->data() : nullptr);
 
     hasActions = true;

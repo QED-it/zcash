@@ -1,6 +1,7 @@
 #ifndef ZCASH_ASSET_H
 #define ZCASH_ASSET_H
 
+#include "rust/include/rust/orchard/asset.h"
 
 class Asset {
 
@@ -31,10 +32,10 @@ public:
 
     static Asset& ZEC() {
         static Asset zecSingleton;
+        zsa_native_asset((unsigned char*)zecSingleton.id);
         return zecSingleton;
     }
 
-private:
     /**
      * Asset ID (byte representation of a Pallas curve point)
      */
@@ -47,8 +48,6 @@ private:
      * Human-readable description of an asset (maximum size is defined by ZC_ORCHARD_MAX_ASSET_DESCRIPTION_SIZE)
      */
     unsigned char* description;
-
-
 };
 
 

@@ -2446,8 +2446,3 @@ dependencies = [
  "syn",
  "synstructure",
 ]
-
-[[patch.unused]]
-name = "zcash_extensions"
-version = "0.0.0"
-source = "git+https://github.com/QED-it/librustzcash?rev=d00636435f5d97b7b29ca51948e252fef887673c#d00636435f5d97b7b29ca51948e252fef887673c"

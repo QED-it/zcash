@@ -122,4 +122,3 @@ zcash_encoding = { git = "https://github.com/QED-it/librustzcash", rev = "d00636
 zcash_note_encryption = { git = "https://github.com/QED-it/librustzcash", rev = "d00636435f5d97b7b29ca51948e252fef887673c" }
 zcash_proofs = { git = "https://github.com/QED-it/librustzcash", rev = "d00636435f5d97b7b29ca51948e252fef887673c" }
 zcash_history = { git = "https://github.com/QED-it/librustzcash", rev = "d00636435f5d97b7b29ca51948e252fef887673c" }
-zcash_extensions = { git = "https://github.com/QED-it/librustzcash", rev = "d00636435f5d97b7b29ca51948e252fef887673c" }
