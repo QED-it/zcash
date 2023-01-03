@@ -73,6 +73,7 @@ mod zcashd_orchard;
 mod bridge;
 
 mod address_ffi;
+mod asset_ffi;
 mod builder_ffi;
 mod bundlecache;
 mod history_ffi;
@@ -122,7 +123,7 @@ fn de_ct<T>(ct: CtOption<T>) -> Option<T> {
 /// and multiplies it by the given base.
 fn fixed_scalar_mult(from: &[u8; 32], p_g: &jubjub::SubgroupPoint) -> jubjub::SubgroupPoint {
     // We only call this with `from` being a valid jubjub::Scalar.
-    let f = jubjub::Scalar::from_bytes(from).unwrap();
+    let f = &jubjub::Scalar::from_bytes(from).unwrap();
 
     p_g * f
 }
