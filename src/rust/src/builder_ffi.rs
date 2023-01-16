@@ -5,6 +5,7 @@ use std::slice;
 use incrementalmerkletree::Hashable;
 use libc::size_t;
 use orchard::keys::SpendingKey;
+use orchard::note::AssetId;
 use orchard::{
     builder::{Builder, InProgress, Unauthorized, Unproven},
     bundle::{Authorized, Flags},
@@ -13,7 +14,6 @@ use orchard::{
     value::NoteValue,
     Bundle, Note,
 };
-use orchard::note::AssetId;
 use rand_core::OsRng;
 use tracing::error;
 use zcash_primitives::{
@@ -107,7 +107,9 @@ pub extern "C" fn orchard_builder_add_recipient(
     let recipient = unsafe { recipient.as_ref() }.expect("Recipient may not be null.");
     let value = NoteValue::from_raw(value);
     let memo = unsafe { memo.as_ref() }.copied();
-    let safe_asset_bytes = unsafe { asset_bytes.as_ref() }.copied().expect("Asset may not be null");
+    let safe_asset_bytes = unsafe { asset_bytes.as_ref() }
+        .copied()
+        .expect("Asset may not be null");
     let asset = AssetId::from_bytes(&safe_asset_bytes).unwrap();
 
     match builder.add_recipient(ovk, *recipient, value, asset, memo) {
