@@ -5177,6 +5177,33 @@ CAmount CWallet::GetImmatureBalance(const std::optional<int>& asOfHeight) const
     return nTotal;
 }
 
+map<std::string, Balances> CWallet::getZSABalances(std::optional<libzcash::PaymentAddress> address, const std::optional<int>& asOfHeight, bool ignoreUnspendable) const {
+    std::map<std::string, Balances> balances;
+    std::vector<OrchardNoteMetadata> orchardEntries;
+    std::vector<OrchardNoteMetadata> orchardUnconfirmedEntries;
+    LOCK2(cs_main, pwalletMain->cs_wallet);
+
+    std::optional<NoteFilter> noteFilter = std::nullopt;
+    if (address.has_value()) {
+        noteFilter = NoteFilter::ForPaymentAddresses(std::vector({address.value()}));
+    }
+
+    pwalletMain->GetFilteredOrchardNotes(orchardEntries, orchardUnconfirmedEntries, noteFilter, asOfHeight, 1, INT_MAX, true, ignoreUnspendable);
+
+    balances["ZEC"] = Balances { CAmount(0), CAmount(0) };
+
+    for (auto & entry : orchardEntries) {
+        std::string asset = "ZEC"; // TODO entry.asset
+        balances[asset].balance = balances[asset].balance + entry.GetNoteValue();
+    }
+    for (auto & entry : orchardUnconfirmedEntries) {
+        std::string asset = "ZEC"; // TODO entry.asset
+        balances[asset].unconfirmedBalance = balances[asset].unconfirmedBalance + entry.GetNoteValue();
+    }
+
+    return balances;
+}
+
 // Calculate total balance in a different way from GetBalance. The biggest
 // difference is that GetBalance sums up all unspent TxOuts paying to the
 // wallet, while this sums up both spent and unspent TxOuts paying to the
@@ -7244,6 +7271,69 @@ void CWallet::GetFilteredNotes(
         }
     }
 }
+
+// Returns only Orchard notes according to the filter criteria
+void CWallet::GetFilteredOrchardNotes(
+        std::vector<OrchardNoteMetadata>& orchardNotesRet,
+        std::vector<OrchardNoteMetadata>& orchardUnconfirmedNotesRet,
+        const std::optional<NoteFilter>& noteFilter,
+        const std::optional<int>& asOfHeight,
+        int minDepth,
+        int maxDepth,
+        bool ignoreSpent,
+        bool requireSpendingKey) const
+{
+    bool ignoreLocked = true;
+
+    // Don't bother to do anything if the note filter would reject all notes
+    if (noteFilter.has_value() && noteFilter.value().IsEmpty())
+        return;
+
+    LOCK2(cs_main, cs_wallet);
+
+    KeyIO keyIO(Params());
+
+    std::vector<OrchardNoteMetadata> orchardNotes;
+    if (noteFilter.has_value()) {
+        for (const OrchardRawAddress& addr: noteFilter.value().GetOrchardAddresses()) {
+            auto ivk = orchardWallet.GetIncomingViewingKeyForAddress(addr);
+            if (ivk.has_value()) {
+                orchardWallet.GetFilteredNotes(
+                        orchardNotes,
+                        ivk.value(),
+                        ignoreSpent,
+                        requireSpendingKey);
+            }
+        }
+    } else {
+        // return all Orchard notes
+        orchardWallet.GetFilteredNotes(
+                orchardNotes,
+                std::nullopt,
+                ignoreSpent,
+                requireSpendingKey);
+    }
+
+    for (auto& noteMeta : orchardNotes) {
+        if (ignoreSpent && IsOrchardSpent(noteMeta.GetOutPoint(), asOfHeight)) {
+            continue;
+        }
+
+        auto wtx = GetWalletTx(noteMeta.GetOutPoint().hash);
+        if (wtx) {
+            auto confirmations = wtx->GetDepthInMainChain(asOfHeight);
+            noteMeta.SetConfirmations(confirmations);
+            if (confirmations >= minDepth && confirmations <= maxDepth) {
+                orchardNotesRet.push_back(noteMeta);
+            } else {
+                orchardUnconfirmedNotesRet.push_back(noteMeta);
+            }
+        } else {
+            throw std::runtime_error("Wallet inconsistency: We have an Orchard WalletTx without a corresponding CWalletTx");
+        }
+    }
+}
+
 
 std::optional<libzcash::AccountId> CWallet::GetUnifiedAccountId(const libzcash::UFVKId& ufvkId) const {
     auto addrMetaIt = mapUfvkAddressMetadata.find(ufvkId);

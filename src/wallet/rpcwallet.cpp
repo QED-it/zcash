@@ -34,6 +34,8 @@
 #include "zcash/Address.hpp"
 #include "zcash/address/zip32.h"
 
+#include "Asset.h"
+
 #include "util/time.h"
 #include "asyncrpcoperation.h"
 #include "asyncrpcqueue.h"
@@ -2359,6 +2361,7 @@ UniValue settxfee(const UniValue& params, bool fHelp)
 }
 
 CAmount getBalanceZaddr(std::optional<libzcash::PaymentAddress> address, const std::optional<int>& asOfHeight, int minDepth = 1, int maxDepth = INT_MAX, bool ignoreUnspendable=true);
+UniValue GetZSABalancesJson(const std::optional<int>& asOfHeight);
 
 UniValue getwalletinfo(const UniValue& params, bool fHelp)
 {
@@ -2381,6 +2384,7 @@ UniValue getwalletinfo(const UniValue& params, bool fHelp)
             "  \"shielded_balance\": xxxxxxx,  (numeric) the total confirmed shielded balance of the wallet in " + CURRENCY_UNIT + "\n"
             "  \"shielded_unconfirmed_balance\": xxx, (numeric, optional) the total unconfirmed shielded balance of the wallet in " + CURRENCY_UNIT + ".\n"
             "                              Not included if `asOfHeight` is specified.\n"
+            "  \"zsa_balances\": xxxxxxx,    (numeric) the total confirmed and unconfirmed balances of the wallet per asset type.\n"
             "  \"txcount\": xxxxxxx,         (numeric) the total number of transactions in the wallet\n"
             "  \"keypoololdest\": xxxxxx,    (numeric) the timestamp (seconds since GMT epoch) of the oldest pre-generated key in the key pool\n"
             "  \"keypoolsize\": xxxx,        (numeric) how many new keys are pre-generated\n"
@@ -2411,6 +2415,7 @@ UniValue getwalletinfo(const UniValue& params, bool fHelp)
     if (!asOfHeight.has_value()) {
         obj.pushKV("shielded_unconfirmed_balance", FormatMoney(getBalanceZaddr(std::nullopt, asOfHeight, 0, 0)));
     }
+    obj.pushKV("zsa_balances", GetZSABalancesJson(asOfHeight));
     obj.pushKV("txcount",       (int)pwalletMain->mapWallet.size());
     obj.pushKV("keypoololdest", pwalletMain->GetOldestKeyPoolTime());
     obj.pushKV("keypoolsize",   (int)pwalletMain->GetKeyPoolSize());
@@ -3897,6 +3902,20 @@ CAmount getBalanceZaddr(std::optional<libzcash::PaymentAddress> address, const s
     }
     return balance;
 }
+
+// Returns confirmed and unconfirmed balances per asset
+UniValue GetZSABalancesJson(const std::optional<int>& asOfHeight)
+{
+    UniValue balance(UniValue::VOBJ);
+    map<std::string, Balances> balances = pwalletMain->getZSABalances(std::nullopt,  asOfHeight);
+
+    balance.pushKV("name", "ZEC");
+    balance.pushKV("confirmed_balance", ValueFromAmount(balances["ZEC"].balance));
+    balance.pushKV("unconfirmed_balance", ValueFromAmount(balances["ZEC"].unconfirmedBalance));
+
+    return balance;
+}
+
 
 struct txblock
 {

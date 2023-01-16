@@ -14,6 +14,7 @@
 #include "rust/orchard/wallet.h"
 #include "zcash/address/orchard.hpp"
 #include "zcash/IncrementalMerkleTree.hpp"
+#include "Asset.h"
 
 class OrchardWallet;
 class OrchardWalletNoteCommitmentTreeWriter;
@@ -25,6 +26,7 @@ private:
     OrchardOutPoint op;
     libzcash::OrchardRawAddress address;
     CAmount noteValue;
+    Asset asset;
     std::array<uint8_t, ZC_MEMO_SIZE> memo;
     int confirmations;
 public:
@@ -32,8 +34,9 @@ public:
         OrchardOutPoint op,
         const libzcash::OrchardRawAddress& address,
         CAmount noteValue,
+        Asset asset,
         const std::array<unsigned char, ZC_MEMO_SIZE>& memo):
-        op(op), address(address), noteValue(noteValue), memo(memo), confirmations(0) {}
+        op(op), address(address), noteValue(noteValue), asset(asset), memo(memo), confirmations(0) {}
 
     const OrchardOutPoint& GetOutPoint() const {
         return op;
@@ -53,6 +56,10 @@ public:
 
     CAmount GetNoteValue() const {
         return noteValue;
+    }
+
+    Asset GetAsset() const {
+        return asset;
     }
 
     const std::array<uint8_t, ZC_MEMO_SIZE>& GetMemo() const {
@@ -116,9 +123,10 @@ private:
     OrchardOutPoint outPoint;
     libzcash::OrchardRawAddress receivedAt;
     CAmount noteValue;
+    Asset asset;
 public:
-    OrchardActionSpend(OrchardOutPoint outPoint, libzcash::OrchardRawAddress receivedAt, CAmount noteValue):
-        outPoint(outPoint), receivedAt(receivedAt), noteValue(noteValue) { }
+    OrchardActionSpend(OrchardOutPoint outPoint, libzcash::OrchardRawAddress receivedAt, CAmount noteValue, Asset asset):
+        outPoint(outPoint), receivedAt(receivedAt), noteValue(noteValue), asset(asset) { }
 
     OrchardOutPoint GetOutPoint() const {
         return outPoint;
@@ -131,18 +139,23 @@ public:
     CAmount GetNoteValue() const {
         return noteValue;
     }
+
+    Asset GetAsset() const {
+        return asset;
+    }
 };
 
 class OrchardActionOutput {
 private:
     libzcash::OrchardRawAddress recipient;
     CAmount noteValue;
+    Asset asset;
     std::array<unsigned char, 512> memo;
     bool isOutgoing;
 public:
     OrchardActionOutput(
-            libzcash::OrchardRawAddress recipient, CAmount noteValue, std::array<unsigned char, 512> memo, bool isOutgoing):
-            recipient(recipient), noteValue(noteValue), memo(memo), isOutgoing(isOutgoing) { }
+            libzcash::OrchardRawAddress recipient, CAmount noteValue, Asset asset, std::array<unsigned char, 512> memo, bool isOutgoing):
+            recipient(recipient), noteValue(noteValue), asset(asset), memo(memo), isOutgoing(isOutgoing) { }
 
     const libzcash::OrchardRawAddress& GetRecipient() const {
         return recipient;
@@ -150,6 +163,10 @@ public:
 
     CAmount GetNoteValue() const {
         return noteValue;
+    }
+
+    Asset GetAsset() const {
+        return asset;
     }
 
     const std::array<unsigned char, 512>& GetMemo() const {
@@ -391,6 +408,7 @@ public:
                 op,
                 libzcash::OrchardRawAddress(rawNoteMeta.addr),
                 rawNoteMeta.noteValue,
+                Asset(rawNoteMeta.asset),
                 memo);
 
         reinterpret_cast<std::vector<OrchardNoteMetadata>*>(orchardNotesRet)->push_back(noteMeta);
@@ -455,7 +473,7 @@ public:
         auto spend = OrchardActionSpend(
                 OrchardOutPoint(txid, rawSpend.outpointActionIdx),
                 libzcash::OrchardRawAddress(rawSpend.receivedAt),
-                rawSpend.noteValue);
+                rawSpend.noteValue, Asset(rawSpend.asset));
         reinterpret_cast<OrchardActions*>(receiver)->AddSpend(rawSpend.spendActionIdx, spend);
     }
 
@@ -465,6 +483,7 @@ public:
         auto output = OrchardActionOutput(
                 libzcash::OrchardRawAddress(rawOutput.recipient),
                 rawOutput.noteValue,
+                Asset(rawOutput.asset),
                 memo,
                 rawOutput.isOutgoing);
 
