@@ -6,3 +6,14 @@ replace-with = "vendored-sources"
 
 [source.vendored-sources]
 # The directory for this source is set to RUST_VENDORED_SOURCES by src/Makefile.am
+
+[source."https://github.com/QED-it/librustzcash"]
+git = "https://github.com/QED-it/librustzcash"
+rev = "d00636435f5d97b7b29ca51948e252fef887673c"
+replace-with = "vendored-sources"
+
+Missing replacement in .cargo/config.offline:
+[source."https://github.com/QED-it/orchard"]
+git = "https://github.com/QED-it/orchard"
+rev = "4681cc212a78104ea43387b37f85af7a437ca2cf"
+replace-with = "vendored-sources"
