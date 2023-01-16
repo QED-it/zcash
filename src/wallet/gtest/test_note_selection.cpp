@@ -5,6 +5,7 @@
 #include "zcash/Note.hpp"
 #include "zcash/address/sapling.hpp"
 #include "zcash/address/sprout.hpp"
+#include "Asset.h"
 
 using namespace libzcash;
 
@@ -39,7 +40,7 @@ SpendableInputs FakeSpendableInputs(
         for (int i = 0; i < 10; i++) {
             OrchardOutPoint op;
             inputs.orchardNoteMetadata.push_back(OrchardNoteMetadata{
-                op, address, 1, {}});
+                op, address, 1, Asset::ZEC(), {}});
         }
     }
 

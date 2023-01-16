@@ -254,6 +254,7 @@ struct RawOrchardNoteMetadata {
     uint32_t actionIdx;
     OrchardRawAddressPtr* addr;
     CAmount noteValue;
+    unsigned char asset[32];
     unsigned char memo[512];
 };
 
@@ -291,6 +292,7 @@ struct RawOrchardActionSpend {
     uint32_t outpointActionIdx;
     OrchardRawAddressPtr* receivedAt;
     CAmount noteValue;
+    unsigned char asset[32];
 };
 
 /**
@@ -302,6 +304,7 @@ struct RawOrchardActionOutput {
     uint32_t outputActionIdx;
     OrchardRawAddressPtr* recipient;
     CAmount noteValue;
+    unsigned char asset[32];
     unsigned char memo[512];
     bool isOutgoing;
 };

@@ -1040,6 +1040,7 @@ pub struct FFINoteMetadata {
     action_idx: u32,
     recipient: *mut Address,
     note_value: i64,
+    asset: [u8; 32],
     memo: [u8; 512],
 }
 
@@ -1065,6 +1066,7 @@ pub extern "C" fn orchard_wallet_get_filtered_notes(
             action_idx: outpoint.action_idx as u32,
             recipient: Box::into_raw(Box::new(dnote.note.recipient())),
             note_value: dnote.note.value().inner() as i64,
+            asset: dnote.note.asset().to_bytes(),
             memo: dnote.memo,
         };
         unsafe { (push_cb.unwrap())(result, metadata) };
@@ -1081,6 +1083,7 @@ pub struct FFIActionSpend {
     outpoint_action_idx: u32,
     received_at: *mut Address,
     value: i64,
+    asset: [u8; 32],
 }
 
 /// A type used to pass decrypted output information across the FFI boundary.
@@ -1091,6 +1094,7 @@ pub struct FFIActionOutput {
     action_idx: u32,
     recipient: *mut Address,
     value: i64,
+    asset: [u8; 32],
     memo: [u8; 512],
     is_outgoing: bool,
 }
@@ -1153,6 +1157,7 @@ pub extern "C" fn orchard_wallet_get_txdata(
                         outpoint_action_idx: outpoint.action_idx as u32,
                         received_at: Box::into_raw(Box::new(dnote.note.recipient())),
                         value: dnote.note.value().inner() as i64,
+                        asset: dnote.note.asset().to_bytes(),
                     })
             }) {
                 unsafe { (spend_push_cb.unwrap())(callback_receiver, spend) };
@@ -1167,6 +1172,7 @@ pub extern "C" fn orchard_wallet_get_txdata(
                     action_idx: idx as u32,
                     recipient: Box::into_raw(Box::new(*addr)),
                     value: note.value().inner() as i64,
+                    asset: note.asset().to_bytes(),
                     memo: *memo,
                     is_outgoing,
                 };

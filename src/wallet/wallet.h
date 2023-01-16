@@ -102,6 +102,11 @@ enum WalletFeature
     FEATURE_LATEST = 60000
 };
 
+struct Balances
+{
+    CAmount balance;
+    CAmount unconfirmedBalance;
+};
 
 /** A key pool entry */
 class CKeyPool
@@ -2210,6 +2215,24 @@ public:
                           bool ignoreSpent=true,
                           bool requireSpendingKey=true,
                           bool ignoreLocked=true) const;
+
+    /**
+     * Similar to GetFilteredNotes but only for Orchard notes
+     */
+    void GetFilteredOrchardNotes(
+            std::vector<OrchardNoteMetadata>& orchardNotesRet,
+            std::vector<OrchardNoteMetadata>& orchardUnconfirmedNotesRet,
+            const std::optional<NoteFilter>& noteFilter,
+            const std::optional<int>& asOfHeight,
+            int minDepth,
+            int maxDepth=INT_MAX,
+            bool ignoreSpent=true,
+            bool requireSpendingKey=true) const;
+
+    /**
+     * Returns confirmed and unconfirmed balances per asset
+     */
+    map<std::string, Balances> getZSABalances(std::optional<libzcash::PaymentAddress> address=std::nullopt, const std::optional<int>& asOfHeight=std::nullopt, bool ignoreUnspendable=true) const;
 
     /* Returns the wallets help message */
     static std::string GetWalletHelpString(bool showDebug);
