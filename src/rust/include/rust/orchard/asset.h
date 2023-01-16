@@ -2,8 +2,8 @@
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or https://www.opensource.org/licenses/mit-license.php .
 
-#ifndef ZCASH_RUST_INCLUDE_RUST_ADDRESS_H
-#define ZCASH_RUST_INCLUDE_RUST_ADDRESS_H
+#ifndef ZCASH_RUST_INCLUDE_RUST_ORCHARD_ASSET_H
+#define ZCASH_RUST_INCLUDE_RUST_ORCHARD_ASSET_H
 
 #include "rust/orchard/keys.h"
 
@@ -21,4 +21,4 @@ bool zsa_derive_asset(unsigned char* _asset_ret); // TODO
 }
 #endif
 
-#endif // ZCASH_RUST_INCLUDE_RUST_ADDRESS_H
+#endif // ZCASH_RUST_INCLUDE_RUST_ORCHARD_ASSET_H
