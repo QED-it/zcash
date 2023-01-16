@@ -3,11 +3,6 @@
 # Distributed under the MIT software license, see the accompanying
 # file COPYING or https://www.opensource.org/licenses/mit-license.php .
 
-import os
-import os.path
-
-from decimal import Decimal
-
 from test_framework.test_framework import BitcoinTestFramework
 from test_framework.util import (
     NU5_BRANCH_ID,
@@ -15,8 +10,6 @@ from test_framework.util import (
     get_coinbase_address,
     nuparams,
     start_nodes,
-    stop_nodes,
-    wait_bitcoinds,
     wait_and_assert_operationid_status,
 )
 

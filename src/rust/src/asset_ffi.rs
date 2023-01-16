@@ -1,17 +1,10 @@
-use std::convert::TryFrom;
-use std::ffi::CStr;
-use std::slice;
-use orchard::keys::IssuanceValidatingKey;
 use orchard::note::AssetId;
-use orchard::primitives::redpallas::VerificationKey;
-
 
 #[no_mangle]
 pub extern "C" fn zsa_native_asset(asset_ret: *mut [u8; 32]) -> bool {
     *unsafe { &mut *asset_ret } = AssetId::native().to_bytes();
     true
 }
-
 
 // TODO implement derivation
 // #[no_mangle]
