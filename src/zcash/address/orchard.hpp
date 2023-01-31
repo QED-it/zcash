@@ -8,6 +8,7 @@
 #include "streams.h"
 #include "zcash/address/zip32.h"
 #include <rust/orchard/keys.h>
+#include <rust/orchard/zsa_issuance.h>
 
 #include <optional>
 
@@ -22,6 +23,9 @@ namespace libzcash {
 class OrchardFullViewingKey;
 class OrchardIncomingViewingKey;
 class OrchardSpendingKey;
+class IssuanceAuthorizingKey;
+class IssuanceValidatingKey;
+class IssueBundle;
 
 class OrchardRawAddress
 {
@@ -35,6 +39,7 @@ private:
     friend class OrchardIncomingViewingKey;
     friend class ::OrchardWallet;
     friend class ::orchard::Builder;
+    friend class IssueBundle;
 public:
     static OrchardRawAddress KeyIoOnlyFromReceiver(OrchardRawAddressPtr* ptr) {
         return OrchardRawAddress(ptr);
@@ -302,6 +307,8 @@ public:
 
     OrchardFullViewingKey ToFullViewingKey() const;
 
+    IssuanceAuthorizingKey ToIssuanceAuthorizingKey() const;
+
     OrchardSpendingKey& operator=(OrchardSpendingKey&& key)
     {
         if (this != &key) {
@@ -319,6 +326,83 @@ public:
     }
 };
 
+    class IssuanceAuthorizingKey
+    {
+    private:
+        std::unique_ptr<IssuanceAuthorizingKeyPtr, decltype(&issuance_authorizing_key_free)> inner;
+
+        IssuanceAuthorizingKey() : inner(nullptr, issuance_authorizing_key_free) {}
+
+        IssuanceAuthorizingKey(IssuanceAuthorizingKeyPtr* ptr) :
+                inner(ptr, issuance_authorizing_key_free) {}
+
+        friend class OrchardSpendingKey;
+        friend class IssueBundle;
+    public:
+        IssuanceAuthorizingKey(IssuanceAuthorizingKey&& key) : inner(std::move(key.inner)) {}
+
+        IssuanceAuthorizingKey(const IssuanceAuthorizingKey& key) :
+                inner(issuance_authorizing_key_clone(key.inner.get()), issuance_authorizing_key_free) {}
+
+        IssuanceAuthorizingKey& operator=(IssuanceAuthorizingKey&& key)
+        {
+            if (this != &key) {
+                inner = std::move(key.inner);
+            }
+            return *this;
+        }
+
+        IssuanceAuthorizingKey& operator=(const IssuanceAuthorizingKey& key)
+        {
+            if (this != &key) {
+                inner.reset(issuance_authorizing_key_clone(key.inner.get()));
+            }
+            return *this;
+        }
+    };
+
+    class IssueBundle
+    {
+    private:
+        std::unique_ptr<IssueBundlePtr, decltype(&issue_bundle_free)> inner;
+
+        IssueBundle() : inner(nullptr, issue_bundle_free) {}
+
+        IssueBundle(IssueBundlePtr* ptr) :
+                inner(ptr, issue_bundle_free) {}
+
+    public:
+
+        IssueBundle(IssuanceAuthorizingKey isk) : inner(nullptr, issue_bundle_free) {
+            IssueBundlePtr* ptr = create_issue_bundle(isk.inner.get());
+            inner.reset(ptr);
+        }
+
+        IssueBundle(IssueBundle&& bundle) : inner(std::move(bundle.inner)) {}
+
+        IssueBundle& operator=(IssueBundle&& bundle)
+        {
+            if (this != &bundle) {
+                inner = std::move(bundle.inner);
+            }
+            return *this;
+        }
+
+        void AddRecipient(
+                uint64_t value,
+                OrchardRawAddress recipient,
+                const char *asset_descr,
+                size_t asset_descr_len,
+                bool finalize
+        ) {
+            add_recipient(inner.get(), value, recipient.inner.get(), asset_descr, asset_descr_len, finalize);
+        }
+
+        void Sign(IssuanceAuthorizingKey isk) {
+            IssueBundlePtr* ptr = sign_issue_bundle(inner.release(), isk.inner.get());
+            inner.reset(ptr);
+        }
+    };
 } // namespace libzcash
 
 #endif // ZCASH_ADDRESS_ORCHARD_H
