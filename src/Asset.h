@@ -34,7 +34,7 @@ public:
      * @return asset id of a non-native ZSA
      */
     Asset(unsigned char ik[TEMP_IK_SIZE], unsigned char* description) {
-        // TODO derivation
+        zsa_derive_asset(ik, description, this->id);
     }
 
 

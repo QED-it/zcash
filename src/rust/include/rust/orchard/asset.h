@@ -15,7 +15,7 @@ extern "C" {
 bool zsa_native_asset(unsigned char* asset_ret);
 
 /// Returns an Asset ID for a ZSA
-bool zsa_derive_asset(unsigned char* _asset_ret); // TODO
+bool zsa_derive_asset(unsigned char* ik_bytes, unsigned char* asset_desc_ptr, unsigned char* asset_ret);
 
 #ifdef __cplusplus
 }
