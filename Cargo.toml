@@ -114,7 +114,7 @@ panic = 'abort'
 codegen-units = 1
 
 [patch.crates-io]
-orchard = { git = "https://github.com/QED-it/orchard", rev = "4681cc212a78104ea43387b37f85af7a437ca2cf" } # branch = "zsa1"
+orchard = { git = "https://github.com/QED-it/orchard", rev = "00cc2aa22be11d699d2f240a0dbe0ae0419ca98b" } # branch = "copy-trait-for-keys"
 zcash_primitives = { git = "https://github.com/QED-it/librustzcash", rev = "d00636435f5d97b7b29ca51948e252fef887673c" }
 equihash = { git = "https://github.com/QED-it/librustzcash", rev = "d00636435f5d97b7b29ca51948e252fef887673c" }
 zcash_address = { git = "https://github.com/QED-it/librustzcash", rev = "d00636435f5d97b7b29ca51948e252fef887673c" }
