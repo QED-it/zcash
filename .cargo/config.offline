@@ -7,3 +7,12 @@ replace-with = "vendored-sources"
 [source.vendored-sources]
 # The directory for this source is set to RUST_VENDORED_SOURCES by src/Makefile.am
 
+[source."https://github.com/QED-it/librustzcash"]
+git = "https://github.com/QED-it/librustzcash"
+rev = "d00636435f5d97b7b29ca51948e252fef887673c"
+replace-with = "vendored-sources"
+
+[source."https://github.com/QED-it/orchard"]
+git = "https://github.com/QED-it/orchard"
+rev = "00cc2aa22be11d699d2f240a0dbe0ae0419ca98b"
+replace-with = "vendored-sources"
