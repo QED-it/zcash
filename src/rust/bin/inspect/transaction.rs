@@ -5,7 +5,7 @@ use std::{
 
 use bellman::groth16;
 use group::GroupEncoding;
-use orchard::note_encryption::OrchardDomain;
+use orchard::note_encryption_v3::OrchardDomainV3;
 use secp256k1::{Secp256k1, VerifyOnly};
 use zcash_address::{
     unified::{self, Encoding},
@@ -485,7 +485,7 @@ pub(crate) fn inspect(tx: Transaction, context: Option<Context>) {
             for (i, action) in bundle.actions().iter().enumerate() {
                 let ovk = orchard::keys::OutgoingViewingKey::from([0u8; 32]);
                 if let Some((note, addr, memo)) = try_output_recovery_with_ovk(
-                    &OrchardDomain::for_action(action),
+                    &OrchardDomainV3::for_action(action),
                     &ovk,
                     action,
                     action.cv_net(),

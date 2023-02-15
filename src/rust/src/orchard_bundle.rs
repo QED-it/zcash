@@ -35,7 +35,7 @@ impl Action {
         self.0.encrypted_note().epk_bytes
     }
 
-    pub(crate) fn enc_ciphertext(&self) -> [u8; 580] {
+    pub(crate) fn enc_ciphertext(&self) -> [u8; 612] {
         self.0.encrypted_note().enc_ciphertext
     }
 

@@ -1577,6 +1577,7 @@ TEST(ChecktransactionTests, NU5EnforcesOrchardRulesOnShieldedCoinbase) {
         ORCHARD_BUNDLE_START +
         ZC_ZIP225_ORCHARD_NUM_ACTIONS_SIZE +
         ZC_ZIP225_ORCHARD_ACTION_SIZE * 2 +
+        ZC_ASSET_BASE_SIZE +
         ZC_ZIP225_ORCHARD_FLAGS_SIZE);
 
     // Verify the transaction is the expected size.
