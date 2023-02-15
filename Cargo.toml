@@ -114,11 +114,11 @@ panic = 'abort'
 codegen-units = 1
 
 [patch.crates-io]
-orchard = { git = "https://github.com/QED-it/orchard", rev = "00cc2aa22be11d699d2f240a0dbe0ae0419ca98b" } # branch = "copy-trait-for-keys"
-zcash_primitives = { git = "https://github.com/QED-it/librustzcash", rev = "d00636435f5d97b7b29ca51948e252fef887673c" }
-equihash = { git = "https://github.com/QED-it/librustzcash", rev = "d00636435f5d97b7b29ca51948e252fef887673c" }
-zcash_address = { git = "https://github.com/QED-it/librustzcash", rev = "d00636435f5d97b7b29ca51948e252fef887673c" }
-zcash_encoding = { git = "https://github.com/QED-it/librustzcash", rev = "d00636435f5d97b7b29ca51948e252fef887673c" }
-zcash_note_encryption = { git = "https://github.com/QED-it/librustzcash", rev = "d00636435f5d97b7b29ca51948e252fef887673c" }
-zcash_proofs = { git = "https://github.com/QED-it/librustzcash", rev = "d00636435f5d97b7b29ca51948e252fef887673c" }
-zcash_history = { git = "https://github.com/QED-it/librustzcash", rev = "d00636435f5d97b7b29ca51948e252fef887673c" }
+orchard = { git = "https://github.com/QED-it/orchard", rev = "4e4767789e675c1317dfbdd6ec70de1758cef37b" } # branch = "copy-trait-for-keys"
+zcash_primitives = { git = "https://github.com/QED-it/librustzcash", rev = "9d01f0bde1be6116ae7e064c8cc57bc46c874737" }
+equihash = { git = "https://github.com/QED-it/librustzcash", rev = "9d01f0bde1be6116ae7e064c8cc57bc46c874737" }
+zcash_address = { git = "https://github.com/QED-it/librustzcash", rev = "9d01f0bde1be6116ae7e064c8cc57bc46c874737" }
+zcash_encoding = { git = "https://github.com/QED-it/librustzcash", rev = "9d01f0bde1be6116ae7e064c8cc57bc46c874737" }
+zcash_note_encryption = { git = "https://github.com/QED-it/librustzcash", rev = "9d01f0bde1be6116ae7e064c8cc57bc46c874737" }
+zcash_proofs = { git = "https://github.com/QED-it/librustzcash", rev = "9d01f0bde1be6116ae7e064c8cc57bc46c874737" }
+zcash_history = { git = "https://github.com/QED-it/librustzcash", rev = "9d01f0bde1be6116ae7e064c8cc57bc46c874737" }

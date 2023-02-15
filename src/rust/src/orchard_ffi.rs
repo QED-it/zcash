@@ -3,7 +3,7 @@ use std::{convert::TryInto, mem, ptr};
 use libc::size_t;
 use memuse::DynamicUsage;
 use orchard::{
-    bundle::Authorized, keys::OutgoingViewingKey, note_encryption::OrchardDomain, Bundle,
+    bundle::Authorized, keys::OutgoingViewingKey, note_encryption_v3::OrchardDomainV3, Bundle,
 };
 use rand_core::OsRng;
 use tracing::{debug, error};
@@ -282,7 +282,7 @@ pub extern "C" fn orchard_bundle_coinbase_outputs_are_valid(
     if let Some(bundle) = unsafe { bundle.as_ref() } {
         for act in bundle.actions() {
             if try_output_recovery_with_ovk(
-                &OrchardDomain::for_action(act),
+                &OrchardDomainV3::for_action(act),
                 &OutgoingViewingKey::from([0u8; 32]),
                 act,
                 act.cv_net(),

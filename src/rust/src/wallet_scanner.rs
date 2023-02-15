@@ -10,7 +10,7 @@ use std::sync::{
 use crossbeam_channel as channel;
 use group::GroupEncoding;
 use memuse::DynamicUsage;
-use zcash_note_encryption::{batch, BatchDomain, Domain, ShieldedOutput, ENC_CIPHERTEXT_SIZE};
+use zcash_note_encryption::{batch, BatchDomain, Domain, ShieldedOutput};
 use zcash_primitives::{
     block::BlockHash,
     consensus, constants,
@@ -401,7 +401,7 @@ impl<Item: Task> Task for WithUsageTask<Item> {
 }
 
 /// A batch of outputs to trial decrypt.
-struct Batch<A, D: BatchDomain, Output: ShieldedOutput<D, ENC_CIPHERTEXT_SIZE>> {
+struct Batch<A, D: BatchDomain, Output: ShieldedOutput<D>> {
     tags: Vec<A>,
     ivks: Vec<D::IncomingViewingKey>,
     /// We currently store outputs and repliers as parallel vectors, because
@@ -420,7 +420,7 @@ where
     A: DynamicUsage,
     D: BatchDomain + DynamicUsage,
     D::IncomingViewingKey: DynamicUsage,
-    Output: ShieldedOutput<D, ENC_CIPHERTEXT_SIZE> + DynamicUsage,
+    Output: ShieldedOutput<D> + DynamicUsage,
 {
     fn dynamic_usage(&self) -> usize {
         self.tags.dynamic_usage()
@@ -450,7 +450,7 @@ impl<A, D, Output> Batch<A, D, Output>
 where
     A: Clone,
     D: OutputDomain,
-    Output: ShieldedOutput<D, ENC_CIPHERTEXT_SIZE>,
+    Output: ShieldedOutput<D>,
 {
     /// Constructs a new batch.
     fn new(tags: Vec<A>, ivks: Vec<D::IncomingViewingKey>) -> Self {
@@ -477,7 +477,7 @@ where
     D::Memo: Send,
     D::Note: Send,
     D::Recipient: Send,
-    Output: ShieldedOutput<D, ENC_CIPHERTEXT_SIZE> + Send + 'static,
+    Output: ShieldedOutput<D> + Send + 'static,
 {
     /// Runs the batch of trial decryptions, and reports the results.
     fn run(self) {
@@ -522,7 +522,7 @@ where
     }
 }
 
-impl<A, D: BatchDomain, Output: ShieldedOutput<D, ENC_CIPHERTEXT_SIZE> + Clone>
+impl<A, D: BatchDomain, Output: ShieldedOutput<D> + Clone>
     Batch<A, D, Output>
 {
     /// Adds the given outputs to this batch.
@@ -598,7 +598,7 @@ impl<A, D: Domain> DynamicUsage for BatchReceiver<A, D> {
 struct BatchRunner<A, D, Output, T>
 where
     D: BatchDomain,
-    Output: ShieldedOutput<D, ENC_CIPHERTEXT_SIZE>,
+    Output: ShieldedOutput<D>,
     T: Tasks<Batch<A, D, Output>>,
 {
     // The batch currently being accumulated.
@@ -614,7 +614,7 @@ where
     A: DynamicUsage,
     D: BatchDomain + DynamicUsage,
     D::IncomingViewingKey: DynamicUsage,
-    Output: ShieldedOutput<D, ENC_CIPHERTEXT_SIZE> + DynamicUsage,
+    Output: ShieldedOutput<D> + DynamicUsage,
     T: Tasks<Batch<A, D, Output>> + DynamicUsage,
 {
     fn dynamic_usage(&self) -> usize {
@@ -645,7 +645,7 @@ impl<A, D, Output, T> BatchRunner<A, D, Output, T>
 where
     A: Clone,
     D: OutputDomain,
-    Output: ShieldedOutput<D, ENC_CIPHERTEXT_SIZE>,
+    Output: ShieldedOutput<D>,
     T: Tasks<Batch<A, D, Output>>,
 {
     /// Constructs a new batch runner for the given incoming viewing keys.
@@ -667,7 +667,7 @@ where
     D::Memo: Send,
     D::Note: Send,
     D::Recipient: Send,
-    Output: ShieldedOutput<D, ENC_CIPHERTEXT_SIZE> + Clone + Send + 'static,
+    Output: ShieldedOutput<D> + Clone + Send + 'static,
     T: Tasks<Batch<A, D, Output>>,
 {
     /// Batches the given outputs for trial decryption.
