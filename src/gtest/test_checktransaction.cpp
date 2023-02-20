@@ -1451,14 +1451,14 @@ TEST(ChecktransactionTests, NU5AcceptsOrchardShieldedCoinbase) {
         .ToIncomingViewingKey()
         .Address(0);
     uint256 ovk;
-    builder.AddOutput(ovk, to, CAmount(123456), Asset::ZEC(), std::nullopt);
+    builder.AddOutput(ovk, to, CAmount(123456), Asset::Native(), std::nullopt);
 
     // orchard::Builder pads to two Actions, but does so using a "no OVK" policy for
     // dummy outputs, which violates coinbase rules requiring all shielded outputs to
     // be recoverable. We manually add a dummy output to sidestep this issue.
     // TODO: If/when we have funding streams going to Orchard recipients, this dummy
     // output can be removed.
-    builder.AddOutput(ovk, to, 0, Asset::ZEC(), std::nullopt);
+    builder.AddOutput(ovk, to, 0, Asset::Native(), std::nullopt);
 
     auto bundle = builder
         .Build().value()
@@ -1571,14 +1571,14 @@ TEST(ChecktransactionTests, NU5EnforcesOrchardRulesOnShieldedCoinbase) {
         .ToIncomingViewingKey()
         .Address(0);
     uint256 ovk;
-    builder.AddOutput(ovk, to, CAmount(1000), Asset::ZEC(), std::nullopt);
+    builder.AddOutput(ovk, to, CAmount(1000), Asset::Native(), std::nullopt);
 
     // orchard::Builder pads to two Actions, but does so using a "no OVK" policy for
     // dummy outputs, which violates coinbase rules requiring all shielded outputs to
     // be recoverable. We manually add a dummy output to sidestep this issue.
     // TODO: If/when we have funding streams going to Orchard recipients, this dummy
     // output can be removed.
-    builder.AddOutput(ovk, to, 0, Asset::ZEC(), std::nullopt);
+    builder.AddOutput(ovk, to, 0, Asset::Native(), std::nullopt);
 
     auto bundle = builder
         .Build().value()

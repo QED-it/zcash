@@ -563,7 +563,7 @@ uint256 AsyncRPCOperation_sendmany::main_impl() {
             },
             [&](const libzcash::OrchardRawAddress& addr) {
                 builder_.AddOrchardOutput(
-                        ovks.second, addr, r.amount, Asset::ZEC(),
+                        ovks.second, addr, r.amount, Asset::Native(),
                         r.memo.has_value() ? std::optional(r.memo.value().ToBytes()) : std::nullopt);
             }
         }, r.address);

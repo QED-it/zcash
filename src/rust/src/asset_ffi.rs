@@ -14,11 +14,11 @@ pub extern "C" fn zsa_derive_asset(
     asset_desc_ptr: *const c_char,
     asset_ret: *mut [u8; 32],
 ) -> bool {
-    unsafe {
-        assert!(!ik_bytes.is_null());
-        assert!(!asset_desc_ptr.is_null());
-        assert!(!asset_ret.is_null());
+    assert!(!ik_bytes.is_null());
+    assert!(!asset_desc_ptr.is_null());
+    assert!(!asset_ret.is_null());
 
+    unsafe {
         let ik_bytes: &[u8] = &ik_bytes
             .as_ref()
             .copied()
@@ -28,7 +28,6 @@ pub extern "C" fn zsa_derive_asset(
         let asset_desc = CStr::from_ptr(asset_desc_ptr)
             .to_str()
             .expect("Asset description should contain correct UTF-8 string");
-
         *asset_ret = AssetId::derive(&ik, asset_desc).to_bytes();
     }
     true

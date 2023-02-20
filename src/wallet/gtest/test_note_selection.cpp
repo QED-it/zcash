@@ -40,7 +40,7 @@ SpendableInputs FakeSpendableInputs(
         for (int i = 0; i < 10; i++) {
             OrchardOutPoint op;
             inputs.orchardNoteMetadata.push_back(OrchardNoteMetadata{
-                op, address, 1, Asset::ZEC(), {}});
+                op, address, 1, Asset::Native(), {}});
         }
     }
 

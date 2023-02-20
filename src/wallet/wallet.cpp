@@ -5177,7 +5177,7 @@ CAmount CWallet::GetImmatureBalance(const std::optional<int>& asOfHeight) const
     return nTotal;
 }
 
-map<std::string, Balances> CWallet::getZSABalances(std::optional<libzcash::PaymentAddress> address, const std::optional<int>& asOfHeight, bool ignoreUnspendable) const {
+map<std::string, Balances> CWallet::getAssetBalances(std::optional<libzcash::PaymentAddress> address, const std::optional<int>& asOfHeight, bool ignoreUnspendable) const {
     std::map<std::string, Balances> balances;
     std::vector<OrchardNoteMetadata> orchardEntries;
     std::vector<OrchardNoteMetadata> orchardUnconfirmedEntries;

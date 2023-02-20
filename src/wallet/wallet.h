@@ -2183,7 +2183,7 @@ public:
     /**
      * Returns confirmed and unconfirmed balances per asset
      */
-    map<std::string, Balances> getZSABalances(std::optional<libzcash::PaymentAddress> address=std::nullopt, const std::optional<int>& asOfHeight=std::nullopt, bool ignoreUnspendable=true) const;
+    map<std::string, Balances> getAssetBalances(std::optional<libzcash::PaymentAddress> address= std::nullopt, const std::optional<int>& asOfHeight= std::nullopt, bool ignoreUnspendable= true) const;
 
     /* Returns the wallets help message */
     static std::string GetWalletHelpString(bool showDebug);

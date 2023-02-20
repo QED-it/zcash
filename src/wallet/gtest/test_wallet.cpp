@@ -836,7 +836,7 @@ TEST(WalletTests, GetConflictedOrchardNotes) {
     // Generate a bundle containing output note A.
     auto builder = TransactionBuilder(consensusParams, 1, orchardAnchor, &keystore);
     builder.AddTransparentInput(COutPoint(uint256(), 0), scriptPubKey, 50000);
-    builder.AddOrchardOutput(std::nullopt, recipient, 40000, Asset::ZEC(), {});
+    builder.AddOrchardOutput(std::nullopt, recipient, 40000, Asset::Native(), {});
     auto maybeTx = builder.Build();
     EXPECT_TRUE(maybeTx.IsTx());
     if (maybeTx.IsError()) {
