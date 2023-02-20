@@ -484,7 +484,7 @@ TransactionBuilderResult TransactionBuilder::Build()
         // if any; otherwise the first Sprout address given as input.
         // (A t-address can only be used as the change address if explicitly set.)
         if (orchardChangeAddr) {
-            AddOrchardOutput(orchardChangeAddr->first, orchardChangeAddr->second, change, Asset::ZEC(), std::nullopt);
+            AddOrchardOutput(orchardChangeAddr->first, orchardChangeAddr->second, change, Asset::Native(), std::nullopt);
         } else if (saplingChangeAddr) {
             AddSaplingOutput(saplingChangeAddr->first, saplingChangeAddr->second, change, std::nullopt);
         } else if (sproutChangeAddr) {
@@ -494,7 +494,7 @@ TransactionBuilderResult TransactionBuilder::Build()
             AddTransparentOutput(tChangeAddr.value(), change);
         } else if (firstOrchardSpendAddr.has_value()) {
             auto ovk = orchardSpendingKeys[0].ToFullViewingKey().ToInternalOutgoingViewingKey();
-            AddOrchardOutput(ovk, firstOrchardSpendAddr.value(), change, Asset::ZEC(), std::nullopt);
+            AddOrchardOutput(ovk, firstOrchardSpendAddr.value(), change, Asset::Native(), std::nullopt);
         } else if (firstSaplingSpendAddr.has_value()) {
             uint256 ovk;
             libzcash::SaplingPaymentAddress changeAddr;

@@ -7,8 +7,8 @@ class Asset {
 
 private:
     /**
-     * Default constructor is only used during ZEC singleton creation
-     * @return ZEC asset id
+     * Default constructor is only used during Native singleton creation
+     * @return Native asset id
      */
     Asset() {
     };
@@ -39,7 +39,7 @@ public:
 
 
     // TODO proper singleton/global
-    static Asset& ZEC() {
+    static Asset& Native() {
         static Asset zecSingleton;
         zsa_native_asset((unsigned char*)zecSingleton.id);
         return zecSingleton;
