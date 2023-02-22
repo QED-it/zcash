@@ -26,7 +26,7 @@ pub extern "C" fn issuance_authorizing_key_clone(
     key: *const IssuanceAuthorizingKey,
 ) -> *mut IssuanceAuthorizingKey {
     unsafe { key.as_ref() }
-        .map(|key| Box::into_raw(Box::new(*key)))
+        .map(|key| Box::into_raw(Box::new(key.clone())))
         .unwrap_or(std::ptr::null_mut())
 }
 
