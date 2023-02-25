@@ -3,7 +3,13 @@ use orchard::keys::{IssuanceAuthorizingKey, IssuanceValidatingKey, SpendingKey};
 use orchard::value::NoteValue;
 use orchard::Address;
 use rand_core::OsRng;
+use std::ptr;
 use std::ffi::{c_char, CStr};
+use tracing::error;
+use crate::{
+    streams_ffi::{CppStreamReader, CppStreamWriter, ReadCb, StreamObj, WriteCb},
+};
+use zcash_primitives::transaction::components::{issuance as issuance_serialization};
 
 #[no_mangle]
 pub extern "C" fn orchard_spending_key_to_issuance_authorizing_key(
@@ -51,6 +57,15 @@ pub extern "C" fn issue_bundle_free(bundle: *mut IssueBundle<Unauthorized>) {
     if !bundle.is_null() {
         drop(unsafe { Box::from_raw(bundle) });
     }
+}
+
+#[no_mangle]
+pub extern "C" fn issue_bundle_clone(
+    bundle: *const IssueBundle<Signed>,
+) -> *mut IssueBundle<Signed> {
+    unsafe { bundle.as_ref() }
+        .map(|bundle| Box::into_raw(Box::new(bundle.clone())))
+        .unwrap_or(std::ptr::null_mut())
 }
 
 #[no_mangle]
@@ -109,6 +124,51 @@ pub extern "C" fn sign_issue_bundle(
                 "An error occurred while authorizing the orchard bundle: {:?}",
                 e
             )
+        }
+    }
+}
+
+
+#[no_mangle]
+pub extern "C" fn issue_bundle_parse(
+    stream: Option<StreamObj>,
+    read_cb: Option<ReadCb>,
+    bundle_ret: *mut *mut IssueBundle<Signed>,
+) -> bool {
+    let reader = CppStreamReader::from_raw_parts(stream, read_cb.unwrap());
+
+    match issuance_serialization::read_v5_bundle(reader) {
+        Ok(parsed) => {
+            unsafe {
+                *bundle_ret = if let Some(bundle) = parsed {
+                    Box::into_raw(Box::new(bundle))
+                } else {
+                    ptr::null_mut::<IssueBundle<Signed>>()
+                };
+            };
+            true
+        }
+        Err(e) => {
+            error!("Failed to parse Orchard bundle: {}", e);
+            false
+        }
+    }
+}
+
+#[no_mangle]
+pub extern "C" fn issue_bundle_serialize(
+    bundle: *const IssueBundle<Signed>,
+    stream: Option<StreamObj>,
+    write_cb: Option<WriteCb>,
+) -> bool {
+    let bundle = unsafe { bundle.as_ref() };
+    let writer = CppStreamWriter::from_raw_parts(stream, write_cb.unwrap());
+
+    match issuance_serialization::write_v5_bundle(bundle, writer) {
+        Ok(()) => true,
+        Err(e) => {
+            error!("{}", e);
+            false
         }
     }
 }

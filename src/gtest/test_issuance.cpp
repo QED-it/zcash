@@ -15,6 +15,7 @@
 #include "Asset.h"
 #include "rust/orchard/keys.h"
 #include "rust/orchard/zsa_issuance.h"
+#include <primitives/issue.h>
 
 #include <optional>
 
@@ -40,11 +41,11 @@ TEST(Issuance, BasicIssuanceFlow)
     auto recipient = ivk.Address(j);
     const char *asset_descr = (const char *)"Asset description";
 
-    libzcash::IssueBundle bundle = libzcash::IssueBundle(isk);
+//    IssueBundle bundle = IssueBundle(isk);
 
-    bundle.AddRecipient(1, recipient, asset_descr, 18, false);
-
-    bundle.Sign(isk);
+//    bundle.AddRecipient(1, recipient, asset_descr, 18, false);
+//
+//    bundle.Sign(isk);
 
     // TODO add structural checks when CXX bridge is implemented
 

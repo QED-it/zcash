@@ -26,6 +26,7 @@
 #include <rust/ed25519.h>
 #include <primitives/sapling.h>
 #include <primitives/orchard.h>
+#include <primitives/issue.h>
 
 // Overwinter transaction version group id
 static constexpr uint32_t OVERWINTER_VERSION_GROUP_ID = 0x03C48270;
@@ -459,6 +460,7 @@ private:
     std::optional<uint32_t> nConsensusBranchId;
     SaplingBundle saplingBundle;
     OrchardBundle orchardBundle;
+    IssueBundle issueBundle;
 
     /** Memory only. */
     const WTxId wtxid;
@@ -601,6 +603,9 @@ public:
 
             // Orchard Transaction Fields
             READWRITE(orchardBundle);
+
+            // Issuance Transaction Fields
+            READWRITE(issueBundle);
         } else {
             // Legacy transaction formats
             READWRITE(*const_cast<std::vector<CTxIn>*>(&vin));
@@ -778,6 +783,7 @@ struct CMutableTransaction
     uint32_t nExpiryHeight{0};
     SaplingBundle saplingBundle;
     OrchardBundle orchardBundle;
+    IssueBundle issueBundle;
     std::vector<JSDescription> vJoinSplit;
     ed25519::VerificationKey joinSplitPubKey;
     ed25519::Signature joinSplitSig;

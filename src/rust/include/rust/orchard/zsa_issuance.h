@@ -78,6 +78,11 @@ typedef struct IssueBundlePtr IssueBundlePtr;
  */
 void issue_bundle_free(IssueBundlePtr* ptr);
 
+/// Clones the given Issue bundle.
+///
+/// Both bundles need to be separately freed when they go out of scope.
+IssueBundlePtr* issue_bundle_clone(IssueBundlePtr* ptr);
+
 IssueBundlePtr* create_issue_bundle(IssuanceAuthorizingKeyPtr* isk);
 
 void add_recipient(
@@ -93,6 +98,24 @@ IssueBundlePtr* sign_issue_bundle(
         IssueBundlePtr* bundle,
         IssuanceAuthorizingKeyPtr* isk
 );
+
+
+/// Parses an authorized Issue bundle from the given stream.
+///
+/// - If no error occurs, `bundle_ret` will point to a Rust-allocated Issue bundle.
+/// - If an error occurs, `bundle_ret` will be unaltered.
+bool issue_bundle_parse(
+        void* stream,
+        read_callback_t read_cb,
+        IssueBundlePtr** bundle_ret);
+
+/// Serializes an authorized Issue bundle to the given stream
+///
+/// If `bundle == nullptr`, this serializes `nActions = 0`.
+bool issue_bundle_serialize(
+        const IssueBundlePtr* bundle,
+        void* stream,
+        write_callback_t write_cb);
 
 #ifdef __cplusplus
 }
