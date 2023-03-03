@@ -8,8 +8,6 @@
 #include "streams.h"
 #include "zcash/address/zip32.h"
 #include <rust/orchard/keys.h>
-#include <rust/orchard/zsa_issuance.h>
-#include <primitives/issue.h>
 
 #include <optional>
 
@@ -19,13 +17,14 @@ namespace orchard {
     class UnauthorizedBundle;
 }
 
+class IssueBundle;
+class IssuanceAuthorizingKey;
+
 namespace libzcash {
 
 class OrchardFullViewingKey;
 class OrchardIncomingViewingKey;
 class OrchardSpendingKey;
-class IssuanceAuthorizingKey;
-class IssuanceValidatingKey;
 
 class OrchardRawAddress
 {
@@ -39,7 +38,7 @@ private:
     friend class OrchardIncomingViewingKey;
     friend class ::OrchardWallet;
     friend class ::orchard::Builder;
-    friend class IssueBundle;
+    friend class ::IssueBundle;
 public:
     static OrchardRawAddress KeyIoOnlyFromReceiver(OrchardRawAddressPtr* ptr) {
         return OrchardRawAddress(ptr);
@@ -294,6 +293,7 @@ private:
 
     friend class orchard::UnauthorizedBundle;
     friend class ::OrchardWallet;
+    friend class ::IssuanceAuthorizingKey;
 public:
     OrchardSpendingKey(OrchardSpendingKey&& key) : inner(std::move(key.inner)) {}
 
@@ -325,41 +325,6 @@ public:
         return *this;
     }
 };
-
-    class IssuanceAuthorizingKey
-    {
-    private:
-        std::unique_ptr<IssuanceAuthorizingKeyPtr, decltype(&issuance_authorizing_key_free)> inner;
-
-        IssuanceAuthorizingKey() : inner(nullptr, issuance_authorizing_key_free) {}
-
-        IssuanceAuthorizingKey(IssuanceAuthorizingKeyPtr* ptr) :
-                inner(ptr, issuance_authorizing_key_free) {}
-
-        friend class OrchardSpendingKey;
-        friend class IssueBundle;
-    public:
-        IssuanceAuthorizingKey(IssuanceAuthorizingKey&& key) : inner(std::move(key.inner)) {}
-
-        IssuanceAuthorizingKey(const IssuanceAuthorizingKey& key) :
-                inner(issuance_authorizing_key_clone(key.inner.get()), issuance_authorizing_key_free) {}
-
-        IssuanceAuthorizingKey& operator=(IssuanceAuthorizingKey&& key)
-        {
-            if (this != &key) {
-                inner = std::move(key.inner);
-            }
-            return *this;
-        }
-
-        IssuanceAuthorizingKey& operator=(const IssuanceAuthorizingKey& key)
-        {
-            if (this != &key) {
-                inner.reset(issuance_authorizing_key_clone(key.inner.get()));
-            }
-            return *this;
-        }
-    };
 } // namespace libzcash
 
 #endif // ZCASH_ADDRESS_ORCHARD_H
