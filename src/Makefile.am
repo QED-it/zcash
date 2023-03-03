@@ -55,6 +55,7 @@ CXXBRIDGE_RS = \
   rust/src/bundlecache.rs \
   rust/src/equihash.rs \
   rust/src/orchard_bundle.rs \
+  rust/src/issue_bundle.rs \
   rust/src/sapling.rs \
   rust/src/wallet_scanner.rs
 CXXBRIDGE_H = \
@@ -62,6 +63,7 @@ CXXBRIDGE_H = \
   rust/gen/include/rust/bundlecache.h \
   rust/gen/include/rust/equihash.h \
   rust/gen/include/rust/orchard_bundle.h \
+  rust/gen/include/rust/issue_bundle.h \
   rust/gen/include/rust/sapling.h \
   rust/gen/include/rust/wallet_scanner.h
 CXXBRIDGE_CPP = \
@@ -69,6 +71,7 @@ CXXBRIDGE_CPP = \
   rust/gen/src/bundlecache.cpp \
   rust/gen/src/equihash.cpp \
   rust/gen/src/orchard_bundle.cpp \
+  rust/gen/src/issue_bundle.cpp \
   rust/gen/src/sapling.cpp \
   rust/gen/src/wallet_scanner.cpp
 

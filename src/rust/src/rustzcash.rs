@@ -81,6 +81,7 @@ mod zip339_ffi;
 mod issue_ffi;
 
 mod test_harness_ffi;
+mod issue_bundle;
 
 #[cfg(test)]
 mod tests;

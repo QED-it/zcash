@@ -14,7 +14,8 @@
 #include "zcash/address/mnemonic.h"
 #include "Asset.h"
 #include "rust/orchard/keys.h"
-#include "rust/orchard/zsa_issuance.h"
+#include "rust/orchard/issuance.h"
+#include <rust/issue_bundle.h>
 #include <primitives/issue.h>
 
 #include <optional>
@@ -41,13 +42,23 @@ TEST(Issuance, BasicIssuanceFlow)
     auto recipient = ivk.Address(j);
     const char *asset_descr = (const char *)"Asset description";
 
-//    IssueBundle bundle = IssueBundle(isk);
+    IssueBundle bundle = IssueBundle(isk);
 
-//    bundle.AddRecipient(1, recipient, asset_descr, 18, false);
-//
-//    bundle.Sign(isk);
+    bundle.AddRecipient(42, recipient, asset_descr, 18, false);
 
-    // TODO add structural checks when CXX bridge is implemented
+    bundle.Sign(isk);
+
+    auto rustBundle = bundle.GetDetails();
+
+    EXPECT_EQ(rustBundle->num_actions(), 1);
+
+    for (const auto& action : rustBundle->actions()) {
+        EXPECT_FALSE(action.is_finalized());
+        for (const auto& note : action.notes()) {
+            EXPECT_EQ(note.value(), 42);
+            // TODO check asset id and recipient
+        }
+    }
 
     // Revert to default
     RegtestDeactivateNU5();

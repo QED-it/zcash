@@ -90,7 +90,6 @@ void add_recipient(
         uint64_t value,
         OrchardRawAddressPtr *recipient,
         const char *asset_descr,
-        size_t asset_descr_len,
         bool finalize
 );
 

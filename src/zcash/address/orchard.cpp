@@ -3,6 +3,7 @@
 // file COPYING or https://www.opensource.org/licenses/mit-license.php .
 
 #include "zcash/address/orchard.hpp"
+#include <primitives/issue.h>
 
 namespace libzcash {
 
