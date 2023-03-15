@@ -116,7 +116,6 @@
                 uint64_t value,
                 libzcash::OrchardRawAddress recipient,
                 const char *asset_descr,
-                size_t asset_descr_len,
                 bool finalize
         ) {
             add_recipient(inner.get(), value, recipient.inner.get(), asset_descr, finalize);

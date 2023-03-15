@@ -723,6 +723,13 @@ public:
         return orchardBundle;
     }
 
+    /**
+     * Returns the Issue bundle for the transaction.
+     */
+    const IssueBundle& GetIssueBundle() const {
+        return issueBundle;
+    }
+
     /*
      * Context for the two methods below:
      * As at most one of vpub_new and vpub_old is non-zero in every JoinSplit,

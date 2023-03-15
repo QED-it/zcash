@@ -310,6 +310,25 @@ void TransactionBuilder::AddOrchardOutput(
     valueBalanceOrchard -= value;
 }
 
+void TransactionBuilder::CreateIssueBundle(IssuanceAuthorizingKey isk) {
+    if(issueBundle.has_value() || issueAuthorizingKey.has_value()) {
+        throw std::runtime_error("IssueBundle is already initialized");
+    }
+    issueAuthorizingKey = isk;
+    issueBundle = IssueBundle(isk);
+}
+
+void TransactionBuilder::AddIssue(
+        uint64_t value,
+        libzcash::OrchardRawAddress recipient,
+        const char *asset_descr,
+        bool finalize) {
+    if(!issueBundle.has_value()) {
+        throw std::runtime_error("TransactionBuilder cannot add Issue action before IssueBundle is initialized");
+    }
+    issueBundle.value().AddRecipient(value, recipient, asset_descr, finalize);
+}
+
 void TransactionBuilder::AddSaplingSpend(
     libzcash::SaplingExtendedSpendingKey extsk,
     libzcash::SaplingNote note,
@@ -586,6 +605,11 @@ TransactionBuilderResult TransactionBuilder::Build()
         } else {
             return TransactionBuilderResult("Failed to create Orchard proof or signatures");
         }
+    }
+
+    if (issueBundle.has_value()) {
+        issueBundle.value().Sign(issueAuthorizingKey.value());
+        mtx.issueBundle = issueBundle.value();
     }
 
     // Create Sapling spendAuth and binding signatures
