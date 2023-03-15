@@ -163,6 +163,17 @@ struct CRecipient
     bool fSubtractFeeFromAmount;
 };
 
+/**
+ * TODO merge with CRecipient?
+ */
+struct CIssueRecipient
+{
+    CScript scriptPubKey;
+    CAmount nAmount;
+    Asset asset;
+    bool finalize;
+};
+
 class RecipientMapping {
 public:
     std::optional<libzcash::UnifiedAddress> ua;

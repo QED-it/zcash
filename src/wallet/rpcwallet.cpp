@@ -265,6 +265,92 @@ UniValue getrawchangeaddress(const UniValue& params, bool fHelp)
     return keyIO.EncodeDestination(keyID);
 }
 
+bool IsValidAsset(const std::string& asset) {
+    // TODO check if new name/id is correct
+    return true;
+}
+
+
+static void IssueAsset(const CTxDestination &address, CAmount amount, Asset asset, bool finalize, CWalletTx& wtxNew) {
+
+    // Parse Zcash address
+    CScript scriptPubKey = GetScriptForDestination(address);
+
+    // Create and send the transaction
+    IssuanceAuthoringKey isk = TODO();
+
+    std::string strError;
+    vector<CRecipient> vecSend;
+    int nChangePosRet = -1;
+    CIssueRecipient recipient = {scriptPubKey, nValue, asset, finalize};
+    vecSend.push_back(recipient);
+
+    if (!pwalletMain->CreateIssueTransaction(vecSend, wtxNew, isk, strError)) {
+        throw JSONRPCError(RPC_WALLET_ERROR, strError);
+    }
+
+    CValidationState state;
+    if (!pwalletMain->CommitTransaction(wtxNew, std::nullopt, state)) {
+        strError = strprintf("Error: The transaction was rejected! Reason given: %s", state.GetRejectReason());
+        throw JSONRPCError(RPC_WALLET_ERROR, strError);
+    }
+}
+
+UniValue issue(const UniValue &params, bool fHelp) {
+
+    if (!EnsureWalletIsAvailable(fHelp))
+        return NullUniValue;
+
+    if (fHelp || params.size() != 4)
+        throw runtime_error(
+                "issue \"zcashaddress\" asset amount finalize\n"
+                "\nTODO add action description.\n"
+                + HelpRequiringPassphrase() +
+                "\nArguments:\n"
+                "1. \"zcashaddress\"  (string, required) The transparent Zcash address to send to.\n"
+                "2. \"asset\"         (string, required) The asset name (TBD Short name or AssetBase?)\n"
+                "3. \"amount\"        (numeric, required) The amount of 'asset' to issue. eg 0.1\n"
+                "4. \"finalize\"      (boolean, required) The finalization flag\n"
+                "\nResult:\n"
+                "\"transactionid\"  (string) The transaction id.\n"
+                "\nExamples:\n"
+                + HelpExampleCli("issue", "\"t1M72Sfpbz1BPpXFHz9m3CdqATR44Jvaydd\" WBTC 0.1 true")
+        );
+
+    LOCK2(cs_main, pwalletMain->cs_wallet);
+
+    KeyIO keyIO(Params());
+
+    CWalletTx wtx;
+
+    // Address
+    auto destStr = params[0].get_str();
+    CTxDestination dest = keyIO.DecodeDestination(destStr);
+    if (!IsValidDestination(dest)) {
+        throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, std::string("Invalid " PACKAGE_NAME " transparent address: ") + destStr);
+    }
+
+    // Asset
+    auto assetStr = params[1].get_str();
+    if(!IsValidAsset(assetStr)) {
+        throw JSONRPCError(RPC_INVALID_ASSET, std::string("Invalid " PACKAGE_NAME " asset: ") + assetStr);
+    }
+
+    // Amount
+    CAmount nAmount = AmountFromValue(params[1]);
+    if (nAmount <= 0)
+        throw JSONRPCError(RPC_TYPE_ERROR, "Invalid amount for send");
+
+    // Finalize
+    bool finalize = params[3].get_bool();
+
+    EnsureWalletIsUnlocked();
+
+    IssueAsset(dest, nAmount, assetStr, finalize, wtx)
+
+    return wtx.GetHash().GetHex();
+}
+
 static void SendMoney(const CTxDestination &address, CAmount nValue, bool fSubtractFeeFromAmount, CWalletTx& wtxNew)
 {
     CAmount curBalance = pwalletMain->GetBalance(std::nullopt);

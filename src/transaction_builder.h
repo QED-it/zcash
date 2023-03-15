@@ -265,9 +265,11 @@ private:
     CAmount fee = 10000;
     std::optional<uint256> orchardAnchor;
     std::optional<orchard::Builder> orchardBuilder;
+    std::optional<IssueBundle> issueBundle;
     CAmount valueBalanceOrchard = 0;
 
     std::vector<libzcash::OrchardSpendingKey> orchardSpendingKeys;
+    std::optional<IssuanceAuthorizingKey> issueAuthorizingKey;
     std::optional<libzcash::OrchardRawAddress> firstOrchardSpendAddr;
     std::vector<SpendDescriptionInfo> spends;
     std::vector<OutputDescriptionInfo> outputs;
@@ -309,6 +311,8 @@ public:
         fee(std::move(builder.fee)),
         orchardAnchor(std::move(builder.orchardAnchor)),
         orchardBuilder(std::move(builder.orchardBuilder)),
+        issueBundle(std::move(builder.issueBundle)),
+        issueAuthorizingKey(std::move(builder.issueAuthorizingKey)),
         valueBalanceOrchard(std::move(builder.valueBalanceOrchard)),
         spends(std::move(builder.spends)),
         outputs(std::move(builder.outputs)),
@@ -329,6 +333,8 @@ public:
             mtx = std::move(builder.mtx);
             fee = std::move(builder.fee);
             orchardBuilder = std::move(builder.orchardBuilder);
+            issueBundle = std::move(builder.issueBundle);
+            issueAuthorizingKey = std::move(builder.issueAuthorizingKey);
             valueBalanceOrchard = std::move(builder.valueBalanceOrchard);
             spends = std::move(builder.spends);
             outputs = std::move(builder.outputs);
@@ -360,6 +366,14 @@ public:
         CAmount value,
         Asset& asset,
         const std::optional<std::array<unsigned char, ZC_MEMO_SIZE>>& memo);
+
+    void CreateIssueBundle(IssuanceAuthorizingKey issueAuthorizingKey);
+
+    void AddIssue(
+        uint64_t value,
+        libzcash::OrchardRawAddress recipient,
+        const char *asset_descr,
+        bool finalize);
 
     // Throws if the anchor does not match the anchor used by
     // previously-added Sapling spends.

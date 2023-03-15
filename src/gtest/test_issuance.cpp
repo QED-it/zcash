@@ -44,7 +44,7 @@ TEST(Issuance, BasicIssuanceFlow)
 
     IssueBundle bundle = IssueBundle(isk);
 
-    bundle.AddRecipient(42, recipient, asset_descr, 18, false);
+    bundle.AddRecipient(42, recipient, asset_descr, false);
 
     bundle.Sign(isk);
 

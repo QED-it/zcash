@@ -5589,6 +5589,24 @@ bool CWallet::FundTransaction(CMutableTransaction& tx, CAmount &nFeeRet, int& nC
     return true;
 }
 
+bool CWallet::CreateIssueTransaction(const vector<CIssueRecipient>& vecIssue, IssuanceAuthorizingKey isk, CWalletTx& wtxNew) {
+
+    CMutableTransaction txNew = CreateNewContextualCMutableTransaction(
+            Params().GetConsensus(), nextBlockHeight, nPreferredTxVersion < ZIP225_MIN_TX_VERSION);
+
+    txNew.CreateIssueBundle(isk);
+
+    for (const CRecipient& recipient : vecSend)
+    {
+        txNew.GetIssueBundle().AddIssue(
+            recipient.nAmount.to_value(),
+            recipient.scriptPubKey.GetOrchardRawAddress(),
+            recipient.asset.asset_descr,
+            recipient.finalize
+        );
+    }
+}
+
 bool CWallet::CreateTransaction(const vector<CRecipient>& vecSend, CWalletTx& wtxNew, CReserveKey& reservekey, CAmount& nFeeRet,
                                 int& nChangePosRet, std::string& strFailReason, const CCoinControl* coinControl, bool sign)
 {
