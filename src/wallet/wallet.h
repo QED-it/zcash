@@ -31,6 +31,7 @@
 #include "zcash/Address.hpp"
 #include "zcash/Note.hpp"
 #include "base58.h"
+#include "Asset.h"
 
 #include <algorithm>
 #include <map>
@@ -1957,6 +1958,11 @@ public:
      */
     bool CreateTransaction(const std::vector<CRecipient>& vecSend, CWalletTx& wtxNew, CReserveKey& reservekey, CAmount& nFeeRet, int& nChangePosRet,
                            std::string& strFailReason, const CCoinControl *coinControl = NULL, bool sign = true);
+
+    /**
+     * Create a new transaction issuing the assets
+     */
+    bool CreateIssueTransaction(const vector<CIssueRecipient>& vecIssue, IssuanceAuthorizingKey isk, CWalletTx& wtxNew, std::string& strFailReason);
 
     /**
      * Save a set of (txid, RecipientAddress, std::optional<UnifiedAddress>) mappings to the wallet.

@@ -272,6 +272,17 @@ bool IsValidAsset(const std::string& asset) {
     return true;
 }
 
+/**
+ * TODO proper key management
+ */
+IssuanceAuthorizingKey generateDummyIssuanceAuthorizingKey() {
+    auto coinType = Params().BIP44CoinType();
+    auto seed = MnemonicSeed::Random(coinType);
+    auto sk = libzcash::OrchardSpendingKey::ForAccount(seed, coinType, 0);
+    auto fvk = sk.ToFullViewingKey();
+    auto ivk = fvk.ToIncomingViewingKey();
+    auto isk = sk.ToIssuanceAuthorizingKey();
+}
 
 static void IssueAsset(const CTxDestination &address, CAmount amount, Asset asset, bool finalize, CWalletTx& wtxNew) {
 
@@ -279,15 +290,14 @@ static void IssueAsset(const CTxDestination &address, CAmount amount, Asset asse
     CScript scriptPubKey = GetScriptForDestination(address);
 
     // Create and send the transaction
-    IssuanceAuthoringKey isk = TODO();
+    IssuanceAuthorizingKey isk = generateDummyIssuanceAuthorizingKey();
 
     std::string strError;
-    vector<CRecipient> vecSend;
-    int nChangePosRet = -1;
-    CIssueRecipient recipient = {scriptPubKey, nValue, asset, finalize};
+    vector<CIssueRecipient> vecSend;
+    CIssueRecipient recipient = {scriptPubKey, amount, asset, finalize};
     vecSend.push_back(recipient);
 
-    if (!pwalletMain->CreateIssueTransaction(vecSend, wtxNew, isk, strError)) {
+    if (!pwalletMain->CreateIssueTransaction(vecSend, isk, wtxNew, strError)) {
         throw JSONRPCError(RPC_WALLET_ERROR, strError);
     }
 
@@ -303,7 +313,7 @@ UniValue issue(const UniValue &params, bool fHelp) {
     if (!EnsureWalletIsAvailable(fHelp))
         return NullUniValue;
 
-    if (fHelp || params.size() != 4)
+    if (fHelp || params.size() != 2) // TODO 4
         throw runtime_error(
                 "issue \"zcashaddress\" asset amount finalize\n"
                 "\nTODO add action description.\n"
@@ -333,10 +343,11 @@ UniValue issue(const UniValue &params, bool fHelp) {
     }
 
     // Asset
-    auto assetStr = params[1].get_str();
+    auto assetStr = "WBTC"; // TODO params[1].get_str();
     if(!IsValidAsset(assetStr)) {
         throw JSONRPCError(RPC_INVALID_ASSET, std::string("Invalid " PACKAGE_NAME " asset: ") + assetStr);
     }
+    Asset asset = Asset::Native(); // TODO lookup by asset name? Derive from asset_descr?
 
     // Amount
     CAmount nAmount = AmountFromValue(params[1]);
@@ -344,11 +355,11 @@ UniValue issue(const UniValue &params, bool fHelp) {
         throw JSONRPCError(RPC_TYPE_ERROR, "Invalid amount for send");
 
     // Finalize
-    bool finalize = params[3].get_bool();
+    bool finalize = true; // TODO params[3].get_bool();
 
     EnsureWalletIsUnlocked();
 
-    IssueAsset(dest, nAmount, assetStr, finalize, wtx)
+    IssueAsset(dest, nAmount, asset, finalize, wtx);
 
     return wtx.GetHash().GetHex();
 }
