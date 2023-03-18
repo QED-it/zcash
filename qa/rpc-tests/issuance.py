@@ -13,8 +13,7 @@ from test_framework.util import (
     wait_and_assert_operationid_status,
 )
 
-# Test wallet behaviour with the Orchard protocol
-class ZsaTest(BitcoinTestFramework):
+class IssueTest(BitcoinTestFramework):
     def __init__(self):
         super().__init__()
         self.num_nodes = 4
@@ -42,8 +41,7 @@ class ZsaTest(BitcoinTestFramework):
         ua1 = self.nodes[1].z_getaddressforaccount(acct1, ['orchard'])['address']
 
         # Send a transaction to node 1 so that it has an Orchard note to spend.
-        recipients = [{"address": ua1, "amount": 10}]
-        myopid = self.nodes[0].z_sendmany(get_coinbase_address(self.nodes[0]), recipients, 1, 0, 'AllowRevealedSenders')
+        myopid = self.nodes[0].issue(get_coinbase_address(self.nodes[0]), 10, 1, 0)
         wait_and_assert_operationid_status(self.nodes[0], myopid)
 
         self.sync_all()
@@ -55,28 +53,10 @@ class ZsaTest(BitcoinTestFramework):
             {'pools': {'orchard': {'valueZat': 10_0000_0000}}, 'minimum_confirmations': 1},
             self.nodes[1].z_getbalanceforaccount(acct1))
 
-        # Create an Orchard spend, so that the note commitment tree root gets altered.
-        recipients = [{"address": ua0, "amount": 1}]
-        myopid = self.nodes[1].z_sendmany(ua1, recipients, 1, 0)
-        wait_and_assert_operationid_status(self.nodes[1], myopid)
-
-        self.sync_all()
-        self.nodes[0].generate(1)
-        self.sync_all()
-
-        # Verify the balance on both nodes
-        assert_equal(
-            {'pools': {'orchard': {'valueZat': 9_0000_0000}}, 'minimum_confirmations': 1},
-            self.nodes[1].z_getbalanceforaccount(acct1))
-
-        assert_equal(
-            {'pools': {'orchard': {'valueZat': 1_0000_0000}}, 'minimum_confirmations': 1},
-            self.nodes[0].z_getbalanceforaccount(acct0))
-
         walletinfo = self.nodes[0].getwalletinfo()
         print(walletinfo)
 
 
 if __name__ == '__main__':
-    ZsaTest().main()
+    IssueTest().main()
 

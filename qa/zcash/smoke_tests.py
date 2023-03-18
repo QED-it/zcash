@@ -228,6 +228,12 @@ def z_sendmany(results, case, zcash, from_addr, recipients):
         1 # minconf
     ])
 
+def z_issue(results, case, zcash, amount):
+    # TODO add asset, isk
+    return async_txid_cmd(results, case, zcash, 'issue', [amount])
+
+
+
 def check_z_sendmany(results, case, zcash, from_addr, recipients):
     txid = z_sendmany(results, case, zcash, from_addr, recipients)
     if txid is None:

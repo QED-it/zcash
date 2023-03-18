@@ -41,6 +41,8 @@
 #include <boost/algorithm/string/replace.hpp>
 #include <boost/thread.hpp>
 
+#include <primitives/issue.h>
+
 using namespace std;
 using namespace libzcash;
 
@@ -5589,19 +5591,36 @@ bool CWallet::FundTransaction(CMutableTransaction& tx, CAmount &nFeeRet, int& nC
     return true;
 }
 
-bool CWallet::CreateIssueTransaction(const vector<CIssueRecipient>& vecIssue, IssuanceAuthorizingKey isk, CWalletTx& wtxNew) {
+OrchardRawAddress RandomOrchardRawAddress() {
+    auto data = ParseHex("FF");
+    CDataStream ss(
+            data,
+            SER_NETWORK,
+            PROTOCOL_VERSION);
+    OrchardRawAddress orchardAddress = libzcash::OrchardRawAddress::Read(ss);
+    return orchardAddress;
+}
+
+bool CWallet::CreateIssueTransaction(const vector<CIssueRecipient>& vecIssue, IssuanceAuthorizingKey isk, CWalletTx& wtxNew, std::string& strFailReason) {
+
+    wtxNew.fTimeReceivedIsTxTime = true;
+    wtxNew.BindWallet(this);
+
+    LOCK(cs_main);
+
+    int nextBlockHeight = chainActive.Height() + 1;
 
     CMutableTransaction txNew = CreateNewContextualCMutableTransaction(
             Params().GetConsensus(), nextBlockHeight, nPreferredTxVersion < ZIP225_MIN_TX_VERSION);
 
-    txNew.CreateIssueBundle(isk);
+    txNew.issueBundle = IssueBundle(std::move(isk));
 
-    for (const CRecipient& recipient : vecSend)
+    for (const CIssueRecipient& recipient : vecIssue)
     {
-        txNew.GetIssueBundle().AddIssue(
-            recipient.nAmount.to_value(),
-            recipient.scriptPubKey.GetOrchardRawAddress(),
-            recipient.asset.asset_descr,
+        txNew.issueBundle.AddRecipient(
+            recipient.nAmount,
+            RandomOrchardRawAddress(), // TODO recipient.scriptPubKey.GetOrchardRawAddress(),
+            (const char*)recipient.asset.description,
             recipient.finalize
         );
     }
