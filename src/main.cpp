@@ -1458,6 +1458,7 @@ bool CheckTransactionWithoutProofVerification(const CTransaction& tx, CValidatio
         }
     }
     auto orchard_bundle = tx.GetOrchardBundle();
+    auto issue_bundle = tx.GetIssueBundle().GetDetails();
 
     // Transactions must contain some potential source of funds. This rejects
     // obviously-invalid transaction constructions early, but cannot prevent
@@ -1469,7 +1470,8 @@ bool CheckTransactionWithoutProofVerification(const CTransaction& tx, CValidatio
     if (tx.vin.empty() &&
         tx.vJoinSplit.empty() &&
         tx.GetSaplingSpendsCount() == 0 &&
-        !orchard_bundle.SpendsEnabled())
+        !orchard_bundle.SpendsEnabled() &&
+        issue_bundle->num_actions() == 0)
     {
         return state.DoS(10, false, REJECT_INVALID, "bad-txns-no-source-of-funds");
     }
@@ -1484,7 +1486,8 @@ bool CheckTransactionWithoutProofVerification(const CTransaction& tx, CValidatio
     if (tx.vout.empty() &&
         tx.vJoinSplit.empty() &&
         tx.GetSaplingOutputsCount() == 0 &&
-        !orchard_bundle.OutputsEnabled())
+        !orchard_bundle.OutputsEnabled() &&
+        issue_bundle->num_actions() == 0)
     {
         return state.DoS(10, false, REJECT_INVALID, "bad-txns-no-sink-of-funds");
     }
@@ -1763,6 +1766,9 @@ bool AcceptToMemoryPool(
         LogPrint("mempool", "Dropping txid %s : recently evicted", tx.GetHash().ToString());
         return false;
     }
+
+    LogPrint("mempool", "Checking txid %s", tx.GetHash().ToString());
+    LogPrint("mempool", "issue bundle num actions = %d, actions num = %d", tx.GetIssueBundle().GetDetails()->num_actions(), tx.GetIssueBundle().GetDetails()->actions().size());
 
     auto verifier = ProofVerifier::Strict();
     if (!CheckTransaction(tx, state, verifier))
@@ -6556,6 +6562,7 @@ void static ProcessGetData(CNode* pfrom, const Consensus::Params& consensusParam
                     // Ensure we only reply with a transaction if it is exactly what the
                     // peer requested from us. Otherwise we add it to vNotFound below.
                     if (inv.hashAux == mi->second->GetAuthDigest()) {
+                        LogPrint("net", "22222222222\n");
                         pfrom->PushMessage("tx", *mi->second);
                         push = true;
                     }
@@ -8147,6 +8154,9 @@ CMutableTransaction CreateNewContextualCMutableTransaction(
     mtx.fOverwintered   = txVersionInfo.fOverwintered;
     mtx.nVersionGroupId = txVersionInfo.nVersionGroupId;
     mtx.nVersion        = txVersionInfo.nVersion;
+
+    LogPrint("mempool", "TCreateNewContextualCMutableTransaction-nVersionGroupId: %d\n", mtx.nVersionGroupId);
+    LogPrint("mempool", "CreateNewContextualCMutableTransaction-nVersion: %d\n", mtx.nVersion);
 
     if (mtx.fOverwintered) {
         if (mtx.nVersion >= ZIP225_TX_VERSION) {

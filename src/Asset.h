@@ -2,6 +2,7 @@
 #define ZCASH_ASSET_H
 
 #include "rust/include/rust/orchard/asset.h"
+#include "primitives/issue.h"
 
 class Asset {
 
@@ -20,11 +21,8 @@ public:
 
     static const int TEMP_IK_SIZE = 32; // TODO find proper place
 
-    /**
-     * TODO remove this one in favor of ik+description
-     */
     Asset(unsigned char* id) {
-        std::copy(id, id + 32, this->id);
+        std::copy(id, id + ZC_ORCHARD_ZSA_ASSET_ID_SIZE, this->id);
     }
 
     /**
@@ -35,13 +33,26 @@ public:
      */
     Asset(unsigned char ik[TEMP_IK_SIZE], unsigned char* description) {
         zsa_derive_asset(ik, description, this->id);
+        this->description = description;
     }
 
+    /**
+     * Similar to 'derive' method from Rust
+     * @param ik asset issuance key
+     * @param description asset description
+     * @return asset id of a non-native ZSA
+     */
+    Asset(IssuanceAuthorizingKey isk, unsigned char* description) {
+        zsa_derive_asset_from_isk(isk.inner.get(), description, this->id);
+        this->description = description;
+    }
 
     // TODO proper singleton/global
     static Asset& Native() {
         static Asset zecSingleton;
         zsa_native_asset((unsigned char*)zecSingleton.id);
+        std::string str = "ZEC" ;
+        zecSingleton.description = (unsigned char*)str.c_str();
         return zecSingleton;
     }
 
@@ -57,6 +68,18 @@ public:
      * Human-readable description of an asset (maximum size is defined by ZC_ORCHARD_MAX_ASSET_DESCRIPTION_SIZE)
      */
     unsigned char* description;
+
+    /**
+     * Converts asset id to a hex string
+     * @return
+     */
+    std::string ToHexString() {
+        std::stringstream ss;
+        ss << std::hex << std::setfill('0');
+        for (int i = 0; i < ZC_ORCHARD_ZSA_ASSET_ID_SIZE; i++)
+            ss << std::setw(2) << (int)id[i];
+        return ss.str();
+    }
 };
 
 

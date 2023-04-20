@@ -305,6 +305,7 @@ public:
                 inner.get(),
                 tx.GetHash().begin(),
                 tx.GetOrchardBundle().inner->as_ptr(),
+                tx.GetIssueBundle().inner->as_ptr(),
                 &txMeta,
                 PushOrchardActionIVK,
                 PushSpendActionIdx
@@ -353,7 +354,8 @@ public:
                     (uint32_t) nBlockHeight,
                     txidx,
                     tx.GetHash().begin(),
-                    tx.GetOrchardBundle().inner->as_ptr()
+                    tx.GetOrchardBundle().inner->as_ptr(),
+                    tx.GetIssueBundle().inner->as_ptr()
                     )) {
                 return false;
             }
@@ -399,6 +401,10 @@ public:
         orchard_wallet_add_full_viewing_key(inner.get(), fvk.inner.get());
     }
 
+    void AddIssuanceAuthorizingKey(const int accountId, const IssuanceAuthorizingKey& isk) {
+        orchard_wallet_add_issuance_authorizing_key(inner.get(), accountId, isk.inner.get());
+    }
+
     std::optional<libzcash::OrchardSpendingKey> GetSpendingKeyForAddress(
             const libzcash::OrchardRawAddress& addr) const;
 
@@ -407,6 +413,12 @@ public:
         auto ivkPtr = orchard_wallet_get_ivk_for_address(inner.get(), addr.inner.get());
         if (ivkPtr == nullptr) return std::nullopt;
         return libzcash::OrchardIncomingViewingKey(ivkPtr);
+    }
+
+    std::optional<IssuanceAuthorizingKey> GetIssuanceAuthorizingKeyForAccountId(const int accountId) const {
+        auto iskPtr = orchard_wallet_get_issuance_authorizing_key(inner.get(), accountId);
+        if (iskPtr == nullptr) return std::nullopt;
+        return IssuanceAuthorizingKey(iskPtr);
     }
 
     /**
@@ -438,13 +450,15 @@ public:
         std::vector<OrchardNoteMetadata>& orchardNotesRet,
         const std::optional<libzcash::OrchardIncomingViewingKey>& ivk,
         bool ignoreMined,
-        bool requireSpendingKey) const {
+        bool requireSpendingKey,
+        bool nativeOnly) const {
 
         orchard_wallet_get_filtered_notes(
             inner.get(),
             ivk.has_value() ? ivk.value().inner.get() : nullptr,
             ignoreMined,
             requireSpendingKey,
+            nativeOnly,
             &orchardNotesRet,
             PushOrchardNoteMeta
             );
