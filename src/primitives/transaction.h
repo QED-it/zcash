@@ -1112,6 +1112,9 @@ struct CMutableTransaction
 
             // Orchard Transaction Fields
             READWRITE(orchardBundle);
+
+            // Orchard Transaction Fields
+            READWRITE(issueBundle);
         } else {
             // Legacy transaction formats
             READWRITE(vin);

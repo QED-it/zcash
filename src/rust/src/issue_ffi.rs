@@ -93,12 +93,15 @@ pub extern "C" fn add_recipient(
     let asset_descr_str = unsafe { CStr::from_ptr(asset_descr) };
     let bundle = unsafe { bundle.as_mut() }.expect("Bundle may not be null.");
 
+    let asset_descr = asset_descr_str
+        .to_str()
+        .expect("Asset description should contain correct UTF-8 string")
+        .to_string();
+    assert!(!asset_descr.is_empty(), "Add recipient: Asset description should not be empty");
+
     bundle
         .add_recipient(
-            asset_descr_str
-                .to_str()
-                .expect("Asset description should contain correct UTF-8 string")
-                .to_string(),
+            asset_descr,
             recipient,
             NoteValue::from_raw(value),
             finalize,
@@ -121,7 +124,7 @@ pub extern "C" fn sign_issue_bundle(
         Ok(signed) => Box::into_raw(Box::new(signed)),
         Err(e) => {
             panic!(
-                "An error occurred while authorizing the orchard bundle: {:?}",
+                "An error occurred while authorizing the issue bundle: {:?}",
                 e
             )
         }
@@ -149,7 +152,7 @@ pub extern "C" fn issue_bundle_parse(
             true
         }
         Err(e) => {
-            error!("Failed to parse Orchard bundle: {}", e);
+            error!("Failed to parse issue bundle: {}", e);
             false
         }
     }
@@ -167,7 +170,7 @@ pub extern "C" fn issue_bundle_serialize(
     match issuance_serialization::write_v5_bundle(bundle, writer) {
         Ok(()) => true,
         Err(e) => {
-            error!("{}", e);
+            error!("Failed to serialize issue bundle: {}", e);
             false
         }
     }

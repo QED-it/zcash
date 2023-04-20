@@ -106,7 +106,7 @@ TEST(TransactionBuilder, OrchardToOrchard) {
     // Select the one note in the wallet for spending.
     std::vector<OrchardNoteMetadata> notes;
     wallet.GetFilteredNotes(
-        notes, sk.ToFullViewingKey().ToIncomingViewingKey(), true, true);
+        notes, sk.ToFullViewingKey().ToIncomingViewingKey(), true, true, true);
     ASSERT_EQ(notes.size(), 1);
 
     // If we attempt to get spend info now, it will fail because the note hasn't

@@ -6,6 +6,7 @@
 #define ZCASH_RUST_INCLUDE_RUST_ORCHARD_ASSET_H
 
 #include "rust/orchard/keys.h"
+#include "rust/orchard/issuance.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -16,6 +17,9 @@ bool zsa_native_asset(unsigned char* asset_ret);
 
 /// Returns an Asset ID for a ZSA
 bool zsa_derive_asset(unsigned char* ik_bytes, unsigned char* asset_desc_ptr, unsigned char* asset_ret);
+
+/// Returns an Asset ID for a ZSA
+bool zsa_derive_asset_from_isk(IssuanceAuthorizingKeyPtr* isk, unsigned char* asset_desc_ptr, unsigned char* asset_ret);
 
 #ifdef __cplusplus
 }

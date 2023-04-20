@@ -22,6 +22,9 @@ use orchard::{
     tree::{MerkleHashOrchard, MerklePath},
     Address, Bundle, Note,
 };
+use orchard::issuance::{IssueBundle, Signed};
+use orchard::keys::IssuanceAuthorizingKey;
+use orchard::note::ExtractedNoteCommitment;
 
 use crate::{
     builder_ffi::OrchardSpendInfo,
@@ -83,6 +86,7 @@ struct KeyStore {
     payment_addresses: BTreeMap<OrderedAddress, IncomingViewingKey>,
     viewing_keys: BTreeMap<IncomingViewingKey, FullViewingKey>,
     spending_keys: BTreeMap<FullViewingKey, SpendingKey>,
+    issuance_keys: BTreeMap<usize, IssuanceAuthorizingKey>,
 }
 
 impl KeyStore {
@@ -91,6 +95,7 @@ impl KeyStore {
             payment_addresses: BTreeMap::new(),
             viewing_keys: BTreeMap::new(),
             spending_keys: BTreeMap::new(),
+            issuance_keys: BTreeMap::new(),
         }
     }
 
@@ -118,6 +123,10 @@ impl KeyStore {
         has_fvk
     }
 
+    pub fn add_issuance_key(&mut self, account_id: usize, iak: IssuanceAuthorizingKey) {
+        self.issuance_keys.insert(account_id, iak);
+    }
+
     pub fn spending_key_for_ivk(&self, ivk: &IncomingViewingKey) -> Option<&SpendingKey> {
         self.viewing_keys
             .get(ivk)
@@ -132,6 +141,10 @@ impl KeyStore {
         self.ivk_for_address(&note.recipient())
             .and_then(|ivk| self.viewing_keys.get(ivk))
             .map(|fvk| note.nullifier(fvk))
+    }
+
+    pub fn get_issuance_key(&self, account_id: usize) -> Option<&IssuanceAuthorizingKey> {
+        self.issuance_keys.get(&account_id)
     }
 }
 
@@ -219,6 +232,11 @@ impl BundleWalletInvolvement {
             receive_action_metadata: BTreeMap::new(),
             spend_action_metadata: Vec::new(),
         }
+    }
+
+    pub fn append(&mut self, other: &mut BundleWalletInvolvement) {
+        self.spend_action_metadata.append(other.spend_action_metadata.as_mut());
+        self.receive_action_metadata.extend(other.receive_action_metadata.clone().into_iter());
     }
 }
 
@@ -403,6 +421,27 @@ impl Wallet {
         involvement
     }
 
+    /// Add note data to the wallet, and return a a data structure that describes
+    /// the actions that are involved with this wallet.
+    #[tracing::instrument(level = "trace", skip(self))]
+    pub fn add_notes_from_issue_bundle(
+        &mut self,
+        txid: &TxId,
+        bundle: &IssueBundle<Signed>,
+        note_index_offset: usize,
+    ) -> BundleWalletInvolvement {
+        let mut involvement = BundleWalletInvolvement::new();
+
+        for (note_index, note) in bundle.actions().iter().flat_map(|a| a.notes()).enumerate() {
+            if let Some(ivk) = self.key_store.ivk_for_address(&note.recipient()) {
+                let note_index = note_index + note_index_offset;
+                involvement.receive_action_metadata.insert(note_index, ivk.clone());
+                assert!(self.add_decrypted_note(txid, note_index, ivk.clone(), *note, note.recipient(), [0; 512]));
+            }
+        }
+        involvement
+    }
+
     /// Restore note and potential spend data from a bundle using the provided
     /// metadata.
     ///
@@ -549,14 +588,16 @@ impl Wallet {
     ///   this bundle.
     /// * `block_tx_idx` - Index of the transaction within the block
     /// * `txid` - Identifier of the transaction.
-    /// * `bundle` - Orchard component of the transaction.
+    /// * `bundle_opt` - Orchard component of the transaction (may be null for issue-only tx).
+    /// * `issue_bundle_opt` - IssueBundle component of the transaction  (may be null for transfer-only tx).
     #[tracing::instrument(level = "trace", skip(self))]
     pub fn append_bundle_commitments(
         &mut self,
         block_height: BlockHeight,
         block_tx_idx: usize,
         txid: &TxId,
-        bundle: &Bundle<Authorized, Amount>,
+        bundle_opt: Option<&Bundle<Authorized, Amount>>,
+        issue_bundle_opt: Option<&IssueBundle<Signed>>,
     ) -> Result<(), WalletError> {
         // Check that the wallet is in the correct state to update the note commitment tree with
         // new outputs.
@@ -596,11 +637,22 @@ impl Wallet {
                 .is_none());
         }
 
-        for (action_idx, action) in bundle.actions().iter().enumerate() {
+        // Process note commitments
+        let mut note_commitments: Vec<ExtractedNoteCommitment> = if let Some(bundle) = bundle_opt {
+            bundle.actions().iter().map(|action| *action.cmx()).collect()
+        } else { Vec::new() };
+
+        let mut issued_note_commitments: Vec<ExtractedNoteCommitment> = if let Some(issue_bundle) = issue_bundle_opt {
+            issue_bundle.actions().iter().flat_map(|a| a.notes()).map(|note| note.commitment().into()).collect()
+        } else { Vec::new() };
+
+        note_commitments.append(&mut issued_note_commitments);
+
+        for (note_index, commitment) in note_commitments.iter().enumerate() {
             // append the note commitment for each action to the witness tree
             if !self
                 .witness_tree
-                .append(&MerkleHashOrchard::from_cmx(action.cmx()))
+                .append(&MerkleHashOrchard::from_cmx(commitment))
             {
                 return Err(WalletError::NoteCommitmentTreeFull);
             }
@@ -608,33 +660,37 @@ impl Wallet {
             // for notes that are ours, witness the current state of the tree
             if my_notes_for_tx
                 .as_ref()
-                .and_then(|n| n.decrypted_notes.get(&action_idx))
+                .and_then(|n| n.decrypted_notes.get(&note_index))
                 .is_some()
             {
-                tracing::trace!("Witnessing Orchard note ({}, {})", txid, action_idx);
+                tracing::trace!("Witnessing Orchard note ({}, {})", txid, note_index);
                 let pos = self.witness_tree.witness().expect("tree is not empty");
                 assert!(self
                     .wallet_note_positions
                     .get_mut(txid)
                     .expect("We created this above")
                     .note_positions
-                    .insert(action_idx, pos)
+                    .insert(note_index, pos)
                     .is_none());
             }
+        }
 
-            // For nullifiers that are ours that we detect as spent by this action,
-            // we will record that input as being mined.
-            if let Some(outpoint) = self.nullifiers.get(action.nullifier()) {
-                assert!(self
-                    .mined_notes
-                    .insert(
-                        *outpoint,
-                        InPoint {
-                            txid: *txid,
-                            action_idx,
-                        },
-                    )
-                    .is_none());
+        // For nullifiers that are ours that we detect as spent by this action,
+        // we will record that input as being mined.
+        if let Some(bundle) = bundle_opt {
+            for (action_idx, action) in bundle.actions().iter().enumerate() {
+                if let Some(outpoint) = self.nullifiers.get(action.nullifier()) {
+                    assert!(self
+                        .mined_notes
+                        .insert(
+                            *outpoint,
+                            InPoint {
+                                txid: *txid,
+                                action_idx,
+                            },
+                        )
+                        .is_none());
+                }
             }
         }
 
@@ -654,6 +710,7 @@ impl Wallet {
         ivk: Option<&IncomingViewingKey>,
         ignore_mined: bool,
         require_spending_key: bool,
+        native_only: bool,
     ) -> Vec<(OutPoint, DecryptedNote)> {
         tracing::trace!("Filtering notes");
         self.wallet_received_notes
@@ -663,6 +720,10 @@ impl Wallet {
                     .decrypted_notes
                     .iter()
                     .filter_map(move |(idx, dnote)| {
+                        if native_only && dnote.note.asset().is_native().unwrap_u8() == 0 {
+                            return None;
+                        }
+
                         let outpoint = OutPoint {
                             txid: *txid,
                             action_idx: *idx,
@@ -854,30 +915,38 @@ pub extern "C" fn orchard_wallet_add_notes_from_bundle(
     wallet: *mut Wallet,
     txid: *const [c_uchar; 32],
     bundle: *const Bundle<Authorized, Amount>,
+    issue_bundle: *const IssueBundle<Signed>,
     cb_receiver: Option<FFICallbackReceiver>,
     action_ivk_push_cb: Option<ActionIvkPushCb>,
     spend_idx_push_cb: Option<SpendIndexPushCb>,
 ) -> bool {
+    let mut issued_notes_offset = 0;
     let wallet = unsafe { wallet.as_mut() }.expect("Wallet pointer may not be null");
     let txid = TxId::from_bytes(*unsafe { txid.as_ref() }.expect("txid may not be null."));
-    if let Some(bundle) = unsafe { bundle.as_ref() } {
-        let added = wallet.add_notes_from_bundle(&txid, bundle);
-        let involved =
-            !(added.receive_action_metadata.is_empty() && added.spend_action_metadata.is_empty());
-        for (action_idx, ivk) in added.receive_action_metadata.into_iter() {
-            let action_ivk = FFIActionIvk {
-                action_idx: action_idx.try_into().unwrap(),
-                ivk_ptr: Box::into_raw(Box::new(ivk.clone())),
-            };
-            unsafe { (action_ivk_push_cb.unwrap())(cb_receiver, action_ivk) };
-        }
-        for action_idx in added.spend_action_metadata {
-            unsafe { (spend_idx_push_cb.unwrap())(cb_receiver, action_idx.try_into().unwrap()) };
-        }
-        involved
-    } else {
-        false
+
+    let mut added = if let Some(bundle) = unsafe { bundle.as_ref() } {
+        issued_notes_offset = bundle.actions().len();
+        wallet.add_notes_from_bundle(&txid, bundle)
+    } else { BundleWalletInvolvement::new() };
+
+    let mut added_from_issue_bundle = if let Some(issue_bundle) = unsafe { issue_bundle.as_ref() } {
+        wallet.add_notes_from_issue_bundle(&txid, issue_bundle, issued_notes_offset)
+    } else { BundleWalletInvolvement::new() };
+
+    added.append(&mut added_from_issue_bundle);
+    let involved =
+        !(added.receive_action_metadata.is_empty() && added.spend_action_metadata.is_empty());
+    for (action_idx, ivk) in added.receive_action_metadata.into_iter() {
+        let action_ivk = FFIActionIvk {
+            action_idx: action_idx.try_into().unwrap(),
+            ivk_ptr: Box::into_raw(Box::new(ivk.clone())),
+        };
+        unsafe { (action_ivk_push_cb.unwrap())(cb_receiver, action_ivk) };
     }
+    for action_idx in added.spend_action_metadata {
+        unsafe { (spend_idx_push_cb.unwrap())(cb_receiver, action_idx.try_into().unwrap()) };
+    }
+    involved
 }
 
 #[no_mangle]
@@ -922,16 +991,17 @@ pub extern "C" fn orchard_wallet_append_bundle_commitments(
     block_tx_idx: usize,
     txid: *const [c_uchar; 32],
     bundle: *const Bundle<Authorized, Amount>,
+    issue_bundle: *const IssueBundle<Signed>,
 ) -> bool {
     let wallet = unsafe { wallet.as_mut() }.expect("Wallet pointer may not be null");
     let txid = TxId::from_bytes(*unsafe { txid.as_ref() }.expect("txid may not be null."));
-    if let Some(bundle) = unsafe { bundle.as_ref() } {
-        if let Err(e) =
-            wallet.append_bundle_commitments(block_height.into(), block_tx_idx, &txid, bundle)
-        {
-            error!("An error occurred adding the Orchard bundle's notes to the note commitment tree: {:?}", e);
-            return false;
-        }
+
+    let bundle = unsafe { bundle.as_ref() };
+    let issue_bundle = unsafe { issue_bundle.as_ref() };
+
+    if let Err(e) = wallet.append_bundle_commitments(block_height.into(), block_tx_idx, &txid, bundle, issue_bundle) {
+        error!("An error occurred adding the Orchard bundle's notes to the note commitment tree: {:?}", e);
+        return false;
     }
 
     true
@@ -983,6 +1053,18 @@ pub extern "C" fn orchard_wallet_add_raw_address(
 }
 
 #[no_mangle]
+pub extern "C" fn orchard_wallet_add_issuance_authorizing_key(
+    wallet: *mut Wallet,
+    account_id: usize,
+    isk: *const IssuanceAuthorizingKey,
+) {
+    let wallet = unsafe { wallet.as_mut() }.expect("Wallet pointer may not be null.");
+    let isk = unsafe { isk.as_ref() }.expect("Issuance authorizing key pointer may not be null.");
+
+    wallet.key_store.add_issuance_key(account_id, isk.clone());
+}
+
+#[no_mangle]
 pub extern "C" fn orchard_wallet_get_spending_key_for_address(
     wallet: *const Wallet,
     addr: *const Address,
@@ -1010,6 +1092,20 @@ pub extern "C" fn orchard_wallet_get_ivk_for_address(
         .key_store
         .ivk_for_address(addr)
         .map(|ivk| Box::into_raw(Box::new(ivk.clone())))
+        .unwrap_or(std::ptr::null_mut())
+}
+
+#[no_mangle]
+pub extern "C" fn orchard_wallet_get_issuance_authorizing_key(
+    wallet: *mut Wallet,
+    account_id: usize,
+) -> *mut IssuanceAuthorizingKey {
+    let wallet = unsafe { wallet.as_mut() }.expect("Wallet pointer may not be null.");
+
+    wallet
+        .key_store
+        .get_issuance_key(account_id)
+        .map(|isk| Box::into_raw(Box::new(isk.clone())))
         .unwrap_or(std::ptr::null_mut())
 }
 
@@ -1047,13 +1143,14 @@ pub extern "C" fn orchard_wallet_get_filtered_notes(
     ivk: *const IncomingViewingKey,
     ignore_mined: bool,
     require_spending_key: bool,
+    native_only: bool,
     result: Option<FFICallbackReceiver>,
     push_cb: Option<NotePushCb>,
 ) {
     let wallet = unsafe { wallet.as_ref() }.expect("Wallet pointer may not be null.");
     let ivk = unsafe { ivk.as_ref() };
 
-    for (outpoint, dnote) in wallet.get_filtered_notes(ivk, ignore_mined, require_spending_key) {
+    for (outpoint, dnote) in wallet.get_filtered_notes(ivk, ignore_mined, require_spending_key, native_only) {
         let metadata = FFINoteMetadata {
             txid: *outpoint.txid.as_ref(),
             action_idx: outpoint.action_idx as u32,

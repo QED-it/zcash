@@ -169,7 +169,7 @@ struct CRecipient
  */
 struct CIssueRecipient
 {
-    CScript scriptPubKey;
+    libzcash::OrchardRawAddress address;
     CAmount nAmount;
     Asset asset;
     bool finalize;
@@ -1749,6 +1749,8 @@ public:
 
     bool AddOrchardZKey(const libzcash::OrchardSpendingKey &sk);
     bool AddOrchardFullViewingKey(const libzcash::OrchardFullViewingKey &fvk);
+    bool AddIssuanceAuthorizingKey(const int accountId, const IssuanceAuthorizingKey &isk);
+
     /**
      * Adds an address/ivk mapping to the in-memory wallet. Returns `false` if
      * the mapping could not be persisted, or the IVK does not correspond to an
@@ -1905,6 +1907,14 @@ public:
      */
     bool CreateTransaction(const std::vector<CRecipient>& vecSend, CWalletTx& wtxNew, CReserveKey& reservekey, CAmount& nFeeRet, int& nChangePosRet,
                            std::string& strFailReason, const CCoinControl *coinControl = NULL, bool sign = true);
+
+    /**
+     * Create a new transaction paying the recipients with a set of coins
+     * selected by SelectCoins(); Also create the change output, when needed
+     * Additionally, issue assets defined in 'vecIssue'
+     */
+    bool CreateTransactionWithIssueBundle(const vector<CRecipient>& vecSend, const vector<CIssueRecipient>& vecIssue, CWalletTx& wtxNew, CReserveKey& reservekey, IssuanceAuthorizingKey& isk, CAmount& nFeeRet,
+                                                   int& nChangePosRet, std::string& strFailReason, const CCoinControl* coinControl = NULL, bool sign = true);
 
     /**
      * Create a new transaction issuing the assets
@@ -2171,6 +2181,8 @@ public:
 
     bool HaveOrchardSpendingKeyForAddress(const libzcash::OrchardRawAddress &addr) const;
 
+    IssuanceAuthorizingKey GetIssuanceAuthorizingKey(const int accountId) const;
+
     /* Find notes filtered by payment addresses, min depth, max depth, if they are spent,
        if a spending key is required, and if they are locked */
     void GetFilteredNotes(std::vector<SproutNoteEntry>& sproutEntriesRet,
@@ -2182,7 +2194,8 @@ public:
                           int maxDepth=INT_MAX,
                           bool ignoreSpent=true,
                           bool requireSpendingKey=true,
-                          bool ignoreLocked=true) const;
+                          bool ignoreLocked=true,
+                          bool nativeOnly=true) const;
 
     /**
      * Similar to GetFilteredNotes but only for Orchard notes
@@ -2195,7 +2208,8 @@ public:
             int minDepth,
             int maxDepth=INT_MAX,
             bool ignoreSpent=true,
-            bool requireSpendingKey=true) const;
+            bool requireSpendingKey=true,
+            bool nativeOnly=true) const;
 
     /**
      * Returns confirmed and unconfirmed balances per asset

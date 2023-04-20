@@ -228,9 +228,8 @@ def z_sendmany(results, case, zcash, from_addr, recipients):
         1 # minconf
     ])
 
-def z_issue(results, case, zcash, amount):
-    # TODO add asset, isk
-    return async_txid_cmd(results, case, zcash, 'issue', [amount])
+def issue(results, case, zcash, account, addr, asset, amount, finalize):
+    return async_txid_cmd(results, case, zcash, 'issue', [account, addr, asset, amount, finalize])
 
 
 

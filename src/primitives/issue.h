@@ -10,8 +10,8 @@
 #include <amount.h>
 #include <rust/issue_bundle.h>
 #include "rust/orchard/issuance.h"
+#include <rust/orchard/wallet.h>
 #include "zcash/address/orchard.hpp"
-
 
     class IssuanceAuthorizingKey {
     private:
@@ -20,9 +20,9 @@
         IssuanceAuthorizingKey() : inner(nullptr, issuance_authorizing_key_free) {}
 
         friend class OrchardSpendingKey;
-
+        friend class OrchardWallet;
         friend class IssueBundle;
-
+        friend class Asset;
     public:
         IssuanceAuthorizingKey(IssuanceAuthorizingKey &&key) : inner(std::move(key.inner)) {}
 
@@ -59,6 +59,7 @@
 
         IssueBundle(IssueBundlePtr *bundle) : inner(bundle, issue_bundle_free) {}
 
+        friend class OrchardWallet;
     public:
         IssueBundle() : inner(nullptr, issue_bundle_free) {}
 

@@ -279,6 +279,18 @@ bool CWallet::AddOrchardFullViewingKey(const libzcash::OrchardFullViewingKey &fv
     return true; // TODO ORCHARD: persist fvk
 }
 
+bool CWallet::AddIssuanceAuthorizingKey(const int accountId, const IssuanceAuthorizingKey &isk)
+{
+    AssertLockHeld(cs_wallet); // orchardWallet
+    orchardWallet.AddIssuanceAuthorizingKey(accountId, isk);
+
+    if (!fFileBacked) {
+        return true;
+    }
+
+    return true; // TODO ORCHARD: persist isk
+}
+
 // Add Orchard payment address -> incoming viewing key map entry
 bool CWallet::AddOrchardRawAddress(
     const libzcash::OrchardIncomingViewingKey &ivk,
@@ -2387,7 +2399,7 @@ SpendableInputs CWallet::FindSpendableInputs(
 
         for (const auto& ivk : orchardIvks) {
             std::vector<OrchardNoteMetadata> incomingNotes;
-            orchardWallet.GetFilteredNotes(incomingNotes, ivk, true, true);
+            orchardWallet.GetFilteredNotes(incomingNotes, ivk, true, true, true);
 
             for (auto& noteMeta : incomingNotes) {
                 if (IsOrchardSpent(noteMeta.GetOutPoint(), asOfHeight)) {
@@ -4246,7 +4258,7 @@ void CWalletTx::SetSaplingNoteData(const mapSaplingNoteData_t& noteData)
 
 void CWalletTx::SetOrchardTxMeta(OrchardWalletTxMeta txMeta)
 {
-    auto numActions = GetOrchardBundle().GetNumActions();
+    auto numActions = GetOrchardBundle().GetNumActions() + GetIssueBundle().GetDetails()->num_actions(); // TODO should be note count, this is just for quick test
     for (const auto& [action_idx, ivk] : txMeta.GetMyActionIVKs()) {
         if (action_idx >= numActions) {
             throw std::logic_error("CWalletTx::SetOrchardTxMeta(): Invalid action index");
@@ -5190,16 +5202,20 @@ map<std::string, Balances> CWallet::getAssetBalances(std::optional<libzcash::Pay
         noteFilter = NoteFilter::ForPaymentAddresses(std::vector({address.value()}));
     }
 
-    pwalletMain->GetFilteredOrchardNotes(orchardEntries, orchardUnconfirmedEntries, noteFilter, asOfHeight, 1, INT_MAX, true, ignoreUnspendable);
-
-    balances["ZEC"] = Balances { CAmount(0), CAmount(0) };
+    pwalletMain->GetFilteredOrchardNotes(orchardEntries, orchardUnconfirmedEntries, noteFilter, asOfHeight, 1, INT_MAX, true, ignoreUnspendable, false);
 
     for (auto & entry : orchardEntries) {
-        std::string asset = "ZEC"; // TODO entry.asset
+        std::string asset = entry.GetAsset().ToHexString();
+        if(balances.find(asset) == balances.end()) {
+            balances[asset] = Balances { CAmount(0), CAmount(0) };
+        }
         balances[asset].balance = balances[asset].balance + entry.GetNoteValue();
     }
     for (auto & entry : orchardUnconfirmedEntries) {
-        std::string asset = "ZEC"; // TODO entry.asset
+        std::string asset = entry.GetAsset().ToHexString();
+        if(balances.find(asset) == balances.end()) {
+            balances[asset] = Balances { CAmount(0), CAmount(0) };
+        }
         balances[asset].unconfirmedBalance = balances[asset].unconfirmedBalance + entry.GetNoteValue();
     }
 
@@ -5591,16 +5607,6 @@ bool CWallet::FundTransaction(CMutableTransaction& tx, CAmount &nFeeRet, int& nC
     return true;
 }
 
-OrchardRawAddress RandomOrchardRawAddress() {
-    auto data = ParseHex("FF");
-    CDataStream ss(
-            data,
-            SER_NETWORK,
-            PROTOCOL_VERSION);
-    OrchardRawAddress orchardAddress = libzcash::OrchardRawAddress::Read(ss);
-    return orchardAddress;
-}
-
 bool CWallet::CreateIssueTransaction(const vector<CIssueRecipient>& vecIssue, IssuanceAuthorizingKey isk, CWalletTx& wtxNew, std::string& strFailReason) {
 
     wtxNew.fTimeReceivedIsTxTime = true;
@@ -5610,8 +5616,7 @@ bool CWallet::CreateIssueTransaction(const vector<CIssueRecipient>& vecIssue, Is
 
     int nextBlockHeight = chainActive.Height() + 1;
 
-    CMutableTransaction txNew = CreateNewContextualCMutableTransaction(
-            Params().GetConsensus(), nextBlockHeight, nPreferredTxVersion < ZIP225_MIN_TX_VERSION);
+    CMutableTransaction txNew = CreateNewContextualCMutableTransaction(Params().GetConsensus(), nextBlockHeight, false); // TODO deal with requireV4
 
     txNew.issueBundle = IssueBundle(std::move(isk));
 
@@ -5619,11 +5624,16 @@ bool CWallet::CreateIssueTransaction(const vector<CIssueRecipient>& vecIssue, Is
     {
         txNew.issueBundle.AddRecipient(
             recipient.nAmount,
-            RandomOrchardRawAddress(), // TODO recipient.scriptPubKey.GetOrchardRawAddress(),
+            recipient.address,
             (const char*)recipient.asset.description,
             recipient.finalize
         );
     }
+
+    // Embed the constructed transaction data in wtxNew.
+    *static_cast<CTransaction*>(&wtxNew) = CTransaction(txNew);
+
+    return true;
 }
 
 bool CWallet::CreateTransaction(const vector<CRecipient>& vecSend, CWalletTx& wtxNew, CReserveKey& reservekey, CAmount& nFeeRet,
@@ -7126,6 +7136,28 @@ bool CWallet::HaveOrchardSpendingKeyForAddress(
 }
 
 /**
+ * TODO proper key management
+ */
+IssuanceAuthorizingKey generateDummyIssuanceAuthorizingKey() {
+    auto coinType = Params().BIP44CoinType();
+    auto seed = MnemonicSeed::Random(coinType);
+    auto sk = libzcash::OrchardSpendingKey::ForAccount(seed, coinType, 0);
+    auto fvk = sk.ToFullViewingKey();
+    auto ivk = fvk.ToIncomingViewingKey();
+    auto isk = sk.ToIssuanceAuthorizingKey();
+    return isk;
+}
+
+IssuanceAuthorizingKey CWallet::GetIssuanceAuthorizingKey(const int accountId) const {
+    auto isk_opt = orchardWallet.GetIssuanceAuthorizingKeyForAccountId(accountId);
+    if (isk_opt.has_value()) {
+        return isk_opt.value();
+    } else {
+        return generateDummyIssuanceAuthorizingKey(); // TODO orchardWallet.GenerateNewIssuanceAuthorizingKey();
+    }
+}
+
+/**
  * Find notes in the wallet filtered by payment addresses, min depth, max depth,
  * if the note is spent, if a spending key is required, and if the notes are locked.
  * These notes are decrypted and added to the output parameter vector, outEntries.
@@ -7146,7 +7178,8 @@ void CWallet::GetFilteredNotes(
     int maxDepth,
     bool ignoreSpent,
     bool requireSpendingKey,
-    bool ignoreLocked) const
+    bool ignoreLocked,
+    bool nativeOnly) const
 {
     // Don't bother to do anything if the note filter would reject all notes
     if (noteFilter.has_value() && noteFilter.value().IsEmpty())
@@ -7279,7 +7312,8 @@ void CWallet::GetFilteredNotes(
                         orchardNotes,
                         ivk.value(),
                         ignoreSpent,
-                        requireSpendingKey);
+                        requireSpendingKey,
+                        nativeOnly);
             }
         }
     } else {
@@ -7288,7 +7322,8 @@ void CWallet::GetFilteredNotes(
                 orchardNotes,
                 std::nullopt,
                 ignoreSpent,
-                requireSpendingKey);
+                requireSpendingKey,
+                nativeOnly);
     }
 
     for (auto& noteMeta : orchardNotes) {
@@ -7318,7 +7353,8 @@ void CWallet::GetFilteredOrchardNotes(
         int minDepth,
         int maxDepth,
         bool ignoreSpent,
-        bool requireSpendingKey) const
+        bool requireSpendingKey,
+        bool nativeOnly) const
 {
     bool ignoreLocked = true;
 
@@ -7339,7 +7375,8 @@ void CWallet::GetFilteredOrchardNotes(
                         orchardNotes,
                         ivk.value(),
                         ignoreSpent,
-                        requireSpendingKey);
+                        requireSpendingKey,
+                        nativeOnly);
             }
         }
     } else {
@@ -7348,7 +7385,8 @@ void CWallet::GetFilteredOrchardNotes(
                 orchardNotes,
                 std::nullopt,
                 ignoreSpent,
-                requireSpendingKey);
+                requireSpendingKey,
+                nativeOnly);
     }
 
     for (auto& noteMeta : orchardNotes) {
