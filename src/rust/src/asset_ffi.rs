@@ -1,10 +1,10 @@
 use orchard::keys::{IssuanceAuthorizingKey, IssuanceValidatingKey};
-use orchard::note::AssetId;
+use orchard::note::AssetBase;
 use std::ffi::{c_char, CStr};
 
 #[no_mangle]
 pub extern "C" fn zsa_native_asset(asset_ret: *mut [u8; 32]) -> bool {
-    *unsafe { &mut *asset_ret } = AssetId::native().to_bytes();
+    *unsafe { &mut *asset_ret } = AssetBase::native().to_bytes();
     true
 }
 
@@ -28,7 +28,7 @@ pub extern "C" fn zsa_derive_asset(
         let asset_desc = CStr::from_ptr(asset_desc_ptr)
             .to_str()
             .expect("Asset description should contain correct UTF-8 string");
-        *asset_ret = AssetId::derive(&ik, asset_desc).to_bytes();
+        *asset_ret = AssetBase::derive(&ik, asset_desc).to_bytes();
     }
     true
 }
@@ -48,9 +48,12 @@ pub extern "C" fn zsa_derive_asset_from_isk(
             .to_str()
             .expect("Asset description should contain correct UTF-8 string");
 
-        assert!(!asset_desc.is_empty(), "Derive asset id: Asset description should not be empty");
+        assert!(
+            !asset_desc.is_empty(),
+            "Derive asset id: Asset description should not be empty"
+        );
 
-        *asset_ret = AssetId::derive(&isk.into(), asset_desc).to_bytes();
+        *asset_ret = AssetBase::derive(&isk.into(), asset_desc).to_bytes();
     }
     true
 }

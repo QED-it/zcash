@@ -4303,7 +4303,7 @@ void CWalletTx::SetSaplingNoteData(const mapSaplingNoteData_t& noteData)
 
 void CWalletTx::SetOrchardTxMeta(OrchardWalletTxMeta txMeta)
 {
-    auto numActions = GetOrchardBundle().GetNumActions() + GetIssueBundle().GetDetails()->num_actions(); // TODO should be note count, this is just for quick test
+    auto numActions = GetOrchardBundle().GetNumActions() + GetIssueBundle().GetDetails()->num_notes();
     for (const auto& [action_idx, ivk] : txMeta.GetMyActionIVKs()) {
         if (action_idx >= numActions) {
             throw std::logic_error("CWalletTx::SetOrchardTxMeta(): Invalid action index");
@@ -5558,7 +5558,7 @@ bool CWallet::CreateIssueTransaction(const vector<CIssueRecipient>& vecIssue, Is
 
     int nextBlockHeight = chainActive.Height() + 1;
 
-    CMutableTransaction txNew = CreateNewContextualCMutableTransaction(Params().GetConsensus(), nextBlockHeight, false); // TODO deal with requireV4
+    CMutableTransaction txNew = CreateNewContextualCMutableTransaction(Params().GetConsensus(), nextBlockHeight, false);
 
     txNew.issueBundle = IssueBundle(std::move(isk));
 
@@ -7041,9 +7041,6 @@ bool CWallet::HaveOrchardSpendingKeyForAddress(
     return orchardWallet.GetSpendingKeyForAddress(addr).has_value();
 }
 
-/**
- * TODO proper key management
- */
 IssuanceAuthorizingKey generateDummyIssuanceAuthorizingKey() {
     auto coinType = Params().BIP44CoinType();
     auto seed = MnemonicSeed::Random(coinType);

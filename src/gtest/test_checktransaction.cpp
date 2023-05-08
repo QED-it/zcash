@@ -1454,7 +1454,7 @@ TEST(ChecktransactionTests, NU5AcceptsOrchardShieldedCoinbase) {
     const size_t ORCHARD_CMX_SIZE = 32;
 
     // Verify the transaction is the expected size.
-    size_t txsize = ORCHARD_BUNDLE_START + ZC_ZIP225_ORCHARD_BASE_SIZE + ZC_ZIP225_ORCHARD_MARGINAL_SIZE * 2;
+    size_t txsize = ORCHARD_BUNDLE_START + ZC_ZIP225_ORCHARD_BASE_SIZE + ZC_ZIP225_ORCHARD_MARGINAL_SIZE * 2 + ZC_ISSUE_BASE_SIZE;
     EXPECT_EQ(ss.size(), txsize);
 
     // Transaction should fail with a bad public cmx.
@@ -1577,11 +1577,10 @@ TEST(ChecktransactionTests, NU5EnforcesOrchardRulesOnShieldedCoinbase) {
         ORCHARD_BUNDLE_START +
         ZC_ZIP225_ORCHARD_NUM_ACTIONS_SIZE +
         ZC_ZIP225_ORCHARD_ACTION_SIZE * 2 +
-        ZC_ASSET_BASE_SIZE +
         ZC_ZIP225_ORCHARD_FLAGS_SIZE);
 
     // Verify the transaction is the expected size.
-    size_t txsize = ORCHARD_BUNDLE_START + ZC_ZIP225_ORCHARD_BASE_SIZE + ZC_ZIP225_ORCHARD_MARGINAL_SIZE * 2;
+    size_t txsize = ORCHARD_BUNDLE_START + ZC_ZIP225_ORCHARD_BASE_SIZE + ZC_ZIP225_ORCHARD_MARGINAL_SIZE * 2 + ZC_ISSUE_BASE_SIZE;
     EXPECT_EQ(ss.size(), txsize);
 
     // Coinbase transaction should fail non-contextual checks with valueBalanceSapling

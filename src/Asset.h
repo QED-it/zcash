@@ -3,6 +3,7 @@
 
 #include "rust/include/rust/orchard/asset.h"
 #include "primitives/issue.h"
+#include <iomanip>
 
 class Asset {
 
@@ -17,9 +18,8 @@ private:
 
 public:
     static const int ZC_ORCHARD_ZSA_ASSET_ID_SIZE = 32;
-    static const int ZC_ORCHARD_MAX_ASSET_DESCRIPTION_SIZE = 512;
 
-    static const int TEMP_IK_SIZE = 32; // TODO find proper place
+    static const int ZC_ORCHARD_IK_SIZE = 32;
 
     Asset(unsigned char* id) {
         std::copy(id, id + ZC_ORCHARD_ZSA_ASSET_ID_SIZE, this->id);
@@ -31,7 +31,7 @@ public:
      * @param description asset description
      * @return asset id of a non-native ZSA
      */
-    Asset(unsigned char ik[TEMP_IK_SIZE], unsigned char* description) {
+    Asset(unsigned char ik[ZC_ORCHARD_IK_SIZE], unsigned char* description) {
         zsa_derive_asset(ik, description, this->id);
         this->description = description;
     }
@@ -63,7 +63,7 @@ public:
     /**
      * Asset Issuer Key
      */
-    unsigned char ik[TEMP_IK_SIZE];
+    unsigned char ik[ZC_ORCHARD_IK_SIZE];
     /**
      * Human-readable description of an asset (maximum size is defined by ZC_ORCHARD_MAX_ASSET_DESCRIPTION_SIZE)
      */

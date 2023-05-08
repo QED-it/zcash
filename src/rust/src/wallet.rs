@@ -17,6 +17,9 @@ use zcash_primitives::{
     transaction::{components::Amount, TxId},
 };
 
+use orchard::issuance::{IssueBundle, Signed};
+use orchard::keys::IssuanceAuthorizingKey;
+use orchard::note::ExtractedNoteCommitment;
 use orchard::{
     bundle::Authorized,
     keys::{FullViewingKey, IncomingViewingKey, OutgoingViewingKey, Scope, SpendingKey},
@@ -24,9 +27,6 @@ use orchard::{
     tree::{MerkleHashOrchard, MerklePath},
     Address, Bundle, Note,
 };
-use orchard::issuance::{IssueBundle, Signed};
-use orchard::keys::IssuanceAuthorizingKey;
-use orchard::note::ExtractedNoteCommitment;
 
 use crate::{
     builder_ffi::OrchardSpendInfo,
@@ -235,8 +235,10 @@ impl BundleWalletInvolvement {
     }
 
     pub fn append(&mut self, other: &mut BundleWalletInvolvement) {
-        self.spend_action_metadata.append(other.spend_action_metadata.as_mut());
-        self.receive_action_metadata.extend(other.receive_action_metadata.clone().into_iter());
+        self.spend_action_metadata
+            .append(other.spend_action_metadata.as_mut());
+        self.receive_action_metadata
+            .extend(other.receive_action_metadata.clone().into_iter());
     }
 }
 
@@ -435,8 +437,17 @@ impl Wallet {
         for (note_index, note) in bundle.actions().iter().flat_map(|a| a.notes()).enumerate() {
             if let Some(ivk) = self.key_store.ivk_for_address(&note.recipient()) {
                 let note_index = note_index + note_index_offset;
-                involvement.receive_action_metadata.insert(note_index, ivk.clone());
-                assert!(self.add_decrypted_note(txid, note_index, ivk.clone(), *note, note.recipient(), [0; 512]));
+                involvement
+                    .receive_action_metadata
+                    .insert(note_index, ivk.clone());
+                assert!(self.add_decrypted_note(
+                    txid,
+                    note_index,
+                    ivk.clone(),
+                    *note,
+                    note.recipient(),
+                    [0; 512]
+                ));
             }
         }
         involvement
@@ -639,12 +650,26 @@ impl Wallet {
 
         // Process note commitments
         let mut note_commitments: Vec<ExtractedNoteCommitment> = if let Some(bundle) = bundle_opt {
-            bundle.actions().iter().map(|action| *action.cmx()).collect()
-        } else { Vec::new() };
+            bundle
+                .actions()
+                .iter()
+                .map(|action| *action.cmx())
+                .collect()
+        } else {
+            Vec::new()
+        };
 
-        let mut issued_note_commitments: Vec<ExtractedNoteCommitment> = if let Some(issue_bundle) = issue_bundle_opt {
-            issue_bundle.actions().iter().flat_map(|a| a.notes()).map(|note| note.commitment().into()).collect()
-        } else { Vec::new() };
+        let mut issued_note_commitments: Vec<ExtractedNoteCommitment> =
+            if let Some(issue_bundle) = issue_bundle_opt {
+                issue_bundle
+                    .actions()
+                    .iter()
+                    .flat_map(|a| a.notes())
+                    .map(|note| note.commitment().into())
+                    .collect()
+            } else {
+                Vec::new()
+            };
 
         note_commitments.append(&mut issued_note_commitments);
 
@@ -928,11 +953,15 @@ pub extern "C" fn orchard_wallet_add_notes_from_bundle(
     let mut added = if let Some(bundle) = unsafe { bundle.as_ref() } {
         issued_notes_offset = bundle.actions().len();
         wallet.add_notes_from_bundle(&txid, bundle)
-    } else { BundleWalletInvolvement::new() };
+    } else {
+        BundleWalletInvolvement::new()
+    };
 
     let mut added_from_issue_bundle = if let Some(issue_bundle) = unsafe { issue_bundle.as_ref() } {
         wallet.add_notes_from_issue_bundle(&txid, issue_bundle, issued_notes_offset)
-    } else { BundleWalletInvolvement::new() };
+    } else {
+        BundleWalletInvolvement::new()
+    };
 
     added.append(&mut added_from_issue_bundle);
     let involved =
@@ -1000,8 +1029,17 @@ pub extern "C" fn orchard_wallet_append_bundle_commitments(
     let bundle = unsafe { bundle.as_ref() };
     let issue_bundle = unsafe { issue_bundle.as_ref() };
 
-    if let Err(e) = wallet.append_bundle_commitments(block_height.into(), block_tx_idx, &txid, bundle, issue_bundle) {
-        error!("An error occurred adding the Orchard bundle's notes to the note commitment tree: {:?}", e);
+    if let Err(e) = wallet.append_bundle_commitments(
+        block_height.into(),
+        block_tx_idx,
+        &txid,
+        bundle,
+        issue_bundle,
+    ) {
+        error!(
+            "An error occurred adding the Orchard bundle's notes to the note commitment tree: {:?}",
+            e
+        );
         return false;
     }
 
@@ -1157,7 +1195,9 @@ pub extern "C" fn orchard_wallet_get_filtered_notes(
     let wallet = unsafe { wallet.as_ref() }.expect("Wallet pointer may not be null.");
     let ivk = unsafe { ivk.as_ref() };
 
-    for (outpoint, dnote) in wallet.get_filtered_notes(ivk, ignore_mined, require_spending_key, native_only) {
+    for (outpoint, dnote) in
+        wallet.get_filtered_notes(ivk, ignore_mined, require_spending_key, native_only)
+    {
         let metadata = FFINoteMetadata {
             txid: *outpoint.txid.as_ref(),
             action_idx: outpoint.action_idx as u32,

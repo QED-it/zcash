@@ -1,15 +1,13 @@
+use crate::streams_ffi::{CppStreamReader, CppStreamWriter, ReadCb, StreamObj, WriteCb};
 use orchard::issuance::{IssueBundle, Signed, Unauthorized};
 use orchard::keys::{IssuanceAuthorizingKey, IssuanceValidatingKey, SpendingKey};
 use orchard::value::NoteValue;
 use orchard::Address;
 use rand_core::OsRng;
-use std::ptr;
 use std::ffi::{c_char, CStr};
+use std::ptr;
 use tracing::error;
-use crate::{
-    streams_ffi::{CppStreamReader, CppStreamWriter, ReadCb, StreamObj, WriteCb},
-};
-use zcash_primitives::transaction::components::{issuance as issuance_serialization};
+use zcash_primitives::transaction::components::issuance as issuance_serialization;
 
 #[no_mangle]
 pub extern "C" fn orchard_spending_key_to_issuance_authorizing_key(
@@ -97,7 +95,10 @@ pub extern "C" fn add_recipient(
         .to_str()
         .expect("Asset description should contain correct UTF-8 string")
         .to_string();
-    assert!(!asset_descr.is_empty(), "Add recipient: Asset description should not be empty");
+    assert!(
+        !asset_descr.is_empty(),
+        "Add recipient: Asset description should not be empty"
+    );
 
     bundle
         .add_recipient(
@@ -130,7 +131,6 @@ pub extern "C" fn sign_issue_bundle(
         }
     }
 }
-
 
 #[no_mangle]
 pub extern "C" fn issue_bundle_parse(
