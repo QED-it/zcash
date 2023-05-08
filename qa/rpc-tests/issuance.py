@@ -2,6 +2,7 @@
 # Copyright (c) 2022 The Zcash developers
 # Distributed under the MIT software license, see the accompanying
 # file COPYING or https://www.opensource.org/licenses/mit-license.php .
+import json
 
 from test_framework.test_framework import BitcoinTestFramework
 from test_framework.util import (
@@ -36,26 +37,20 @@ class IssueTest(BitcoinTestFramework):
         self.nodes[0].generate(5)
         self.sync_all()
 
-        # Get a recipient address
-        acct1 = self.nodes[1].z_getnewaccount()['account']
-        ua1 = self.nodes[1].z_getaddressforaccount(acct1, ['orchard'])['address']
-
         # Send a transaction to node 1 so that it has an Orchard note to spend.
-        myopid = self.nodes[0].issue(get_coinbase_address(self.nodes[0]), 10, 1, 0)
-        wait_and_assert_operationid_status(self.nodes[0], myopid)
+        self.nodes[0].issue(0, ua0, "WBTC", 4001, True)
 
         self.sync_all()
         self.nodes[0].generate(1)
         self.sync_all()
 
-        # Check the value sent to ua1 was received
-        assert_equal(
-            {'pools': {'orchard': {'valueZat': 10_0000_0000}}, 'minimum_confirmations': 1},
-            self.nodes[1].z_getbalanceforaccount(acct1))
-
         walletinfo = self.nodes[0].getwalletinfo()
+
         print(walletinfo)
 
+        assert_equal(len(walletinfo['asset_balances'].items()), 1)
+        for key, value in walletinfo['asset_balances'].items():
+            assert_equal(value['confirmed_balance'], 4001)
 
 if __name__ == '__main__':
     IssueTest().main()
