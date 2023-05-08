@@ -25,6 +25,7 @@ mod ffi {
         fn ik(self: &IssueBundle) -> [u8; 32];
         fn actions(self: &IssueBundle) -> Vec<IssueAction>;
         fn num_actions(self: &IssueBundle) -> usize;
+        fn num_notes(self: &IssueBundle) -> usize;
         fn authorization(self: &IssueBundle) -> [u8; 64]; // Assumption is that we only need auth for IssueBundle<Signed> here, ignoring empty for Unauthorized and sighash for Prepared
     }
 }
@@ -32,7 +33,6 @@ mod ffi {
 pub struct IssueNote(orchard::note::Note);
 
 impl IssueNote {
-
     fn recipient(self: &IssueNote) -> [u8; 43] {
         self.0.recipient().to_raw_address_bytes()
     }
@@ -57,7 +57,6 @@ impl IssueNote {
 pub struct IssueAction(orchard::issuance::IssueAction);
 
 impl IssueAction {
-
     fn asset_desc(self: &IssueAction) -> Vec<u8> {
         self.0.asset_desc().as_bytes().to_vec()
     }
@@ -92,6 +91,13 @@ impl IssueBundle {
 
     fn num_actions(&self) -> usize {
         self.0.as_ref().map(|b| b.actions().len()).unwrap_or(0)
+    }
+
+    fn num_notes(&self) -> usize {
+        self.0
+            .as_ref()
+            .map(|b| b.actions().iter().map(|a| a.notes().len()).sum())
+            .unwrap_or(0)
     }
 
     fn ik(&self) -> [u8; 32] {

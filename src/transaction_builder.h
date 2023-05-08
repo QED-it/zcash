@@ -367,14 +367,6 @@ public:
         Asset& asset,
         const std::optional<std::array<unsigned char, ZC_MEMO_SIZE>>& memo);
 
-    void CreateIssueBundle(IssuanceAuthorizingKey issueAuthorizingKey);
-
-    void AddIssue(
-        uint64_t value,
-        libzcash::OrchardRawAddress recipient,
-        const char *asset_descr,
-        bool finalize);
-
     // Throws if the anchor does not match the anchor used by
     // previously-added Sapling spends.
     void AddSaplingSpend(

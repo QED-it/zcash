@@ -265,37 +265,15 @@ UniValue getrawchangeaddress(const UniValue& params, bool fHelp)
     return keyIO.EncodeDestination(keyID);
 }
 
-bool IsValidAsset(const std::string& asset) {
-    // TODO check if new name/id is correct
-    return true;
-}
-
-/**
- * TODO proper key management
- */
-IssuanceAuthorizingKey generateDummyIssuanceAuthorizingKey() {
-    auto coinType = Params().BIP44CoinType();
-    auto seed = MnemonicSeed::Random(coinType);
-    auto sk = libzcash::OrchardSpendingKey::ForAccount(seed, coinType, 0);
-    auto fvk = sk.ToFullViewingKey();
-    auto ivk = fvk.ToIncomingViewingKey();
-    auto isk = sk.ToIssuanceAuthorizingKey();
-}
-
-static void IssueAsset(const CTxDestination &address, CAmount amount, Asset asset, bool finalize, CWalletTx& wtxNew) {
-
-    // Parse Zcash address
-    CScript scriptPubKey = GetScriptForDestination(address);
-
-    // Create and send the transaction
-    IssuanceAuthorizingKey isk = generateDummyIssuanceAuthorizingKey();
-
+static void IssueAsset(const OrchardRawAddress &address, CAmount amount, Asset asset, bool finalize, IssuanceAuthorizingKey &isk, CWalletTx& wtxNew) {
     std::string strError;
-    vector<CIssueRecipient> vecSend;
-    CIssueRecipient recipient = {scriptPubKey, amount, asset, finalize};
-    vecSend.push_back(recipient);
 
-    if (!pwalletMain->CreateIssueTransaction(vecSend, isk, wtxNew, strError)) {
+    // Create issue component
+    vector<CIssueRecipient> vecIssue;
+    CIssueRecipient recipient = {address, amount, asset, finalize};
+    vecIssue.push_back(recipient);
+
+    if (!pwalletMain->CreateIssueTransaction(vecIssue, isk, wtxNew, strError)) {
         throw JSONRPCError(RPC_WALLET_ERROR, strError);
     }
 
@@ -311,20 +289,21 @@ UniValue issue(const UniValue &params, bool fHelp) {
     if (!EnsureWalletIsAvailable(fHelp))
         return NullUniValue;
 
-    if (fHelp || params.size() != 2) // TODO 4
+    if (fHelp || params.size() != 5)
         throw runtime_error(
-                "issue \"zcashaddress\" asset amount finalize\n"
+                "issue account \"zcashaddress\" asset amount finalize\n"
                 "\nTODO add action description.\n"
                 + HelpRequiringPassphrase() +
                 "\nArguments:\n"
+                "0. \"account\"       (numeric, required) The account ID (determines issuance key). \n"
                 "1. \"zcashaddress\"  (string, required) The transparent Zcash address to send to.\n"
-                "2. \"asset\"         (string, required) The asset name (TBD Short name or AssetBase?)\n"
+                "2. \"asset\"         (string, required) The asset description.\n"
                 "3. \"amount\"        (numeric, required) The amount of 'asset' to issue. eg 0.1\n"
                 "4. \"finalize\"      (boolean, required) The finalization flag\n"
                 "\nResult:\n"
                 "\"transactionid\"  (string) The transaction id.\n"
                 "\nExamples:\n"
-                + HelpExampleCli("issue", "\"t1M72Sfpbz1BPpXFHz9m3CdqATR44Jvaydd\" WBTC 0.1 true")
+                + HelpExampleCli("issue", "0 \"t1M72Sfpbz1BPpXFHz9m3CdqATR44Jvaydd\" WBTC 0.1 true")
         );
 
     LOCK2(cs_main, pwalletMain->cs_wallet);
@@ -333,31 +312,38 @@ UniValue issue(const UniValue &params, bool fHelp) {
 
     CWalletTx wtx;
 
+    // Account
+    auto account = params[0].get_int();
+
     // Address
-    auto destStr = params[0].get_str();
-    CTxDestination dest = keyIO.DecodeDestination(destStr);
-    if (!IsValidDestination(dest)) {
-        throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, std::string("Invalid " PACKAGE_NAME " transparent address: ") + destStr);
+    auto addrStr = params[1].get_str();
+    auto recipient = keyIO.DecodePaymentAddress(addrStr);
+    if (!recipient.has_value()) {
+        throw JSONRPCError(RPC_INVALID_PARAMETER, std::string("Invalid parameter, unknown address format: ") + addrStr);
+    }
+    auto orchardAddress = std::get<libzcash::UnifiedAddress>(recipient.value()).GetOrchardReceiver();
+    if (!orchardAddress.has_value()) {
+        throw JSONRPCError(RPC_INVALID_PARAMETER, std::string("Invalid parameter, incorrect Orchard address: ") + addrStr);
     }
 
     // Asset
-    auto assetStr = "WBTC"; // TODO params[1].get_str();
-    if(!IsValidAsset(assetStr)) {
-        throw JSONRPCError(RPC_INVALID_ASSET, std::string("Invalid " PACKAGE_NAME " asset: ") + assetStr);
-    }
-    Asset asset = Asset::Native(); // TODO lookup by asset name? Derive from asset_descr?
+    auto assetDescription = params[2].get_str();
+
+    IssuanceAuthorizingKey isk = pwalletMain->GetIssuanceAuthorizingKey(account);
+
+    Asset asset = Asset(isk, (unsigned char *)assetDescription.c_str());
 
     // Amount
-    CAmount nAmount = AmountFromValue(params[1]);
+    CAmount nAmount = AmountFromValue(params[3]);
     if (nAmount <= 0)
         throw JSONRPCError(RPC_TYPE_ERROR, "Invalid amount for send");
 
     // Finalize
-    bool finalize = true; // TODO params[3].get_bool();
+    bool finalize = params[4].get_bool();
 
     EnsureWalletIsUnlocked();
 
-    IssueAsset(dest, nAmount, asset, finalize, wtx);
+    IssueAsset(orchardAddress.value(), nAmount, asset, finalize, isk,wtx);
 
     return wtx.GetHash().GetHex();
 }
@@ -3987,7 +3973,7 @@ CAmount getBalanceZaddr(std::optional<libzcash::PaymentAddress> address, const s
         noteFilter = NoteFilter::ForPaymentAddresses(std::vector({address.value()}));
     }
 
-    pwalletMain->GetFilteredNotes(sproutEntries, saplingEntries, orchardEntries, noteFilter, asOfHeight, minDepth, maxDepth, true, ignoreUnspendable);
+    pwalletMain->GetFilteredNotes(sproutEntries, saplingEntries, orchardEntries, noteFilter, asOfHeight, minDepth, maxDepth, true, ignoreUnspendable, true);
     for (auto & entry : sproutEntries) {
         balance += CAmount(entry.note.value());
     }
@@ -4006,9 +3992,12 @@ UniValue GetAssetBalancesJson(const std::optional<int>& asOfHeight)
     UniValue balance(UniValue::VOBJ);
     map<std::string, Balances> balances = pwalletMain->getAssetBalances(std::nullopt, asOfHeight);
 
-    balance.pushKV("name", "ZEC");
-    balance.pushKV("confirmed_balance", ValueFromAmount(balances["ZEC"].balance));
-    balance.pushKV("unconfirmed_balance", ValueFromAmount(balances["ZEC"].unconfirmedBalance));
+    for (auto& asset : balances) {
+        UniValue assetBalance(UniValue::VOBJ);
+        assetBalance.pushKV("confirmed_balance", ValueFromAmount(asset.second.balance));
+        assetBalance.pushKV("unconfirmed_balance", ValueFromAmount(asset.second.unconfirmedBalance));
+        balance.pushKV(asset.first, assetBalance);
+    }
 
     return balance;
 }
@@ -4704,6 +4693,7 @@ UniValue z_viewtransaction(const UniValue& params, bool fHelp)
 
     UniValue spends(UniValue::VARR);
     UniValue outputs(UniValue::VARR);
+    UniValue issuances(UniValue::VARR);
 
     auto addMemo = [](UniValue &entry, std::array<unsigned char, ZC_MEMO_SIZE> &memo) {
         entry.pushKV("memo", HexStr(memo));
@@ -5168,7 +5158,7 @@ size_t EstimateTxSize(
         // - The Orchard transaction builder pads to a minimum of 2 actions.
         // - We subtract 1 because `GetSerializeSize(tx, ...)` already counts
         //   `ZC_ZIP225_ORCHARD_NUM_ACTIONS_BASE_SIZE`.
-        txsize += ZC_ZIP225_ORCHARD_BASE_SIZE - 1 + ZC_ZIP225_ORCHARD_MARGINAL_SIZE * std::max(2, (int) orchardRecipientCount);
+        txsize += ZC_ZIP225_ORCHARD_BASE_SIZE - 1 + ZC_ZIP225_ORCHARD_MARGINAL_SIZE * std::max(2, (int) orchardRecipientCount) + ZC_ISSUE_BASE_SIZE;
     }
     return txsize;
 }
@@ -6562,6 +6552,7 @@ static const CRPCCommand commands[] =
     { "wallet",             "z_importwallet",           &z_importwallet,           true  },
     { "wallet",             "z_viewtransaction",        &z_viewtransaction,        false },
     { "wallet",             "z_getnotescount",          &z_getnotescount,          false },
+    { "wallet",             "issue",                    &issue,                    true },
     // TODO: rearrange into another category
     { "disclosure",         "z_getpaymentdisclosure",   &z_getpaymentdisclosure,   true  },
     { "disclosure",         "z_validatepaymentdisclosure", &z_validatepaymentdisclosure, true }

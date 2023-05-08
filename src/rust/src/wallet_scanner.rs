@@ -522,9 +522,7 @@ where
     }
 }
 
-impl<A, D: BatchDomain, Output: ShieldedOutput<D> + Clone>
-    Batch<A, D, Output>
-{
+impl<A, D: BatchDomain, Output: ShieldedOutput<D> + Clone> Batch<A, D, Output> {
     /// Adds the given outputs to this batch.
     ///
     /// `replier` will be called with the result of every output.

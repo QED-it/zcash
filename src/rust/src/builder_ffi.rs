@@ -5,7 +5,7 @@ use std::slice;
 use incrementalmerkletree::Hashable;
 use libc::size_t;
 use orchard::keys::SpendingKey;
-use orchard::note::AssetId;
+use orchard::note::AssetBase;
 use orchard::{
     builder::{Builder, InProgress, Unauthorized, Unproven},
     bundle::{Authorized, Flags},
@@ -107,7 +107,7 @@ pub extern "C" fn orchard_builder_add_recipient(
     let safe_asset_bytes = unsafe { asset_bytes.as_ref() }
         .copied()
         .expect("Asset may not be null");
-    let asset = AssetId::from_bytes(&safe_asset_bytes).unwrap();
+    let asset = AssetBase::from_bytes(&safe_asset_bytes).unwrap();
 
     match builder.add_recipient(ovk, *recipient, value, asset, memo) {
         Ok(()) => true,
