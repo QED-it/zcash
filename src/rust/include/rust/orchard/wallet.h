@@ -7,6 +7,7 @@
 
 #include "rust/orchard/incremental_merkle_tree.h"
 #include "rust/orchard/keys.h"
+#include "rust/orchard/issuance.h"
 #include "rust/builder.h"
 
 #ifdef __cplusplus
@@ -130,6 +131,7 @@ bool orchard_wallet_add_notes_from_bundle(
         OrchardWalletPtr* wallet,
         const unsigned char txid[32],
         const OrchardBundlePtr* bundle,
+        const IssueBundlePtr* issueBundle,
         void* callbackReceiver,
         push_action_ivk_callback_t push_cb,
         push_spend_action_idx_callback_t spend_cb
@@ -167,7 +169,8 @@ bool orchard_wallet_append_bundle_commitments(
         const uint32_t block_height,
         const size_t block_tx_idx,
         const unsigned char txid[32],
-        const OrchardBundlePtr* bundle
+        const OrchardBundlePtr* bundle,
+        const IssueBundlePtr* issue_bundle
         );
 
 /**
@@ -202,6 +205,15 @@ void orchard_wallet_add_full_viewing_key(
         const OrchardFullViewingKeyPtr* fvk);
 
 /**
+ * Add the specified issuance authorizing key to the wallet's key store.
+ */
+void orchard_wallet_add_issuance_authorizing_key(
+        OrchardWalletPtr* wallet,
+        const uint32_t accountId,
+        const IssuanceAuthorizingKeyPtr* isk
+);
+
+/**
  * Add the specified raw address to the wallet's key store, associated with the incoming
  * viewing key from which that address was derived.
  */
@@ -233,6 +245,17 @@ OrchardIncomingViewingKeyPtr* orchard_wallet_get_ivk_for_address(
         const OrchardRawAddressPtr* addr);
 
 /**
+ * Returns a pointer to the issuance authorizing key corresponding to the specified
+ * account id, if it is known to the wallet, or `nullptr` otherwise.
+ *
+ * Memory is allocated by Rust and must be manually freed using
+ * `issuance_authorizing_key_free`.
+ */
+IssuanceAuthorizingKeyPtr* orchard_wallet_get_issuance_authorizing_key(
+        const OrchardWalletPtr* wallet,
+        uint32_t accountId);
+
+/**
  * A C struct used to transfer note metadata information across the Rust FFI boundary.
  * This must have the same in-memory representation as the `FFINoteMetadata` type in
  * orchard_ffi/wallet.rs.
@@ -242,6 +265,7 @@ struct RawOrchardNoteMetadata {
     uint32_t actionIdx;
     OrchardRawAddressPtr* addr;
     CAmount noteValue;
+    unsigned char asset[32];
     unsigned char memo[512];
 };
 
@@ -264,6 +288,7 @@ void orchard_wallet_get_filtered_notes(
         const OrchardIncomingViewingKeyPtr* ivk,
         bool ignoreMined,
         bool requireSpendingKey,
+        bool nativeOnly,
         void* resultVector,
         push_note_callback_t push_cb
         );
@@ -279,6 +304,7 @@ struct RawOrchardActionSpend {
     uint32_t outpointActionIdx;
     OrchardRawAddressPtr* receivedAt;
     CAmount noteValue;
+    unsigned char asset[32];
 };
 
 /**
@@ -290,6 +316,7 @@ struct RawOrchardActionOutput {
     uint32_t outputActionIdx;
     OrchardRawAddressPtr* recipient;
     CAmount noteValue;
+    unsigned char asset[32];
     unsigned char memo[512];
     bool isOutgoing;
 };

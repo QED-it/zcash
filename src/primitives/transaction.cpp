@@ -139,6 +139,7 @@ CMutableTransaction::CMutableTransaction(const CTransaction& tx) : nVersion(tx.n
                                                                    vin(tx.vin), vout(tx.vout), nLockTime(tx.nLockTime),
                                                                    valueBalanceSapling(tx.GetValueBalanceSapling()), vShieldedSpend(tx.vShieldedSpend), vShieldedOutput(tx.vShieldedOutput),
                                                                    orchardBundle(tx.GetOrchardBundle()),
+                                                                   issueBundle(tx.GetIssueBundle()),
                                                                    vJoinSplit(tx.vJoinSplit), joinSplitPubKey(tx.joinSplitPubKey), joinSplitSig(tx.joinSplitSig),
                                                                    bindingSig(tx.bindingSig)
 {
@@ -196,6 +197,7 @@ CTransaction::CTransaction() : nVersion(CTransaction::SPROUT_MIN_CURRENT_VERSION
                                vin(), vout(), nLockTime(0),
                                valueBalanceSapling(0), vShieldedSpend(), vShieldedOutput(),
                                orchardBundle(),
+                               issueBundle(),
                                vJoinSplit(), joinSplitPubKey(), joinSplitSig(),
                                bindingSig() { }
 
@@ -204,6 +206,7 @@ CTransaction::CTransaction(const CMutableTransaction &tx) : nVersion(tx.nVersion
                                                             vin(tx.vin), vout(tx.vout), nLockTime(tx.nLockTime),
                                                             valueBalanceSapling(tx.valueBalanceSapling), vShieldedSpend(tx.vShieldedSpend), vShieldedOutput(tx.vShieldedOutput),
                                                             orchardBundle(tx.orchardBundle),
+                                                            issueBundle(tx.issueBundle),
                                                             vJoinSplit(tx.vJoinSplit), joinSplitPubKey(tx.joinSplitPubKey), joinSplitSig(tx.joinSplitSig),
                                                             bindingSig(tx.bindingSig)
 {
@@ -219,6 +222,7 @@ CTransaction::CTransaction(
                               vin(tx.vin), vout(tx.vout), nLockTime(tx.nLockTime),
                               valueBalanceSapling(tx.valueBalanceSapling), vShieldedSpend(tx.vShieldedSpend), vShieldedOutput(tx.vShieldedOutput),
                               orchardBundle(tx.orchardBundle),
+                              issueBundle(tx.issueBundle),
                               vJoinSplit(tx.vJoinSplit), joinSplitPubKey(tx.joinSplitPubKey), joinSplitSig(tx.joinSplitSig),
                               bindingSig(tx.bindingSig)
 {
@@ -233,6 +237,7 @@ CTransaction::CTransaction(CMutableTransaction &&tx) : nVersion(tx.nVersion),
                                                        valueBalanceSapling(tx.valueBalanceSapling),
                                                        vShieldedSpend(std::move(tx.vShieldedSpend)), vShieldedOutput(std::move(tx.vShieldedOutput)),
                                                        orchardBundle(std::move(tx.orchardBundle)),
+                                                       issueBundle(std::move(tx.issueBundle)),
                                                        vJoinSplit(std::move(tx.vJoinSplit)),
                                                        joinSplitPubKey(std::move(tx.joinSplitPubKey)), joinSplitSig(std::move(tx.joinSplitSig)),
                                                        bindingSig(std::move(tx.bindingSig))
@@ -253,6 +258,7 @@ CTransaction& CTransaction::operator=(const CTransaction &tx) {
     *const_cast<std::vector<SpendDescription>*>(&vShieldedSpend) = tx.vShieldedSpend;
     *const_cast<std::vector<OutputDescription>*>(&vShieldedOutput) = tx.vShieldedOutput;
     orchardBundle = tx.orchardBundle;
+    issueBundle = tx.issueBundle;
     *const_cast<std::vector<JSDescription>*>(&vJoinSplit) = tx.vJoinSplit;
     *const_cast<Ed25519VerificationKey*>(&joinSplitPubKey) = tx.joinSplitPubKey;
     *const_cast<Ed25519Signature*>(&joinSplitSig) = tx.joinSplitSig;
@@ -408,10 +414,11 @@ std::string CTransaction::ToString() const
             vShieldedSpend.size(),
             vShieldedOutput.size());
         if (nVersion >= ZIP225_MIN_TX_VERSION) {
-            str += strprintf(", nConsensusBranchId=%08x, valueBalanceOrchard=%u, vOrchardAction.size=%u",
+            str += strprintf(", nConsensusBranchId=%08x, valueBalanceOrchard=%u, vOrchardAction.size=%u, issueBundle.size=%u",
                 nConsensusBranchId.value_or(0),
                 orchardBundle.GetValueBalance(),
-                orchardBundle.GetNumActions());
+                orchardBundle.GetNumActions(),
+                issueBundle.GetDetails()->num_actions());
         }
         str += ")\n";
     } else if (nVersion >= 3) {

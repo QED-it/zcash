@@ -17,6 +17,9 @@ namespace orchard {
     class UnauthorizedBundle;
 }
 
+class IssueBundle;
+class IssuanceAuthorizingKey;
+
 namespace libzcash {
 
 class OrchardFullViewingKey;
@@ -35,6 +38,7 @@ private:
     friend class OrchardIncomingViewingKey;
     friend class ::OrchardWallet;
     friend class ::orchard::Builder;
+    friend class ::IssueBundle;
 public:
     static OrchardRawAddress KeyIoOnlyFromReceiver(OrchardRawAddressPtr* ptr) {
         return OrchardRawAddress(ptr);
@@ -289,6 +293,7 @@ private:
 
     friend class orchard::UnauthorizedBundle;
     friend class ::OrchardWallet;
+    friend class ::IssuanceAuthorizingKey;
 public:
     OrchardSpendingKey(OrchardSpendingKey&& key) : inner(std::move(key.inner)) {}
 
@@ -301,6 +306,8 @@ public:
             libzcash::AccountId accountId);
 
     OrchardFullViewingKey ToFullViewingKey() const;
+
+    IssuanceAuthorizingKey ToIssuanceAuthorizingKey() const;
 
     OrchardSpendingKey& operator=(OrchardSpendingKey&& key)
     {
@@ -318,7 +325,6 @@ public:
         return *this;
     }
 };
-
 } // namespace libzcash
 
 #endif // ZCASH_ADDRESS_ORCHARD_H

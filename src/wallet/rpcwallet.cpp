@@ -34,6 +34,8 @@
 #include "zcash/Address.hpp"
 #include "zcash/address/zip32.h"
 
+#include "Asset.h"
+
 #include "util/time.h"
 #include "asyncrpcoperation.h"
 #include "asyncrpcqueue.h"
@@ -261,6 +263,89 @@ UniValue getrawchangeaddress(const UniValue& params, bool fHelp)
 
     KeyIO keyIO(chainparams);
     return keyIO.EncodeDestination(keyID);
+}
+
+static void IssueAsset(const OrchardRawAddress &address, CAmount amount, Asset asset, bool finalize, IssuanceAuthorizingKey &isk, CWalletTx& wtxNew) {
+    std::string strError;
+
+    // Create issue component
+    vector<CIssueRecipient> vecIssue;
+    CIssueRecipient recipient = {address, amount, asset, finalize};
+    vecIssue.push_back(recipient);
+
+    if (!pwalletMain->CreateIssueTransaction(vecIssue, isk, wtxNew, strError)) {
+        throw JSONRPCError(RPC_WALLET_ERROR, strError);
+    }
+
+    CValidationState state;
+    if (!pwalletMain->CommitTransaction(wtxNew, std::nullopt, state)) {
+        strError = strprintf("Error: The transaction was rejected! Reason given: %s", state.GetRejectReason());
+        throw JSONRPCError(RPC_WALLET_ERROR, strError);
+    }
+}
+
+UniValue issue(const UniValue &params, bool fHelp) {
+
+    if (!EnsureWalletIsAvailable(fHelp))
+        return NullUniValue;
+
+    if (fHelp || params.size() != 5)
+        throw runtime_error(
+                "issue account \"zcashaddress\" asset amount finalize\n"
+                "\nTODO add action description.\n"
+                + HelpRequiringPassphrase() +
+                "\nArguments:\n"
+                "0. \"account\"       (numeric, required) The account ID (determines issuance key). \n"
+                "1. \"zcashaddress\"  (string, required) The transparent Zcash address to send to.\n"
+                "2. \"asset\"         (string, required) The asset description.\n"
+                "3. \"amount\"        (numeric, required) The amount of 'asset' to issue. eg 0.1\n"
+                "4. \"finalize\"      (boolean, required) The finalization flag\n"
+                "\nResult:\n"
+                "\"transactionid\"  (string) The transaction id.\n"
+                "\nExamples:\n"
+                + HelpExampleCli("issue", "0 \"t1M72Sfpbz1BPpXFHz9m3CdqATR44Jvaydd\" WBTC 0.1 true")
+        );
+
+    LOCK2(cs_main, pwalletMain->cs_wallet);
+
+    KeyIO keyIO(Params());
+
+    CWalletTx wtx;
+
+    // Account
+    auto account = params[0].get_int();
+
+    // Address
+    auto addrStr = params[1].get_str();
+    auto recipient = keyIO.DecodePaymentAddress(addrStr);
+    if (!recipient.has_value()) {
+        throw JSONRPCError(RPC_INVALID_PARAMETER, std::string("Invalid parameter, unknown address format: ") + addrStr);
+    }
+    auto orchardAddress = std::get<libzcash::UnifiedAddress>(recipient.value()).GetOrchardReceiver();
+    if (!orchardAddress.has_value()) {
+        throw JSONRPCError(RPC_INVALID_PARAMETER, std::string("Invalid parameter, incorrect Orchard address: ") + addrStr);
+    }
+
+    // Asset
+    auto assetDescription = params[2].get_str();
+
+    IssuanceAuthorizingKey isk = pwalletMain->GetIssuanceAuthorizingKey(account);
+
+    Asset asset = Asset(isk, (unsigned char *)assetDescription.c_str());
+
+    // Amount
+    CAmount nAmount = AmountFromValue(params[3]);
+    if (nAmount <= 0)
+        throw JSONRPCError(RPC_TYPE_ERROR, "Invalid amount for send");
+
+    // Finalize
+    bool finalize = params[4].get_bool();
+
+    EnsureWalletIsUnlocked();
+
+    IssueAsset(orchardAddress.value(), nAmount, asset, finalize, isk,wtx);
+
+    return wtx.GetHash().GetHex();
 }
 
 static void SendMoney(const CTxDestination &address, CAmount nValue, bool fSubtractFeeFromAmount, CWalletTx& wtxNew)
@@ -2359,6 +2444,7 @@ UniValue settxfee(const UniValue& params, bool fHelp)
 }
 
 CAmount getBalanceZaddr(std::optional<libzcash::PaymentAddress> address, const std::optional<int>& asOfHeight, int minDepth = 1, int maxDepth = INT_MAX, bool ignoreUnspendable=true);
+UniValue GetAssetBalancesJson(const std::optional<int>& asOfHeight);
 
 UniValue getwalletinfo(const UniValue& params, bool fHelp)
 {
@@ -2381,6 +2467,7 @@ UniValue getwalletinfo(const UniValue& params, bool fHelp)
             "  \"shielded_balance\": xxxxxxx,  (numeric) the total confirmed shielded balance of the wallet in " + CURRENCY_UNIT + "\n"
             "  \"shielded_unconfirmed_balance\": xxx, (numeric, optional) the total unconfirmed shielded balance of the wallet in " + CURRENCY_UNIT + ".\n"
             "                              Not included if `asOfHeight` is specified.\n"
+            "  \"asset_balances\": xxxxxxx,  (numeric) the total confirmed and unconfirmed balances of the wallet per asset type.\n"
             "  \"txcount\": xxxxxxx,         (numeric) the total number of transactions in the wallet\n"
             "  \"keypoololdest\": xxxxxx,    (numeric) the timestamp (seconds since GMT epoch) of the oldest pre-generated key in the key pool\n"
             "  \"keypoolsize\": xxxx,        (numeric) how many new keys are pre-generated\n"
@@ -2411,6 +2498,7 @@ UniValue getwalletinfo(const UniValue& params, bool fHelp)
     if (!asOfHeight.has_value()) {
         obj.pushKV("shielded_unconfirmed_balance", FormatMoney(getBalanceZaddr(std::nullopt, asOfHeight, 0, 0)));
     }
+    obj.pushKV("asset_balances", GetAssetBalancesJson(asOfHeight));
     obj.pushKV("txcount",       (int)pwalletMain->mapWallet.size());
     obj.pushKV("keypoololdest", pwalletMain->GetOldestKeyPoolTime());
     obj.pushKV("keypoolsize",   (int)pwalletMain->GetKeyPoolSize());
@@ -3885,7 +3973,7 @@ CAmount getBalanceZaddr(std::optional<libzcash::PaymentAddress> address, const s
         noteFilter = NoteFilter::ForPaymentAddresses(std::vector({address.value()}));
     }
 
-    pwalletMain->GetFilteredNotes(sproutEntries, saplingEntries, orchardEntries, noteFilter, asOfHeight, minDepth, maxDepth, true, ignoreUnspendable);
+    pwalletMain->GetFilteredNotes(sproutEntries, saplingEntries, orchardEntries, noteFilter, asOfHeight, minDepth, maxDepth, true, ignoreUnspendable, true);
     for (auto & entry : sproutEntries) {
         balance += CAmount(entry.note.value());
     }
@@ -3897,6 +3985,23 @@ CAmount getBalanceZaddr(std::optional<libzcash::PaymentAddress> address, const s
     }
     return balance;
 }
+
+// Returns confirmed and unconfirmed balances per asset
+UniValue GetAssetBalancesJson(const std::optional<int>& asOfHeight)
+{
+    UniValue balance(UniValue::VOBJ);
+    map<std::string, Balances> balances = pwalletMain->getAssetBalances(std::nullopt, asOfHeight);
+
+    for (auto& asset : balances) {
+        UniValue assetBalance(UniValue::VOBJ);
+        assetBalance.pushKV("confirmed_balance", ValueFromAmount(asset.second.balance));
+        assetBalance.pushKV("unconfirmed_balance", ValueFromAmount(asset.second.unconfirmedBalance));
+        balance.pushKV(asset.first, assetBalance);
+    }
+
+    return balance;
+}
+
 
 struct txblock
 {
@@ -4588,6 +4693,7 @@ UniValue z_viewtransaction(const UniValue& params, bool fHelp)
 
     UniValue spends(UniValue::VARR);
     UniValue outputs(UniValue::VARR);
+    UniValue issuances(UniValue::VARR);
 
     auto addMemo = [](UniValue &entry, std::array<unsigned char, ZC_MEMO_SIZE> &memo) {
         entry.pushKV("memo", HexStr(memo));
@@ -5052,7 +5158,7 @@ size_t EstimateTxSize(
         // - The Orchard transaction builder pads to a minimum of 2 actions.
         // - We subtract 1 because `GetSerializeSize(tx, ...)` already counts
         //   `ZC_ZIP225_ORCHARD_NUM_ACTIONS_BASE_SIZE`.
-        txsize += ZC_ZIP225_ORCHARD_BASE_SIZE - 1 + ZC_ZIP225_ORCHARD_MARGINAL_SIZE * std::max(2, (int) orchardRecipientCount);
+        txsize += ZC_ZIP225_ORCHARD_BASE_SIZE - 1 + ZC_ZIP225_ORCHARD_MARGINAL_SIZE * std::max(2, (int) orchardRecipientCount) + ZC_ISSUE_BASE_SIZE;
     }
     return txsize;
 }
@@ -6446,6 +6552,7 @@ static const CRPCCommand commands[] =
     { "wallet",             "z_importwallet",           &z_importwallet,           true  },
     { "wallet",             "z_viewtransaction",        &z_viewtransaction,        false },
     { "wallet",             "z_getnotescount",          &z_getnotescount,          false },
+    { "wallet",             "issue",                    &issue,                    true },
     // TODO: rearrange into another category
     { "disclosure",         "z_getpaymentdisclosure",   &z_getpaymentdisclosure,   true  },
     { "disclosure",         "z_validatepaymentdisclosure", &z_validatepaymentdisclosure, true }

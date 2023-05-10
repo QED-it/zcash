@@ -7,6 +7,7 @@
 #include "util/test.h"
 #include "wallet/orchard.h"
 #include "zcash/Address.hpp"
+#include "Asset.h"
 
 #include "gtest/test_transaction_builder.h"
 
@@ -37,7 +38,7 @@ CTransaction FakeOrchardTx(const OrchardSpendingKey& sk, libzcash::diversifier_i
     // 0.0005 t-ZEC in, 0.0004 z-ZEC out, default fee
     auto builder = TransactionBuilder(Params().GetConsensus(), 1, orchardAnchor, &keystore);
     builder.AddTransparentInput(COutPoint(uint256S("1234"), 0), scriptPubKey, 50000);
-    builder.AddOrchardOutput(std::nullopt, recipient, 40000, std::nullopt);
+    builder.AddOrchardOutput(std::nullopt, recipient, 40000, Asset::Native(), std::nullopt);
 
     auto maybeTx = builder.Build();
     EXPECT_TRUE(maybeTx.IsTx());
@@ -105,7 +106,7 @@ TEST(TransactionBuilder, OrchardToOrchard) {
     // Select the one note in the wallet for spending.
     std::vector<OrchardNoteMetadata> notes;
     wallet.GetFilteredNotes(
-        notes, sk.ToFullViewingKey().ToIncomingViewingKey(), true, true);
+        notes, sk.ToFullViewingKey().ToIncomingViewingKey(), true, true, true);
     ASSERT_EQ(notes.size(), 1);
 
     // If we attempt to get spend info now, it will fail because the note hasn't
@@ -131,7 +132,7 @@ TEST(TransactionBuilder, OrchardToOrchard) {
     // 0.0004 z-ZEC in, 0.00025 z-ZEC out, default fee, 0.00005 z-ZEC change
     auto builder = TransactionBuilder(consensusParams, 2, orchardAnchor);
     EXPECT_TRUE(builder.AddOrchardSpend(sk, std::move(spendInfo[0].second)));
-    builder.AddOrchardOutput(std::nullopt, recipient, 25000, std::nullopt);
+    builder.AddOrchardOutput(std::nullopt, recipient, 25000, Asset::Native(), std::nullopt);
     auto maybeTx = builder.Build();
     EXPECT_TRUE(maybeTx.IsTx());
     if (maybeTx.IsError()) {

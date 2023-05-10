@@ -62,12 +62,14 @@ mod tracing_ffi;
 mod zcashd_orchard;
 
 mod address_ffi;
+mod asset_ffi;
 mod builder_ffi;
 mod bundlecache;
 mod history_ffi;
 mod incremental_merkle_tree;
 mod incremental_merkle_tree_ffi;
 mod init_ffi;
+mod issue_ffi;
 mod orchard_bundle;
 mod orchard_ffi;
 mod orchard_keys_ffi;
@@ -78,6 +80,7 @@ mod wallet;
 mod wallet_scanner;
 mod zip339_ffi;
 
+mod issue_bundle;
 mod test_harness_ffi;
 
 #[cfg(test)]

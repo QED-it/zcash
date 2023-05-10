@@ -16,7 +16,7 @@ mod ffi {
         fn rk(self: &Action) -> [u8; 32];
         fn cmx(self: &Action) -> [u8; 32];
         fn ephemeral_key(self: &Action) -> [u8; 32];
-        fn enc_ciphertext(self: &Action) -> [u8; 580];
+        fn enc_ciphertext(self: &Action) -> [u8; 612];
         fn out_ciphertext(self: &Action) -> [u8; 80];
         fn spend_auth_sig(self: &Action) -> [u8; 64];
 
@@ -55,7 +55,7 @@ impl Action {
         self.0.encrypted_note().epk_bytes
     }
 
-    fn enc_ciphertext(&self) -> [u8; 580] {
+    fn enc_ciphertext(&self) -> [u8; 612] {
         self.0.encrypted_note().enc_ciphertext
     }
 

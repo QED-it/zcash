@@ -3,6 +3,7 @@
 // file COPYING or https://www.opensource.org/licenses/mit-license.php .
 
 #include "zcash/address/orchard.hpp"
+#include <primitives/issue.h>
 
 namespace libzcash {
 
@@ -69,5 +70,8 @@ OrchardFullViewingKey OrchardSpendingKey::ToFullViewingKey() const {
     return OrchardFullViewingKey(orchard_spending_key_to_full_viewing_key(inner.get()));
 }
 
+IssuanceAuthorizingKey OrchardSpendingKey::ToIssuanceAuthorizingKey() const {
+    return IssuanceAuthorizingKey(orchard_spending_key_to_issuance_authorizing_key(inner.get()));
+}
 } //namespace libzcash
 

@@ -31,6 +31,7 @@
 #include "zcash/Address.hpp"
 #include "zcash/Note.hpp"
 #include "base58.h"
+#include "Asset.h"
 
 #include <algorithm>
 #include <map>
@@ -112,6 +113,11 @@ enum WalletFeature
     FEATURE_LATEST = 60000
 };
 
+struct Balances
+{
+    CAmount balance;
+    CAmount unconfirmedBalance;
+};
 
 /** A key pool entry */
 class CKeyPool
@@ -156,6 +162,17 @@ struct CRecipient
     CScript scriptPubKey;
     CAmount nAmount;
     bool fSubtractFeeFromAmount;
+};
+
+/**
+ * TODO merge with CRecipient?
+ */
+struct CIssueRecipient
+{
+    libzcash::OrchardRawAddress address;
+    CAmount nAmount;
+    Asset asset;
+    bool finalize;
 };
 
 class RecipientMapping {
@@ -1732,6 +1749,8 @@ public:
 
     bool AddOrchardZKey(const libzcash::OrchardSpendingKey &sk);
     bool AddOrchardFullViewingKey(const libzcash::OrchardFullViewingKey &fvk);
+    bool AddIssuanceAuthorizingKey(const int accountId, const IssuanceAuthorizingKey &isk);
+
     /**
      * Adds an address/ivk mapping to the in-memory wallet. Returns `false` if
      * the mapping could not be persisted, or the IVK does not correspond to an
@@ -1888,6 +1907,19 @@ public:
      */
     bool CreateTransaction(const std::vector<CRecipient>& vecSend, CWalletTx& wtxNew, CReserveKey& reservekey, CAmount& nFeeRet, int& nChangePosRet,
                            std::string& strFailReason, const CCoinControl *coinControl = NULL, bool sign = true);
+
+    /**
+     * Create a new transaction paying the recipients with a set of coins
+     * selected by SelectCoins(); Also create the change output, when needed
+     * Additionally, issue assets defined in 'vecIssue'
+     */
+    bool CreateTransactionWithIssueBundle(const vector<CRecipient>& vecSend, const vector<CIssueRecipient>& vecIssue, CWalletTx& wtxNew, CReserveKey& reservekey, IssuanceAuthorizingKey& isk, CAmount& nFeeRet,
+                                                   int& nChangePosRet, std::string& strFailReason, const CCoinControl* coinControl = NULL, bool sign = true);
+
+    /**
+     * Create a new transaction issuing the assets
+     */
+    bool CreateIssueTransaction(const vector<CIssueRecipient>& vecIssue, IssuanceAuthorizingKey isk, CWalletTx& wtxNew, std::string& strFailReason);
 
     /**
      * Save a set of (txid, RecipientAddress, std::optional<UnifiedAddress>) mappings to the wallet.
@@ -2149,6 +2181,8 @@ public:
 
     bool HaveOrchardSpendingKeyForAddress(const libzcash::OrchardRawAddress &addr) const;
 
+    IssuanceAuthorizingKey GetIssuanceAuthorizingKey(const int accountId) const;
+
     /* Find notes filtered by payment addresses, min depth, max depth, if they are spent,
        if a spending key is required, and if they are locked */
     void GetFilteredNotes(std::vector<SproutNoteEntry>& sproutEntriesRet,
@@ -2160,7 +2194,27 @@ public:
                           int maxDepth=INT_MAX,
                           bool ignoreSpent=true,
                           bool requireSpendingKey=true,
-                          bool ignoreLocked=true) const;
+                          bool ignoreLocked=true,
+                          bool nativeOnly=true) const;
+
+    /**
+     * Similar to GetFilteredNotes but only for Orchard notes
+     */
+    void GetFilteredOrchardNotes(
+            std::vector<OrchardNoteMetadata>& orchardNotesRet,
+            std::vector<OrchardNoteMetadata>& orchardUnconfirmedNotesRet,
+            const std::optional<NoteFilter>& noteFilter,
+            const std::optional<int>& asOfHeight,
+            int minDepth,
+            int maxDepth=INT_MAX,
+            bool ignoreSpent=true,
+            bool requireSpendingKey=true,
+            bool nativeOnly=true) const;
+
+    /**
+     * Returns confirmed and unconfirmed balances per asset
+     */
+    map<std::string, Balances> getAssetBalances(std::optional<libzcash::PaymentAddress> address= std::nullopt, const std::optional<int>& asOfHeight= std::nullopt, bool ignoreUnspendable= true) const;
 
     /* Returns the wallets help message */
     static std::string GetWalletHelpString(bool showDebug);

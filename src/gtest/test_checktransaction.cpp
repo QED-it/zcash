@@ -8,6 +8,7 @@
 #include "gtest/utils.h"
 #include "util/test.h"
 #include "zcash/JoinSplit.hpp"
+#include "Asset.h"
 
 #include <librustzcash.h>
 #include <rust/ed25519.h>
@@ -1414,7 +1415,7 @@ TEST(ChecktransactionTests, InvalidOrchardShieldedCoinbase) {
     mtx.vin.resize(1);
     mtx.vin[0].prevout.SetNull();
     mtx.orchardBundle = orchard::Builder(false, true, uint256())
-        .Build().value()
+        .Build().value() // TODO this build can never succeed because of empty actions list
         .ProveAndSign({}, uint256()).value();
 
     CTransaction tx(mtx);
@@ -1450,14 +1451,14 @@ TEST(ChecktransactionTests, NU5AcceptsOrchardShieldedCoinbase) {
         .ToIncomingViewingKey()
         .Address(0);
     uint256 ovk;
-    builder.AddOutput(ovk, to, CAmount(123456), std::nullopt);
+    builder.AddOutput(ovk, to, CAmount(123456), Asset::Native(), std::nullopt);
 
     // orchard::Builder pads to two Actions, but does so using a "no OVK" policy for
     // dummy outputs, which violates coinbase rules requiring all shielded outputs to
     // be recoverable. We manually add a dummy output to sidestep this issue.
     // TODO: If/when we have funding streams going to Orchard recipients, this dummy
     // output can be removed.
-    builder.AddOutput(ovk, to, 0, std::nullopt);
+    builder.AddOutput(ovk, to, 0, Asset::Native(), std::nullopt);
 
     auto bundle = builder
         .Build().value()
@@ -1489,7 +1490,7 @@ TEST(ChecktransactionTests, NU5AcceptsOrchardShieldedCoinbase) {
     const size_t ORCHARD_CMX_SIZE = 32;
 
     // Verify the transaction is the expected size.
-    size_t txsize = ORCHARD_BUNDLE_START + ZC_ZIP225_ORCHARD_BASE_SIZE + ZC_ZIP225_ORCHARD_MARGINAL_SIZE * 2;
+    size_t txsize = ORCHARD_BUNDLE_START + ZC_ZIP225_ORCHARD_BASE_SIZE + ZC_ZIP225_ORCHARD_MARGINAL_SIZE * 2 + ZC_ISSUE_BASE_SIZE;
     EXPECT_EQ(ss.size(), txsize);
 
     // Transaction should fail with a bad public cmx.
@@ -1570,14 +1571,14 @@ TEST(ChecktransactionTests, NU5EnforcesOrchardRulesOnShieldedCoinbase) {
         .ToIncomingViewingKey()
         .Address(0);
     uint256 ovk;
-    builder.AddOutput(ovk, to, CAmount(1000), std::nullopt);
+    builder.AddOutput(ovk, to, CAmount(1000), Asset::Native(), std::nullopt);
 
     // orchard::Builder pads to two Actions, but does so using a "no OVK" policy for
     // dummy outputs, which violates coinbase rules requiring all shielded outputs to
     // be recoverable. We manually add a dummy output to sidestep this issue.
     // TODO: If/when we have funding streams going to Orchard recipients, this dummy
     // output can be removed.
-    builder.AddOutput(ovk, to, 0, std::nullopt);
+    builder.AddOutput(ovk, to, 0, Asset::Native(), std::nullopt);
 
     auto bundle = builder
         .Build().value()
@@ -1613,7 +1614,7 @@ TEST(ChecktransactionTests, NU5EnforcesOrchardRulesOnShieldedCoinbase) {
         ZC_ZIP225_ORCHARD_FLAGS_SIZE);
 
     // Verify the transaction is the expected size.
-    size_t txsize = ORCHARD_BUNDLE_START + ZC_ZIP225_ORCHARD_BASE_SIZE + ZC_ZIP225_ORCHARD_MARGINAL_SIZE * 2;
+    size_t txsize = ORCHARD_BUNDLE_START + ZC_ZIP225_ORCHARD_BASE_SIZE + ZC_ZIP225_ORCHARD_MARGINAL_SIZE * 2 + ZC_ISSUE_BASE_SIZE;
     EXPECT_EQ(ss.size(), txsize);
 
     // Coinbase transaction should fail non-contextual checks with valueBalanceSapling

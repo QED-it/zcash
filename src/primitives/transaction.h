@@ -25,6 +25,7 @@
 
 #include <rust/ed25519/types.h>
 #include <primitives/orchard.h>
+#include <primitives/issue.h>
 
 // Overwinter transaction version group id
 static constexpr uint32_t OVERWINTER_VERSION_GROUP_ID = 0x03C48270;
@@ -708,6 +709,7 @@ private:
     std::optional<uint32_t> nConsensusBranchId;
     CAmount valueBalanceSapling;
     OrchardBundle orchardBundle;
+    IssueBundle issueBundle;
 
     /** Memory only. */
     const WTxId wtxid;
@@ -870,6 +872,9 @@ public:
 
             // Orchard Transaction Fields
             READWRITE(orchardBundle);
+
+            // Issuance Transaction Fields
+            READWRITE(issueBundle);
         } else {
             // Legacy transaction formats
             READWRITE(*const_cast<std::vector<CTxIn>*>(&vin));
@@ -952,6 +957,13 @@ public:
         return orchardBundle;
     }
 
+    /**
+     * Returns the Issue bundle for the transaction.
+     */
+    const IssueBundle& GetIssueBundle() const {
+        return issueBundle;
+    }
+
     /*
      * Context for the two methods below:
      * As at most one of vpub_new and vpub_old is non-zero in every JoinSplit,
@@ -1012,6 +1024,7 @@ struct CMutableTransaction
     std::vector<SpendDescription> vShieldedSpend;
     std::vector<OutputDescription> vShieldedOutput;
     OrchardBundle orchardBundle;
+    IssueBundle issueBundle;
     std::vector<JSDescription> vJoinSplit;
     Ed25519VerificationKey joinSplitPubKey;
     Ed25519Signature joinSplitSig;
@@ -1099,6 +1112,9 @@ struct CMutableTransaction
 
             // Orchard Transaction Fields
             READWRITE(orchardBundle);
+
+            // Orchard Transaction Fields
+            READWRITE(issueBundle);
         } else {
             // Legacy transaction formats
             READWRITE(vin);

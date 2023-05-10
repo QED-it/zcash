@@ -434,7 +434,7 @@ class OrchardAction(object):
         self.rk = deser_uint256(f)
         self.cmx = deser_uint256(f)
         self.ephemeralKey = deser_uint256(f)
-        self.encCiphertext = f.read(580)
+        self.encCiphertext = f.read(612)
         self.outCiphertext = f.read(80)
 
     def serialize(self):
@@ -523,6 +523,21 @@ class OrchardBundle(object):
                 self.bindingSig,
             )
 
+
+class IssueBundle(object):
+
+    def deserialize(self, f):
+        num_actions = struct.unpack("<B", f.read(1))[0]
+        if num_actions != 0:
+            raise Exception("Non-empty IssueBundle is not implemented in mininode")
+
+    def serialize(self):
+        r = b""
+        r += ser_compact_size(0)
+        return r
+
+    def __repr__(self):
+        return "IssueBundle(Empty)"
 
 class Groth16Proof(object):
     def __init__(self):
@@ -628,7 +643,7 @@ class OutputDescriptionV5(object):
         self.cv = deser_uint256(f)
         self.cmu = deser_uint256(f)
         self.ephemeralKey = deser_uint256(f)
-        self.encCiphertext = f.read(580)
+        self.encCiphertext = f.read(612)
         self.outCiphertext = f.read(80)
 
     def serialize(self):
@@ -665,7 +680,7 @@ class OutputDescription(object):
         self.cv = deser_uint256(f)
         self.cmu = deser_uint256(f)
         self.ephemeralKey = deser_uint256(f)
-        self.encCiphertext = f.read(580)
+        self.encCiphertext = f.read(612)
         self.outCiphertext = f.read(80)
         self.zkproof = Groth16Proof()
         self.zkproof.deserialize(f)
@@ -981,6 +996,7 @@ class CTransaction(object):
             self.valueBalance = 0
             self.saplingBundle = SaplingBundle()
             self.orchardBundle = OrchardBundle()
+            self.issueBundle = IssueBundle()
             self.shieldedSpends = []
             self.shieldedOutputs = []
             self.vJoinSplit = []
@@ -1000,6 +1016,7 @@ class CTransaction(object):
             self.valueBalance = tx.valueBalance
             self.saplingBundle = copy.deepcopy(tx.saplingBundle)
             self.orchardBundle = copy.deepcopy(tx.orchardBundle)
+            self.issueBundle = copy.deepcopy(tx.issueBundle)
             self.shieldedSpends = copy.deepcopy(tx.shieldedSpends)
             self.shieldedOutputs = copy.deepcopy(tx.shieldedOutputs)
             self.vJoinSplit = copy.deepcopy(tx.vJoinSplit)
@@ -1043,6 +1060,10 @@ class CTransaction(object):
             # Orchard transaction fields
             self.orchardBundle = OrchardBundle()
             self.orchardBundle.deserialize(f)
+
+            # Orchard transaction fields
+            self.issueBundle = IssueBundle()
+            self.issueBundle.deserialize(f)
 
             return
 
@@ -1101,6 +1122,9 @@ class CTransaction(object):
 
             # Orchard transaction fields
             r += self.orchardBundle.serialize()
+
+            # Issuance transaction fields
+            r += self.issueBundle.serialize()
 
             return r
 
