@@ -2,8 +2,8 @@
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or https://www.opensource.org/licenses/mit-license.php .
 
-#ifndef ZCASH_RUST_INCLUDE_RUST_ORCHARD_ZSA_ISSUANCE_H
-#define ZCASH_RUST_INCLUDE_RUST_ORCHARD_ZSA_ISSUANCE_H
+#ifndef ZCASH_RUST_INCLUDE_RUST_ORCHARD_ISSUANCE_H
+#define ZCASH_RUST_INCLUDE_RUST_ORCHARD_ISSUANCE_H
 
 #include "rust/orchard/keys.h"
 
@@ -120,4 +120,4 @@ bool issue_bundle_serialize(
 }
 #endif
 
-#endif // ZCASH_RUST_INCLUDE_RUST_ORCHARD_ZSA_ISSUANCE_H
+#endif // ZCASH_RUST_INCLUDE_RUST_ORCHARD_ISSUANCE_H

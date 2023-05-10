@@ -2,16 +2,13 @@
 # Copyright (c) 2022 The Zcash developers
 # Distributed under the MIT software license, see the accompanying
 # file COPYING or https://www.opensource.org/licenses/mit-license.php .
-import json
 
 from test_framework.test_framework import BitcoinTestFramework
 from test_framework.util import (
     NU5_BRANCH_ID,
     assert_equal,
-    get_coinbase_address,
     nuparams,
     start_nodes,
-    wait_and_assert_operationid_status,
 )
 
 class IssueTest(BitcoinTestFramework):
