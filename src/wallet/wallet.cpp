@@ -2248,7 +2248,8 @@ CWallet::GenerateChangeAddressForAccount(
 SpendableInputs CWallet::FindSpendableInputs(
         ZTXOSelector selector,
         uint32_t minDepth,
-        const std::optional<int>& asOfHeight) const {
+        const std::optional<int>& asOfHeight,
+        const std::optional<Asset> asset) const {
     AssertLockHeld(cs_main);
     AssertLockHeld(cs_wallet);
 
@@ -2437,7 +2438,8 @@ SpendableInputs CWallet::FindSpendableInputs(
 
         for (const auto& ivk : orchardIvks) {
             std::vector<OrchardNoteMetadata> incomingNotes;
-            orchardWallet.GetFilteredNotes(incomingNotes, ivk, true, true, true);
+
+            orchardWallet.GetFilteredNotes(incomingNotes, ivk, true, true, asset);
 
             for (auto& noteMeta : incomingNotes) {
                 if (IsOrchardSpent(noteMeta.GetOutPoint(), asOfHeight)) {
@@ -5136,7 +5138,7 @@ map<std::string, Balances> CWallet::getAssetBalances(std::optional<libzcash::Pay
         noteFilter = NoteFilter::ForPaymentAddresses(std::vector({address.value()}));
     }
 
-    pwalletMain->GetFilteredOrchardNotes(orchardEntries, orchardUnconfirmedEntries, noteFilter, asOfHeight, 1, INT_MAX, true, ignoreUnspendable, false);
+    pwalletMain->GetFilteredOrchardNotes(orchardEntries, orchardUnconfirmedEntries, noteFilter, asOfHeight, 1, INT_MAX, true, ignoreUnspendable, std::nullopt);
 
     for (auto & entry : orchardEntries) {
         std::string asset = entry.GetAsset().ToHexString();
@@ -7079,7 +7081,7 @@ void CWallet::GetFilteredNotes(
     bool ignoreSpent,
     bool requireSpendingKey,
     bool ignoreLocked,
-    bool nativeOnly) const
+    const std::optional<Asset> asset) const
 {
     // Don't bother to do anything if the note filter would reject all notes
     if (noteFilter.has_value() && noteFilter.value().IsEmpty())
@@ -7211,7 +7213,7 @@ void CWallet::GetFilteredNotes(
                         ivk.value(),
                         ignoreSpent,
                         requireSpendingKey,
-                        nativeOnly);
+                        asset);
             }
         }
     } else {
@@ -7221,7 +7223,7 @@ void CWallet::GetFilteredNotes(
                 std::nullopt,
                 ignoreSpent,
                 requireSpendingKey,
-                nativeOnly);
+                asset);
     }
 
     for (auto& noteMeta : orchardNotes) {
@@ -7252,7 +7254,7 @@ void CWallet::GetFilteredOrchardNotes(
         int maxDepth,
         bool ignoreSpent,
         bool requireSpendingKey,
-        bool nativeOnly) const
+        std::optional<Asset> asset) const
 {
     bool ignoreLocked = true;
 
@@ -7274,7 +7276,7 @@ void CWallet::GetFilteredOrchardNotes(
                         ivk.value(),
                         ignoreSpent,
                         requireSpendingKey,
-                        nativeOnly);
+                        asset);
             }
         }
     } else {
@@ -7284,7 +7286,7 @@ void CWallet::GetFilteredOrchardNotes(
                 std::nullopt,
                 ignoreSpent,
                 requireSpendingKey,
-                nativeOnly);
+                asset);
     }
 
     for (auto& noteMeta : orchardNotes) {

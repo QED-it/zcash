@@ -298,9 +298,10 @@ typedef void (*push_note_callback_t)(void* resultVector, const RawOrchardNoteMet
 void orchard_wallet_get_filtered_notes(
         const OrchardWalletPtr* wallet,
         const OrchardIncomingViewingKeyPtr* ivk,
+        const unsigned char* asset_bytes,
         bool ignoreMined,
         bool requireSpendingKey,
-        bool nativeOnly,
+        bool allAssets,
         void* resultVector,
         push_note_callback_t push_cb
         );

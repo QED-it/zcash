@@ -451,14 +451,21 @@ public:
         const std::optional<libzcash::OrchardIncomingViewingKey>& ivk,
         bool ignoreMined,
         bool requireSpendingKey,
-        bool nativeOnly) const {
+        std::optional<Asset> asset = Asset::Native()) const {
+
+        bool allAssets = !asset.has_value();
+        unsigned char *assetId = nullptr;
+        if (asset.has_value()) {
+            assetId = (unsigned char *)asset.value().id;
+        }
 
         orchard_wallet_get_filtered_notes(
             inner.get(),
             ivk.has_value() ? ivk.value().inner.get() : nullptr,
+            assetId,
             ignoreMined,
             requireSpendingKey,
-            nativeOnly,
+            allAssets,
             &orchardNotesRet,
             PushOrchardNoteMeta
             );

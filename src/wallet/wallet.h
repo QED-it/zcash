@@ -1659,7 +1659,8 @@ public:
     SpendableInputs FindSpendableInputs(
             ZTXOSelector paymentSource,
             uint32_t minDepth,
-            const std::optional<int>& asOfHeight) const;
+            const std::optional<int>& asOfHeight,
+            const std::optional<Asset> asset = Asset::Native()) const;
 
     bool SelectorMatchesAddress(const ZTXOSelector& source, const CTxDestination& a0) const;
     bool SelectorMatchesAddress(const ZTXOSelector& source, const libzcash::SproutPaymentAddress& a0) const;
@@ -2244,7 +2245,7 @@ public:
                           bool ignoreSpent=true,
                           bool requireSpendingKey=true,
                           bool ignoreLocked=true,
-                          bool nativeOnly=true) const;
+                          const std::optional<Asset> asset = Asset::Native()) const;
 
     /**
      * Similar to GetFilteredNotes but only for Orchard notes
@@ -2258,7 +2259,7 @@ public:
             int maxDepth=INT_MAX,
             bool ignoreSpent=true,
             bool requireSpendingKey=true,
-            bool nativeOnly=true) const;
+            const std::optional<Asset> asset = Asset::Native()) const;
 
     /**
      * Returns confirmed and unconfirmed balances per asset
