@@ -539,7 +539,7 @@ checksum = "7fcaabb2fef8c910e7f4c7ce9f67a1283a1715879a7c230ca9d6d1ae31f16d91"
 [[package]]
 name = "equihash"
 version = "0.2.0"
-source = "git+https://github.com/QED-it/librustzcash.git?branch=zsa-bundle-in-v5-vector-serialization#d8089d591d4a0fc76228e5946556844898f4a5d8"
+source = "git+https://github.com/QED-it/librustzcash.git?branch=zsa-bundle-in-v5-vector-serialization_with_burn_validation_new#24d8bf56b21c7df3d7e6996153700e69c7d31dd2"
 dependencies = [
  "blake2b_simd",
  "byteorder",
@@ -575,7 +575,7 @@ dependencies = [
 [[package]]
 name = "f4jumble"
 version = "0.1.0"
-source = "git+https://github.com/QED-it/librustzcash.git?branch=zsa-bundle-in-v5-vector-serialization#d8089d591d4a0fc76228e5946556844898f4a5d8"
+source = "git+https://github.com/QED-it/librustzcash.git?branch=zsa-bundle-in-v5-vector-serialization_with_burn_validation_new#24d8bf56b21c7df3d7e6996153700e69c7d31dd2"
 dependencies = [
  "blake2b_simd",
 ]
@@ -2502,7 +2502,7 @@ dependencies = [
 [[package]]
 name = "zcash_address"
 version = "0.3.0"
-source = "git+https://github.com/QED-it/librustzcash.git?branch=zsa-bundle-in-v5-vector-serialization#d8089d591d4a0fc76228e5946556844898f4a5d8"
+source = "git+https://github.com/QED-it/librustzcash.git?branch=zsa-bundle-in-v5-vector-serialization_with_burn_validation_new#24d8bf56b21c7df3d7e6996153700e69c7d31dd2"
 dependencies = [
  "bech32",
  "bs58",
@@ -2513,7 +2513,7 @@ dependencies = [
 [[package]]
 name = "zcash_encoding"
 version = "0.2.0"
-source = "git+https://github.com/QED-it/librustzcash.git?branch=zsa-bundle-in-v5-vector-serialization#d8089d591d4a0fc76228e5946556844898f4a5d8"
+source = "git+https://github.com/QED-it/librustzcash.git?branch=zsa-bundle-in-v5-vector-serialization_with_burn_validation_new#24d8bf56b21c7df3d7e6996153700e69c7d31dd2"
 dependencies = [
  "byteorder",
  "nonempty",
@@ -2533,7 +2533,7 @@ dependencies = [
 [[package]]
 name = "zcash_note_encryption"
 version = "0.4.0"
-source = "git+https://github.com/QED-it/librustzcash.git?branch=zsa-bundle-in-v5-vector-serialization#d8089d591d4a0fc76228e5946556844898f4a5d8"
+source = "git+https://github.com/QED-it/librustzcash.git?branch=zsa-bundle-in-v5-vector-serialization_with_burn_validation_new#24d8bf56b21c7df3d7e6996153700e69c7d31dd2"
 dependencies = [
  "chacha20",
  "chacha20poly1305",
@@ -2545,7 +2545,7 @@ dependencies = [
 [[package]]
 name = "zcash_primitives"
 version = "0.12.0"
-source = "git+https://github.com/QED-it/librustzcash.git?branch=zsa-bundle-in-v5-vector-serialization#d8089d591d4a0fc76228e5946556844898f4a5d8"
+source = "git+https://github.com/QED-it/librustzcash.git?branch=zsa-bundle-in-v5-vector-serialization_with_burn_validation_new#24d8bf56b21c7df3d7e6996153700e69c7d31dd2"
 dependencies = [
  "aes",
  "bip0039",

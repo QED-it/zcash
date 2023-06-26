@@ -1,11 +1,13 @@
 use std::{
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     convert::{TryFrom, TryInto},
 };
 
 use bellman::groth16;
 use group::GroupEncoding;
-use orchard::note_encryption_v3::OrchardDomainV3;
+use orchard::{
+    issuance::verify_issue_bundle, note::AssetBase, note_encryption_v3::OrchardDomainV3,
+};
 use secp256k1::{Secp256k1, VerifyOnly};
 use zcash_address::{
     unified::{self, Encoding},
@@ -19,7 +21,9 @@ use zcash_primitives::{
     memo::{Memo, MemoBytes},
     sapling::note_encryption::SaplingDomain,
     transaction::{
-        components::{sapling, transparent, Amount},
+        components::{
+            orchard::burn_validation::validate_bundle_burn, sapling, transparent, Amount,
+        },
         sighash::{signature_hash, SignableInput, TransparentAuthorizingContext},
         txid::TxIdDigester,
         Authorization, Transaction, TransactionData, TxId, TxVersion,
@@ -540,6 +544,30 @@ pub(crate) fn inspect(tx: Transaction, context: Option<Context>) {
 
         if let Err(e) = bundle.verify_proof(&ORCHARD_VK) {
             eprintln!("⚠️  Orchard proof is invalid: {:?}", e);
+        }
+
+        if let Some(issue_bundle) = tx.issue_bundle() {
+            if let Some(sighash) = &common_sighash {
+                let finalized = HashSet::<AssetBase>::new();
+
+                if let Err(e) = verify_issue_bundle(issue_bundle, *sighash.as_ref(), &finalized) {
+                    eprintln!("⚠️  Issue bundle is invalid: {:?}", e);
+                }
+
+                /* FIXME: consider using this instead
+                if let Err(e) = verify_issue_bundle(
+                    issue_bundle,
+                    issue_bundle.commitment().into(),
+                    &HashSet::new(),
+                ) {}
+                */
+            }
+        }
+
+        if let Some(orchard_bundle) = tx.orchard_bundle() {
+            if let Err(e) = validate_bundle_burn(orchard_bundle.burn()) {
+                eprintln!("⚠️  Orchard bundle burn is invalid: {:?}", e);
+            }
         }
     }
 }
