@@ -8,7 +8,9 @@ use orchard::{
     primitives::redpallas::{Signature, SpendAuth},
 };
 use zcash_note_encryption::try_output_recovery_with_ovk;
-use zcash_primitives::transaction::components::{orchard as orchard_serialization, Amount};
+use zcash_primitives::transaction::components::{
+    orchard as orchard_serialization, orchard::burn_validation::validate_bundle_burn, Amount,
+};
 
 use crate::{bridge::ffi, streams::CppStream};
 
@@ -229,5 +231,16 @@ impl Bundle {
         // Either there are no Orchard actions, or all of the outputs
         // are decryptable with the all-zeros OVK.
         true
+    }
+
+    /// Returns whether all burns in the Orchard bundle are valid
+    #[no_mangle]
+    pub extern "C" fn burn_is_valid(&self) -> bool {
+        if let Some(bundle) = self.inner() {
+            validate_bundle_burn(bundle.burn()).is_ok()
+        } else {
+            // TODO: should true or false be returned here?
+            true
+        }
     }
 }

@@ -1,5 +1,5 @@
 use crate::streams_ffi::{CppStreamReader, CppStreamWriter, ReadCb, StreamObj, WriteCb};
-use orchard::issuance::{IssueBundle, Signed, Unauthorized};
+use orchard::issuance::{verify_issue_bundle, IssueBundle, Signed, Unauthorized};
 use orchard::keys::{IssuanceAuthorizingKey, IssuanceKey, IssuanceValidatingKey};
 use orchard::value::NoteValue;
 use orchard::Address;
@@ -26,9 +26,7 @@ pub extern "C" fn issuance_key_free(key: *mut IssuanceKey) {
 }
 
 #[no_mangle]
-pub extern "C" fn issuance_key_clone(
-    key: *const IssuanceKey,
-) -> *mut IssuanceKey {
+pub extern "C" fn issuance_key_clone(key: *const IssuanceKey) -> *mut IssuanceKey {
     unsafe { key.as_ref() }
         .map(|key| Box::into_raw(Box::new(key.clone())))
         .unwrap_or(std::ptr::null_mut())
@@ -88,8 +86,6 @@ pub extern "C" fn issue_bundle_clone(
         .unwrap_or(std::ptr::null_mut())
 }
 
-
-
 #[no_mangle]
 pub extern "C" fn add_recipient(
     bundle: *mut IssueBundle<Unauthorized>,
@@ -114,12 +110,7 @@ pub extern "C" fn add_recipient(
     );
 
     bundle
-        .add_recipient(
-            asset_descr,
-            recipient,
-            NoteValue::from_raw(value),
-            rng,
-        )
+        .add_recipient(asset_descr, recipient, NoteValue::from_raw(value), rng)
         .expect("An error occurred while adding recipient");
 }
 
@@ -183,6 +174,27 @@ pub extern "C" fn issue_bundle_serialize(
         Ok(()) => true,
         Err(e) => {
             error!("Failed to serialize issue bundle: {}", e);
+            false
+        }
+    }
+}
+
+#[no_mangle]
+pub extern "C" fn issue_bundle_verify(
+    bundle: *const IssueBundle<Signed>,
+    sighash: *const [u8; 32],
+) -> bool {
+    let bundle = unsafe { bundle.as_ref() };
+    let sighash = unsafe { sighash.as_ref() };
+
+    // TODO: implement reading/saving finalization set from/to global state
+    let finalized = std::collections::HashSet::<AssetBase>::new();
+
+    // TODO: conside returning false and log errors instead of calling "unwrap"
+    match verify_issue_bundle(bundle.unwrap(), *sighash.unwrap(), &finalized) {
+        Ok(_) => true,
+        Err(e) => {
+            error!("Issue bundle verification error: {}", e);
             false
         }
     }

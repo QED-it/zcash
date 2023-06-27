@@ -10,15 +10,16 @@
 use crate::{
     builder_ffi::shielded_signature_digest,
     bundlecache::init as bundlecache_init,
+    issue_bundle::{
+        create_issue_bundle, issue_bundle_from_raw_box, none_issue_bundle, parse_issue_bundle,
+        IssueAction, IssueBundle, IssueNote,
+    },
     merkle_frontier::{new_orchard, orchard_empty_root, parse_orchard, Orchard, OrchardWallet},
     note_encryption::{
         try_sapling_note_decryption, try_sapling_output_recovery, DecryptedSaplingOutput,
     },
     orchard_bundle::{
         none_orchard_bundle, orchard_bundle_from_raw_box, parse_orchard_bundle, Action, Bundle,
-    },
-    issue_bundle::{
-        none_issue_bundle, issue_bundle_from_raw_box, parse_issue_bundle, create_issue_bundle, IssueNote, IssueAction, IssueBundle,
     },
     orchard_ffi::{orchard_batch_validation_init, BatchValidator as OrchardBatchValidator},
     params::{network, Network},
@@ -298,6 +299,7 @@ pub(crate) mod ffi {
         fn proof(self: &Bundle) -> Vec<u8>;
         fn binding_sig(self: &Bundle) -> [u8; 64];
         fn coinbase_outputs_are_valid(self: &Bundle) -> bool;
+        fn burn_is_valid(self: &Bundle) -> bool;
     }
 
     unsafe extern "C++" {
@@ -329,7 +331,12 @@ pub(crate) mod ffi {
         #[rust_name = "none_issue_bundle"]
         fn none() -> Box<IssueBundle>;
         #[rust_name = "create_issue_bundle"]
-        unsafe fn create_issue_bundle(isk: *const IssuanceAuthorizingKeyPtr, value: u64, recipient: *const OrchardRawAddressPtr, asset_descr: String) -> Box<IssueBundle>;
+        unsafe fn create_issue_bundle(
+            isk: *const IssuanceAuthorizingKeyPtr,
+            value: u64,
+            recipient: *const OrchardRawAddressPtr,
+            asset_descr: String,
+        ) -> Box<IssueBundle>;
         #[rust_name = "issue_bundle_from_raw_box"]
         unsafe fn from_raw_box(bundle: *mut IssueBundlePtr) -> Box<IssueBundle>;
         #[rust_name = "parse_issue_bundle"]
