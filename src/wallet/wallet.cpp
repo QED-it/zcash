@@ -5560,17 +5560,16 @@ bool CWallet::CreateIssueTransaction(const vector<CIssueRecipient>& vecIssue, Is
 
     CMutableTransaction txNew = CreateNewContextualCMutableTransaction(Params().GetConsensus(), nextBlockHeight, false);
 
-    txNew.issueBundle = IssueBundle(std::move(isk));
-
-    for (const CIssueRecipient& recipient : vecIssue)
-    {
-        txNew.issueBundle.AddRecipient(
-            recipient.nAmount,
-            recipient.address,
-            (const char*)recipient.asset.description,
-            recipient.finalize
-        );
+    // We only support one recipient for now
+    if(vecIssue.size() != 1) {
+        strFailReason = _("Only one recipient is supported for now");
+        return false;
     }
+    CIssueRecipient recipient = vecIssue[0];
+
+    txNew.issueBundle = IssueBundle(std::move(isk), recipient.nAmount,
+                                              recipient.address,
+                                              (const char*)recipient.asset.description);
 
     // Embed the constructed transaction data in wtxNew.
     *static_cast<CTransaction*>(&wtxNew) = CTransaction(txNew);
@@ -7044,10 +7043,8 @@ bool CWallet::HaveOrchardSpendingKeyForAddress(
 IssuanceAuthorizingKey generateDummyIssuanceAuthorizingKey() {
     auto coinType = Params().BIP44CoinType();
     auto seed = MnemonicSeed::Random(coinType);
-    auto sk = libzcash::OrchardSpendingKey::ForAccount(seed, coinType, 0);
-    auto fvk = sk.ToFullViewingKey();
-    auto ivk = fvk.ToIncomingViewingKey();
-    auto isk = sk.ToIssuanceAuthorizingKey();
+    auto ik = IssuanceKey::ForAccount(seed, coinType, 0);
+    auto isk = ik.ToIssuanceAuthorizingKey();
     return isk;
 }
 

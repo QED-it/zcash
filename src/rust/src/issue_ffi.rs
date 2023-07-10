@@ -1,20 +1,36 @@
 use crate::streams_ffi::{CppStreamReader, CppStreamWriter, ReadCb, StreamObj, WriteCb};
 use orchard::issuance::{IssueBundle, Signed, Unauthorized};
-use orchard::keys::{IssuanceAuthorizingKey, IssuanceValidatingKey, SpendingKey};
+use orchard::keys::{IssuanceAuthorizingKey, IssuanceKey, IssuanceValidatingKey};
 use orchard::value::NoteValue;
 use orchard::Address;
 use rand_core::OsRng;
 use std::ffi::{c_char, CStr};
-use std::ptr;
+use std::{ptr, slice};
 use tracing::error;
 use zcash_primitives::transaction::components::issuance as issuance_serialization;
 
 #[no_mangle]
-pub extern "C" fn orchard_spending_key_to_issuance_authorizing_key(
-    key: *const SpendingKey,
+pub extern "C" fn issuance_key_to_issuance_authorizing_key(
+    key: *const IssuanceKey,
 ) -> *mut IssuanceAuthorizingKey {
     unsafe { key.as_ref() }
         .map(|key| Box::into_raw(Box::new(IssuanceAuthorizingKey::from(key))))
+        .unwrap_or(std::ptr::null_mut())
+}
+
+#[no_mangle]
+pub extern "C" fn issuance_key_free(key: *mut IssuanceKey) {
+    if !key.is_null() {
+        drop(unsafe { Box::from_raw(key) });
+    }
+}
+
+#[no_mangle]
+pub extern "C" fn issuance_key_clone(
+    key: *const IssuanceKey,
+) -> *mut IssuanceKey {
+    unsafe { key.as_ref() }
+        .map(|key| Box::into_raw(Box::new(key.clone())))
         .unwrap_or(std::ptr::null_mut())
 }
 
@@ -51,10 +67,16 @@ pub extern "C" fn issuance_validating_key_free(key: *mut IssuanceValidatingKey) 
 }
 
 #[no_mangle]
-pub extern "C" fn issue_bundle_free(bundle: *mut IssueBundle<Unauthorized>) {
-    if !bundle.is_null() {
-        drop(unsafe { Box::from_raw(bundle) });
-    }
+pub extern "C" fn issuance_key_for_account(
+    seed: *const u8,
+    seed_len: usize,
+    bip44_coin_type: u32,
+    account_id: u32,
+) -> *mut IssuanceKey {
+    let seed = unsafe { slice::from_raw_parts(seed, seed_len) };
+    IssuanceKey::from_zip32_seed(seed, bip44_coin_type, account_id)
+        .map(|key| Box::into_raw(Box::new(key)))
+        .unwrap_or(std::ptr::null_mut())
 }
 
 #[no_mangle]
@@ -66,15 +88,7 @@ pub extern "C" fn issue_bundle_clone(
         .unwrap_or(std::ptr::null_mut())
 }
 
-#[no_mangle]
-pub extern "C" fn create_issue_bundle(
-    isk: *const IssuanceAuthorizingKey,
-) -> *mut IssueBundle<Unauthorized> {
-    let isk = unsafe { isk.as_ref() }.expect("IssuanceAuthorizingKey may not be null.");
-    let ik: IssuanceValidatingKey = isk.into();
 
-    Box::into_raw(Box::new(IssueBundle::new(ik)))
-}
 
 #[no_mangle]
 pub extern "C" fn add_recipient(
@@ -82,7 +96,6 @@ pub extern "C" fn add_recipient(
     value: u64,
     recipient: *const Address,
     asset_descr: *const c_char,
-    finalize: bool,
 ) {
     let rng = OsRng;
     let recipient = unsafe { recipient.as_ref() }
@@ -105,7 +118,6 @@ pub extern "C" fn add_recipient(
             asset_descr,
             recipient,
             NoteValue::from_raw(value),
-            finalize,
             rng,
         )
         .expect("An error occurred while adding recipient");

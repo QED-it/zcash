@@ -117,7 +117,6 @@ public:
         const std::optional<uint256>& ovk,
         const libzcash::OrchardRawAddress& to,
         CAmount value,
-        const Asset& asset,
         const std::optional<libzcash::Memo>& memo);
 
     /// Returns `true` if any spends or outputs have been added to this builder. This can
@@ -350,7 +349,6 @@ public:
         const std::optional<uint256>& ovk,
         const libzcash::OrchardRawAddress& to,
         CAmount value,
-        Asset& asset,
         const std::optional<libzcash::Memo>& memo);
 
     // Throws if the anchor does not match the anchor used by

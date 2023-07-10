@@ -18,7 +18,6 @@ namespace orchard {
 }
 
 class IssueBundle;
-class IssuanceAuthorizingKey;
 
 namespace libzcash {
 
@@ -293,7 +292,6 @@ private:
 
     friend class orchard::UnauthorizedBundle;
     friend class ::OrchardWallet;
-    friend class ::IssuanceAuthorizingKey;
 public:
     OrchardSpendingKey(OrchardSpendingKey&& key) : inner(std::move(key.inner)) {}
 
@@ -306,8 +304,6 @@ public:
             libzcash::AccountId accountId);
 
     OrchardFullViewingKey ToFullViewingKey() const;
-
-    IssuanceAuthorizingKey ToIssuanceAuthorizingKey() const;
 
     OrchardSpendingKey& operator=(OrchardSpendingKey&& key)
     {

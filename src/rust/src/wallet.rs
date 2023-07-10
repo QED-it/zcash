@@ -677,7 +677,7 @@ impl Wallet {
             // append the note commitment for each action to the note commitment tree
             if !self
                 .commitment_tree
-                .append(&MerkleHashOrchard::from_cmx(commitment))
+                .append(MerkleHashOrchard::from_cmx(commitment))
             {
                 return Err(WalletError::NoteCommitmentTreeFull);
             }

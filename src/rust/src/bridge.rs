@@ -17,6 +17,9 @@ use crate::{
     orchard_bundle::{
         none_orchard_bundle, orchard_bundle_from_raw_box, parse_orchard_bundle, Action, Bundle,
     },
+    issue_bundle::{
+        none_issue_bundle, issue_bundle_from_raw_box, parse_issue_bundle, create_issue_bundle, IssueNote, IssueAction, IssueBundle,
+    },
     orchard_ffi::{orchard_batch_validation_init, BatchValidator as OrchardBatchValidator},
     params::{network, Network},
     sapling::{
@@ -271,7 +274,7 @@ pub(crate) mod ffi {
         fn rk(self: &Action) -> [u8; 32];
         fn cmx(self: &Action) -> [u8; 32];
         fn ephemeral_key(self: &Action) -> [u8; 32];
-        fn enc_ciphertext(self: &Action) -> [u8; 580];
+        fn enc_ciphertext(self: &Action) -> [u8; 612];
         fn out_ciphertext(self: &Action) -> [u8; 80];
         fn spend_auth_sig(self: &Action) -> [u8; 64];
 
@@ -295,6 +298,54 @@ pub(crate) mod ffi {
         fn proof(self: &Bundle) -> Vec<u8>;
         fn binding_sig(self: &Bundle) -> [u8; 64];
         fn coinbase_outputs_are_valid(self: &Bundle) -> bool;
+    }
+
+    unsafe extern "C++" {
+        include!("rust/orchard/issuance.h");
+        include!("rust/orchard/keys.h");
+        type IssueBundlePtr;
+        type IssuanceAuthorizingKeyPtr;
+        type OrchardRawAddressPtr;
+    }
+    #[namespace = "issue_bundle"]
+    extern "Rust" {
+        type IssueNote;
+        type IssueAction;
+        type IssueBundle;
+
+        // Issue Note
+        fn recipient(self: &IssueNote) -> [u8; 43];
+        fn value(self: &IssueNote) -> u64;
+        fn asset(self: &IssueNote) -> [u8; 32];
+        fn rho(self: &IssueNote) -> [u8; 32];
+        fn rseed(self: &IssueNote) -> [u8; 32];
+
+        // Issue Action
+        fn asset_desc(self: &IssueAction) -> Vec<u8>;
+        fn notes(self: &IssueAction) -> Vec<IssueNote>;
+        fn is_finalized(self: &IssueAction) -> bool;
+
+        // Issue Bundle
+        #[rust_name = "none_issue_bundle"]
+        fn none() -> Box<IssueBundle>;
+        #[rust_name = "create_issue_bundle"]
+        unsafe fn create_issue_bundle(isk: *const IssuanceAuthorizingKeyPtr, value: u64, recipient: *const OrchardRawAddressPtr, asset_descr: String) -> Box<IssueBundle>;
+        #[rust_name = "issue_bundle_from_raw_box"]
+        unsafe fn from_raw_box(bundle: *mut IssueBundlePtr) -> Box<IssueBundle>;
+        #[rust_name = "parse_issue_bundle"]
+        fn parse(stream: &mut CppStream<'_>) -> Result<Box<IssueBundle>>;
+        fn serialize(self: &IssueBundle, stream: &mut CppStream<'_>) -> Result<()>;
+        fn as_ptr(self: &IssueBundle) -> *const IssueBundlePtr;
+
+        fn box_clone(self: &IssueBundle) -> Box<IssueBundle>;
+        fn recursive_dynamic_usage(self: &IssueBundle) -> usize;
+        fn is_present(self: &IssueBundle) -> bool;
+
+        fn ik(self: &IssueBundle) -> [u8; 32];
+        fn actions(self: &IssueBundle) -> Vec<IssueAction>;
+        fn num_actions(self: &IssueBundle) -> usize;
+        fn num_notes(self: &IssueBundle) -> usize;
+        fn authorization(self: &IssueBundle) -> [u8; 64]; // Assumption is that we only need auth for IssueBundle<Signed> here, ignoring empty for Unauthorized and sighash for Prepared
     }
 
     #[namespace = "orchard"]

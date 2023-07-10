@@ -83,6 +83,7 @@ mod merkle_frontier;
 mod note_encryption;
 mod issue_ffi;
 mod orchard_bundle;
+mod issue_bundle;
 mod orchard_ffi;
 mod orchard_keys_ffi;
 mod params;
@@ -94,7 +95,6 @@ mod wallet;
 mod wallet_scanner;
 mod zip339_ffi;
 
-mod issue_bundle;
 mod test_harness_ffi;
 
 #[cfg(test)]

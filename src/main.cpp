@@ -1458,7 +1458,7 @@ bool CheckTransactionWithoutProofVerification(const CTransaction& tx, CValidatio
         }
     }
     auto orchard_bundle = tx.GetOrchardBundle();
-    auto issue_bundle = tx.GetIssueBundle().GetDetails();
+    auto issue_bundle = tx.GetIssueBundle();
 
     // Transactions must contain some potential source of funds. This rejects
     // obviously-invalid transaction constructions early, but cannot prevent
@@ -1471,7 +1471,7 @@ bool CheckTransactionWithoutProofVerification(const CTransaction& tx, CValidatio
         tx.vJoinSplit.empty() &&
         tx.GetSaplingSpendsCount() == 0 &&
         !orchard_bundle.SpendsEnabled() &&
-        issue_bundle->num_actions() == 0)
+        issue_bundle.GetNumActions() == 0)
     {
         return state.DoS(10, false, REJECT_INVALID, "bad-txns-no-source-of-funds");
     }
@@ -1487,7 +1487,7 @@ bool CheckTransactionWithoutProofVerification(const CTransaction& tx, CValidatio
         tx.vJoinSplit.empty() &&
         tx.GetSaplingOutputsCount() == 0 &&
         !orchard_bundle.OutputsEnabled() &&
-        issue_bundle->num_actions() == 0)
+        issue_bundle.GetNumActions() == 0)
     {
         return state.DoS(10, false, REJECT_INVALID, "bad-txns-no-sink-of-funds");
     }
@@ -1903,32 +1903,33 @@ bool AcceptToMemoryPool(
         CTxMemPoolEntry entry(tx, nFees, GetTime(), chainActive.Height(), pool.HasNoInputsOf(tx), fSpendsCoinbase, nSigOps, consensusBranchId);
         unsigned int nSize = entry.GetTxSize();
 
-        // No transactions are allowed with modified fee below the minimum relay fee,
-        // except from disconnected blocks. The minimum relay fee will never be more
-        // than LEGACY_DEFAULT_FEE zatoshis.
-        CAmount minRelayFee = ::minRelayTxFee.GetFeeForRelay(nSize);
-        if (fLimitFree && nModifiedFees < minRelayFee) {
-            LogPrint("mempool",
-                    "Not accepting transaction with txid %s, size %d bytes, effective fee %d " + MINOR_CURRENCY_UNIT +
-                    ", and fee delta %d " + MINOR_CURRENCY_UNIT + " to the mempool due to insufficient fee. " +
-                    " The minimum acceptance/relay fee for this transaction is %d " + MINOR_CURRENCY_UNIT,
-                    tx.GetHash().ToString(), nSize, nModifiedFees, nModifiedFees - nFees, minRelayFee);
-            return state.DoS(0, false, REJECT_INSUFFICIENTFEE, "min relay fee not met");
-        }
-
-        // Transactions with more than `-txunpaidactionlimit` unpaid actions (calculated
-        // using the modified fee) are not accepted to the mempool or relayed.
-        // <https://zips.z.cash/zip-0317#transaction-relaying>
-        size_t nUnpaidActionCount = entry.GetUnpaidActionCount();
-        if (nUnpaidActionCount > nTxUnpaidActionLimit) {
-            LogPrint("mempool",
-                    "Not accepting transaction with txid %s, size %d bytes, effective fee %d " + MINOR_CURRENCY_UNIT +
-                    ", and fee delta %d " + MINOR_CURRENCY_UNIT + " to the mempool because it has %d unpaid actions"
-                    ", which is over the limit of %d. The conventional fee for this transaction is %d " + MINOR_CURRENCY_UNIT,
-                    tx.GetHash().ToString(), nSize, nModifiedFees, nModifiedFees - nFees, nUnpaidActionCount,
-                    nTxUnpaidActionLimit, tx.GetConventionalFee());
-            return state.DoS(0, false, REJECT_INSUFFICIENTFEE, "tx unpaid action limit exceeded");
-        }
+        // TODO return fees
+//        // No transactions are allowed with modified fee below the minimum relay fee,
+//        // except from disconnected blocks. The minimum relay fee will never be more
+//        // than LEGACY_DEFAULT_FEE zatoshis.
+//        CAmount minRelayFee = ::minRelayTxFee.GetFeeForRelay(nSize);
+//        if (fLimitFree && nModifiedFees < minRelayFee) {
+//            LogPrint("mempool",
+//                    "Not accepting transaction with txid %s, size %d bytes, effective fee %d " + MINOR_CURRENCY_UNIT +
+//                    ", and fee delta %d " + MINOR_CURRENCY_UNIT + " to the mempool due to insufficient fee. " +
+//                    " The minimum acceptance/relay fee for this transaction is %d " + MINOR_CURRENCY_UNIT,
+//                    tx.GetHash().ToString(), nSize, nModifiedFees, nModifiedFees - nFees, minRelayFee);
+//            return state.DoS(0, false, REJECT_INSUFFICIENTFEE, "min relay fee not met");
+//        }
+//
+//        // Transactions with more than `-txunpaidactionlimit` unpaid actions (calculated
+//        // using the modified fee) are not accepted to the mempool or relayed.
+//        // <https://zips.z.cash/zip-0317#transaction-relaying>
+//        size_t nUnpaidActionCount = entry.GetUnpaidActionCount();
+//        if (nUnpaidActionCount > nTxUnpaidActionLimit) {
+//            LogPrint("mempool",
+//                    "Not accepting transaction with txid %s, size %d bytes, effective fee %d " + MINOR_CURRENCY_UNIT +
+//                    ", and fee delta %d " + MINOR_CURRENCY_UNIT + " to the mempool because it has %d unpaid actions"
+//                    ", which is over the limit of %d. The conventional fee for this transaction is %d " + MINOR_CURRENCY_UNIT,
+//                    tx.GetHash().ToString(), nSize, nModifiedFees, nModifiedFees - nFees, nUnpaidActionCount,
+//                    nTxUnpaidActionLimit, tx.GetConventionalFee());
+//            return state.DoS(0, false, REJECT_INSUFFICIENTFEE, "tx unpaid action limit exceeded");
+//        }
 
         if (fRejectAbsurdFee && nFees > maxTxFee) {
             return state.Invalid(false,
@@ -6562,7 +6563,6 @@ void static ProcessGetData(CNode* pfrom, const Consensus::Params& consensusParam
                     // Ensure we only reply with a transaction if it is exactly what the
                     // peer requested from us. Otherwise we add it to vNotFound below.
                     if (inv.hashAux == mi->second->GetAuthDigest()) {
-                        LogPrint("net", "22222222222\n");
                         pfrom->PushMessage("tx", *mi->second);
                         push = true;
                     }

@@ -16,8 +16,38 @@ extern "C" {
 // Issuance Keys
 //
 
+struct IssuanceKeyPtr;
+typedef struct IssuanceKeyPtr IssuanceKeyPtr;
+
 struct IssuanceAuthorizingKeyPtr;
 typedef struct IssuanceAuthorizingKeyPtr IssuanceAuthorizingKeyPtr;
+
+struct IssuanceValidatingKeyPtr;
+typedef struct IssuanceValidatingKeyPtr IssuanceValidatingKeyPtr;
+
+
+/**
+ * Free the memory allocated for the given issuance key.
+ */
+void issuance_key_free(IssuanceKeyPtr* ptr);
+
+/**
+ * Clones the given issuance key and returns
+ * a pointer to the newly created value. Both the original
+ * one's memory and the newly allocated one need to be freed
+ * independently.
+ */
+IssuanceKeyPtr* issuance_key_clone(
+        const IssuanceKeyPtr* ptr);
+
+/**
+ * Returns the issuance authorizing key for the specified issuance key.
+ *
+ * The resulting pointer must be ultimately freed by the caller
+ * using `issuance_authorizing_key_free`.
+ */
+IssuanceAuthorizingKeyPtr* issuance_key_to_issuance_authorizing_key(
+        const IssuanceKeyPtr* key);
 
 /**
  * Free the memory allocated for the given issuance authorizing key.
@@ -39,12 +69,8 @@ IssuanceAuthorizingKeyPtr* issuance_authorizing_key_clone(
  * The resulting pointer must be ultimately freed by the caller
  * using `issuance_authorizing_key_free`.
  */
-IssuanceAuthorizingKeyPtr* orchard_spending_key_to_issuance_authorizing_key(
-        const OrchardSpendingKeyPtr* key);
-
-
-struct IssuanceValidatingKeyPtr;
-typedef struct IssuanceValidatingKeyPtr IssuanceValidatingKeyPtr;
+IssuanceAuthorizingKeyPtr* issuance_key_to_issuance_authorizing_key(
+        const IssuanceKeyPtr* key);
 
 /**
  * Free the memory allocated for the given issuance validating key.
@@ -69,52 +95,19 @@ void issuance_validating_key_free(IssuanceValidatingKeyPtr* ptr);
 IssuanceValidatingKeyPtr* issuance_authorizing_key_to_issuance_validating_key(
         const IssuanceAuthorizingKeyPtr* key);
 
+/**
+ * Constructs a spending key by ZIP-32 derivation to the account
+ * level from the provided seed.
+ */
+IssuanceKeyPtr* issuance_key_for_account(
+        const unsigned char* seed,
+        size_t seed_len,
+        uint32_t bip44_coin_type,
+        uint32_t account_id);
+
 
 struct IssueBundlePtr;
 typedef struct IssueBundlePtr IssueBundlePtr;
-
-/**
- * Free the memory allocated for the given issuance bundle.
- */
-void issue_bundle_free(IssueBundlePtr* ptr);
-
-/// Clones the given Issue bundle.
-///
-/// Both bundles need to be separately freed when they go out of scope.
-IssueBundlePtr* issue_bundle_clone(IssueBundlePtr* ptr);
-
-IssueBundlePtr* create_issue_bundle(IssuanceAuthorizingKeyPtr* isk);
-
-void add_recipient(
-        IssueBundlePtr* bundle,
-        uint64_t value,
-        OrchardRawAddressPtr *recipient,
-        const char *asset_descr,
-        bool finalize
-);
-
-IssueBundlePtr* sign_issue_bundle(
-        IssueBundlePtr* bundle,
-        IssuanceAuthorizingKeyPtr* isk
-);
-
-
-/// Parses an authorized Issue bundle from the given stream.
-///
-/// - If no error occurs, `bundle_ret` will point to a Rust-allocated Issue bundle.
-/// - If an error occurs, `bundle_ret` will be unaltered.
-bool issue_bundle_parse(
-        void* stream,
-        read_callback_t read_cb,
-        IssueBundlePtr** bundle_ret);
-
-/// Serializes an authorized Issue bundle to the given stream
-///
-/// If `bundle == nullptr`, this serializes `nActions = 0`.
-bool issue_bundle_serialize(
-        const IssueBundlePtr* bundle,
-        void* stream,
-        write_callback_t write_cb);
 
 #ifdef __cplusplus
 }

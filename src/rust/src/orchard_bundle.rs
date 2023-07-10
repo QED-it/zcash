@@ -4,7 +4,7 @@ use memuse::DynamicUsage;
 use orchard::{
     bundle::Authorized,
     keys::OutgoingViewingKey,
-    note_encryption::OrchardDomain,
+    note_encryption_v3::OrchardDomainV3,
     primitives::redpallas::{Signature, SpendAuth},
 };
 use zcash_note_encryption::try_output_recovery_with_ovk;
@@ -213,7 +213,7 @@ impl Bundle {
         if let Some(bundle) = self.inner() {
             for act in bundle.actions() {
                 if try_output_recovery_with_ovk(
-                    &OrchardDomain::for_action(act),
+                    &OrchardDomainV3::for_action(act),
                     &OutgoingViewingKey::from([0u8; 32]),
                     act,
                     act.cv_net(),

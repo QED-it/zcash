@@ -118,3 +118,11 @@ features = ["ansi", "env-filter", "fmt", "time"]
 lto = 'thin'
 panic = 'abort'
 codegen-units = 1
+
+[patch.crates-io]
+orchard = { version = "0.5", git = "https://github.com/QED-it/orchard", branch = "ivk-to-bytes-visibility-downgrade" }
+zcash_note_encryption = { version = "0.4", git = "https://github.com/QED-it/librustzcash.git", branch = "zsa-bundle-in-v5-vector-serialization" }
+zcash_address = { version = "0.3", git = "https://github.com/QED-it/librustzcash.git", branch = "zsa-bundle-in-v5-vector-serialization" }
+zcash_primitives = { version = "0.12", git = "https://github.com/QED-it/librustzcash.git", branch = "zsa-bundle-in-v5-vector-serialization" }
+equihash = { version = "0.2", git = "https://github.com/QED-it/librustzcash.git", branch = "zsa-bundle-in-v5-vector-serialization" }
+zcash_encoding = { version = "0.2", git = "https://github.com/QED-it/librustzcash.git", branch = "zsa-bundle-in-v5-vector-serialization" }

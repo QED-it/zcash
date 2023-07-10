@@ -15,7 +15,7 @@
 #include "Asset.h"
 #include "rust/orchard/keys.h"
 #include "rust/orchard/issuance.h"
-#include <rust/issue_bundle.h>
+#include <rust/bridge.h>
 #include <primitives/issue.h>
 
 #include <optional>
@@ -37,22 +37,19 @@ TEST(Issuance, BasicIssuanceFlow)
     auto sk = libzcash::OrchardSpendingKey::ForAccount(seed, coinType, 0);
     auto fvk = sk.ToFullViewingKey();
     auto ivk = fvk.ToIncomingViewingKey();
-    auto isk = sk.ToIssuanceAuthorizingKey();
     libzcash::diversifier_index_t j(0);
     auto recipient = ivk.Address(j);
+
+    auto ik = IssuanceKey::ForAccount(seed, coinType, 0);
+    auto isk = ik.ToIssuanceAuthorizingKey();
     const char *asset_descr = (const char *)"Asset description";
 
-    IssueBundle bundle = IssueBundle(isk);
+    IssueBundle bundle = IssueBundle(isk, 42, recipient, asset_descr);
 
-    bundle.AddRecipient(42, recipient, asset_descr, false);
+    EXPECT_EQ(bundle.GetNumActions(), 1);
 
-    bundle.Sign(isk);
-
-    auto rustBundle = bundle.GetDetails();
-
-    EXPECT_EQ(rustBundle->num_actions(), 1);
-
-    for (const auto& action : rustBundle->actions()) {
+    // TODO check notes
+    for (const auto& action : bundle.GetDetails()->actions()) {
         EXPECT_FALSE(action.is_finalized());
         for (const auto& note : action.notes()) {
             EXPECT_EQ(note.value(), 42);

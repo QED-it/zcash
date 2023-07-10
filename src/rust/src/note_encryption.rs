@@ -1,7 +1,7 @@
 use std::convert::TryInto;
 
 use zcash_note_encryption::{
-    try_output_recovery_with_ovk, Domain, EphemeralKeyBytes, ShieldedOutput, ENC_CIPHERTEXT_SIZE,
+    try_output_recovery_with_ovk, EphemeralKeyBytes, ShieldedOutput,
 };
 use zcash_primitives::{
     consensus::BlockHeight,
@@ -14,6 +14,7 @@ use zcash_primitives::{
         SaplingIvk,
     },
 };
+use zcash_primitives::sapling::note_encryption::{CompactNoteCiphertextBytes, NoteCiphertextBytes};
 
 use crate::{bridge::ffi::SaplingShieldedOutput, params::Network};
 
@@ -94,17 +95,21 @@ pub(crate) fn parse_and_prepare_sapling_ivk(
         .into()
 }
 
-impl ShieldedOutput<SaplingDomain<Network>, ENC_CIPHERTEXT_SIZE> for SaplingShieldedOutput {
+impl ShieldedOutput<SaplingDomain<Network>> for SaplingShieldedOutput {
     fn ephemeral_key(&self) -> EphemeralKeyBytes {
         EphemeralKeyBytes(self.ephemeral_key)
     }
 
-    fn cmstar_bytes(&self) -> <SaplingDomain<Network> as Domain>::ExtractedCommitmentBytes {
+    fn cmstar_bytes(&self) -> [u8; 32] {
         self.cmu
     }
 
-    fn enc_ciphertext(&self) -> &[u8; ENC_CIPHERTEXT_SIZE] {
-        &self.enc_ciphertext
+    fn enc_ciphertext(&self) -> Option<NoteCiphertextBytes> {
+        Some(NoteCiphertextBytes(self.enc_ciphertext))
+    }
+
+    fn enc_ciphertext_compact(&self) -> CompactNoteCiphertextBytes {
+        todo!()
     }
 }
 
