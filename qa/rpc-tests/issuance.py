@@ -32,16 +32,16 @@ class IssueTest(BitcoinTestFramework):
 
         # Get a new Orchard account on node 1
         acct1 = self.nodes[1].z_getnewaccount()['account']
-        ua1 = self.nodes[1].z_getaddressforaccount(acct0, ['orchard'])['address']
+        ua1 = self.nodes[1].z_getaddressforaccount(acct1, ['orchard'])['address']
 
         # Activate NU5
         self.nodes[0].generate(5)
         self.sync_all()
 
-        # Send a transaction to node 0 so that it has an Orchard note to spend.
+        # Issue assets to an address on node 0
         self.nodes[0].issue(0, ua0, "WBTC", 4001, True)
 
-        # Send a transaction to node 1 so that it has an Orchard note to spend.
+        # Issue assets to an address on node 1
         self.nodes[0].issue(0, ua1, "WBTC", 42, True)
 
         self.sync_all()
