@@ -1,6 +1,7 @@
 use crate::streams_ffi::{CppStreamReader, CppStreamWriter, ReadCb, StreamObj, WriteCb};
 use orchard::issuance::{verify_issue_bundle, IssueBundle, Signed, Unauthorized};
 use orchard::keys::{IssuanceAuthorizingKey, IssuanceKey, IssuanceValidatingKey};
+use orchard::note::AssetBase;
 use orchard::value::NoteValue;
 use orchard::Address;
 use rand_core::OsRng;

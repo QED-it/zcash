@@ -2,9 +2,6 @@ use std::convert::TryInto;
 
 use rand_core::OsRng;
 use tracing::{debug, error};
-use zcash_primitives::transaction::components::{
-    orchard::burn_validation::validate_bundle_burn, Amount,
-};
 
 use crate::{
     bundlecache::{orchard_bundle_validity_cache, orchard_bundle_validity_cache_mut, CacheEntries},
