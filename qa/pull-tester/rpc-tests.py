@@ -177,7 +177,13 @@ EXTENDED_SCRIPTS = [
     'wallet_db_flush.py',
 ]
 
-ALL_SCRIPTS = SERIAL_SCRIPTS + BASE_SCRIPTS + ZMQ_SCRIPTS + EXTENDED_SCRIPTS
+ZSA_SCRIPTS = [
+    # These are tests for the ZSA protocol updates.
+    'issuance.py',
+    'demo-setup.py',
+]
+
+ALL_SCRIPTS = SERIAL_SCRIPTS + BASE_SCRIPTS + ZMQ_SCRIPTS + EXTENDED_SCRIPTS + ZSA_SCRIPTS
 
 def main():
     # Parse arguments and pass through unrecognised args
