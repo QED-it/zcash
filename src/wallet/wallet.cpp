@@ -272,7 +272,7 @@ bool CWallet::AddOrchardFullViewingKey(const libzcash::OrchardFullViewingKey &fv
     return true; // TODO ORCHARD: persist fvk
 }
 
-bool CWallet::AddIssuanceAuthorizingKey(const int accountId, const IssuanceAuthorizingKey &isk)
+bool CWallet::AddIssuanceAuthorizingKey(const int accountId, const IssuanceAuthorizingKey &isk) const
 {
     AssertLockHeld(cs_wallet); // orchardWallet
     orchardWallet.AddIssuanceAuthorizingKey(accountId, isk);
@@ -2248,8 +2248,7 @@ CWallet::GenerateChangeAddressForAccount(
 SpendableInputs CWallet::FindSpendableInputs(
         ZTXOSelector selector,
         uint32_t minDepth,
-        const std::optional<int>& asOfHeight,
-        const std::optional<Asset> asset) const {
+        const std::optional<int>& asOfHeight) const {
     AssertLockHeld(cs_main);
     AssertLockHeld(cs_wallet);
 
@@ -2439,7 +2438,7 @@ SpendableInputs CWallet::FindSpendableInputs(
         for (const auto& ivk : orchardIvks) {
             std::vector<OrchardNoteMetadata> incomingNotes;
 
-            orchardWallet.GetFilteredNotes(incomingNotes, ivk, true, true, asset);
+            orchardWallet.GetFilteredNotes(incomingNotes, ivk, true, true, Asset::Native());
 
             for (auto& noteMeta : incomingNotes) {
                 if (IsOrchardSpent(noteMeta.GetOutPoint(), asOfHeight)) {
@@ -2462,6 +2461,83 @@ SpendableInputs CWallet::FindSpendableInputs(
         }
     }
 
+    return unspent;
+}
+
+SpendableInputs CWallet::FindSpendableAssets(
+        const Asset asset,
+        ZTXOSelector selector,
+        uint32_t minDepth,
+        const std::optional<int> &asOfHeight) const {
+    AssertLockHeld(cs_main);
+    AssertLockHeld(cs_wallet);
+
+    KeyIO keyIO(Params());
+
+    SpendableInputs unspent;
+
+    // for Orchard, we select both the internal and external IVKs.
+    auto orchardIvks = examine(selector.GetPattern(), match{
+            [&](const libzcash::UnifiedAddress &selectorUA) -> std::vector <OrchardIncomingViewingKey> {
+                auto orchardReceiver = selectorUA.GetOrchardReceiver();
+                if (orchardReceiver.has_value()) {
+                    auto meta = GetUFVKMetadataForReceiver(orchardReceiver.value());
+                    if (meta.has_value()) {
+                        auto ufvk = GetUnifiedFullViewingKey(meta.value().GetUFVKId());
+                        if (ufvk.has_value()) {
+                            auto fvk = ufvk->GetOrchardKey();
+                            if (fvk.has_value()) {
+                                return {fvk->ToIncomingViewingKey(), fvk->ToInternalIncomingViewingKey()};
+                            }
+                        }
+                    }
+                }
+                return {};
+            },
+            [&](const libzcash::UnifiedFullViewingKey &ufvk) -> std::vector <OrchardIncomingViewingKey> {
+                auto fvk = ufvk.GetOrchardKey();
+                if (fvk.has_value()) {
+                    return {fvk->ToIncomingViewingKey(), fvk->ToInternalIncomingViewingKey()};
+                }
+                return {};
+            },
+            [&](const AccountZTXOPattern &acct) -> std::vector <OrchardIncomingViewingKey> {
+                auto ufvk = GetUnifiedFullViewingKeyByAccount(acct.GetAccountId());
+                if (ufvk.has_value()) {
+                    auto fvk = ufvk->GetOrchardKey();
+                    if (fvk.has_value()) {
+                        return {fvk->ToIncomingViewingKey(), fvk->ToInternalIncomingViewingKey()};
+                    }
+                }
+                return {};
+            },
+            [&](const auto &addr) -> std::vector <OrchardIncomingViewingKey> { return {}; }
+    });
+
+    for (const auto &ivk: orchardIvks) {
+        std::vector <OrchardNoteMetadata> incomingNotes;
+
+        orchardWallet.GetFilteredNotes(incomingNotes, ivk, true, true, asset);
+
+        for (auto &noteMeta: incomingNotes) {
+            if (IsOrchardSpent(noteMeta.GetOutPoint(), asOfHeight)) {
+                continue;
+            }
+
+            auto mit = mapWallet.find(noteMeta.GetOutPoint().hash);
+
+            // We should never get an outpoint from the Orchard wallet where
+            // the transaction does not exist in the main wallet.
+            assert(mit != mapWallet.end());
+
+            int confirmations = mit->second.GetDepthInMainChain(asOfHeight);
+            if (confirmations < 0) continue;
+            if (confirmations >= minDepth) {
+                noteMeta.SetConfirmations(confirmations);
+                unspent.orchardNoteMetadata.push_back(noteMeta);
+            }
+        }
+    }
     return unspent;
 }
 
@@ -7042,20 +7118,21 @@ bool CWallet::HaveOrchardSpendingKeyForAddress(
     return orchardWallet.GetSpendingKeyForAddress(addr).has_value();
 }
 
-IssuanceAuthorizingKey generateDummyIssuanceAuthorizingKey() {
-    auto coinType = Params().BIP44CoinType();
-    auto seed = MnemonicSeed::Random(coinType);
-    auto ik = IssuanceKey::ForAccount(seed, coinType, 0);
-    auto isk = ik.ToIssuanceAuthorizingKey();
-    return isk;
-}
-
 IssuanceAuthorizingKey CWallet::GetIssuanceAuthorizingKey(const int accountId) const {
     auto isk_opt = orchardWallet.GetIssuanceAuthorizingKeyForAccountId(accountId);
     if (isk_opt.has_value()) {
         return isk_opt.value();
     } else {
-        return generateDummyIssuanceAuthorizingKey(); // TODO orchardWallet.GenerateNewIssuanceAuthorizingKey();
+        auto seed = GetMnemonicSeed();
+        if (!seed.has_value()) {
+            throw std::runtime_error(std::string(__func__) + ": Wallet has no mnemonic HD seed.");
+        }
+        auto isk = IssuanceKey::ForAccount(seed.value(), Params().BIP44CoinType(), accountId).ToIssuanceAuthorizingKey();
+        bool success = AddIssuanceAuthorizingKey(accountId, isk);
+        if (!success)
+            return nullptr;
+        else
+            return isk;
     }
 }
 

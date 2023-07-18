@@ -22,6 +22,7 @@ int GetAnchorHeight(const CChain& chain, int anchorConfirmations);
 class ResolvedPayment : public RecipientMapping {
 public:
     CAmount amount;
+    Asset asset;
     std::optional<Memo> memo;
     bool isInternal;
 
@@ -30,8 +31,9 @@ public:
             libzcash::RecipientAddress address,
             CAmount amount,
             std::optional<Memo> memo,
-            bool isInternal) :
-        RecipientMapping(ua, address), amount(amount), memo(memo), isInternal(isInternal) {}
+            bool isInternal,
+            Asset asset = Asset::Native()) :
+        RecipientMapping(ua, address), amount(amount), memo(memo), isInternal(isInternal), asset(asset) {}
 };
 
 /**
@@ -42,13 +44,23 @@ class Payment {
 private:
     PaymentAddress address;
     CAmount amount;
+    Asset asset;
     std::optional<Memo> memo;
 public:
     Payment(
             PaymentAddress address,
             CAmount amount,
             std::optional<Memo> memo) :
-        address(address), amount(amount), memo(memo) {
+            address(address), amount(amount), asset(Asset::Native()), memo(memo) {
+        assert(MoneyRange(amount));
+    }
+
+    Payment(
+            PaymentAddress address,
+            CAmount amount,
+            Asset asset,
+            std::optional<Memo> memo) :
+        address(address), amount(amount), asset(asset), memo(memo) {
         assert(MoneyRange(amount));
     }
 
@@ -58,6 +70,10 @@ public:
 
     CAmount GetAmount() const {
         return amount;
+    }
+
+    Asset GetAsset() const {
+        return asset;
     }
 
     const std::optional<Memo>& GetMemo() const {
@@ -435,6 +451,12 @@ public:
 
     SpendableInputs FindAllSpendableInputs(
             const CWallet& wallet,
+            const ZTXOSelector& selector,
+            int32_t minDepth) const;
+
+    SpendableInputs FindAllSpendableAssets(
+            const CWallet& wallet,
+            Asset asset,
             const ZTXOSelector& selector,
             int32_t minDepth) const;
 

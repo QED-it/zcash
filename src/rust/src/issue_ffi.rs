@@ -26,9 +26,7 @@ pub extern "C" fn issuance_key_free(key: *mut IssuanceKey) {
 }
 
 #[no_mangle]
-pub extern "C" fn issuance_key_clone(
-    key: *const IssuanceKey,
-) -> *mut IssuanceKey {
+pub extern "C" fn issuance_key_clone(key: *const IssuanceKey) -> *mut IssuanceKey {
     unsafe { key.as_ref() }
         .map(|key| Box::into_raw(Box::new(key.clone())))
         .unwrap_or(std::ptr::null_mut())
@@ -88,8 +86,6 @@ pub extern "C" fn issue_bundle_clone(
         .unwrap_or(std::ptr::null_mut())
 }
 
-
-
 #[no_mangle]
 pub extern "C" fn add_recipient(
     bundle: *mut IssueBundle<Unauthorized>,
@@ -114,12 +110,7 @@ pub extern "C" fn add_recipient(
     );
 
     bundle
-        .add_recipient(
-            asset_descr,
-            recipient,
-            NoteValue::from_raw(value),
-            rng,
-        )
+        .add_recipient(asset_descr, recipient, NoteValue::from_raw(value), rng)
         .expect("An error occurred while adding recipient");
 }
 

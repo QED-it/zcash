@@ -1,14 +1,14 @@
-use std::{mem, ptr};
 use crate::{bridge::ffi, streams::CppStream};
+use std::{mem, ptr};
 
-use orchard::{Address, issuance as issuance};
 use issuance::Signed;
 use memuse::DynamicUsage;
-use orchard::value::NoteValue;
 use orchard::issuance::IssueInfo;
 use orchard::keys::{IssuanceAuthorizingKey, IssuanceValidatingKey};
+use orchard::value::NoteValue;
+use orchard::{issuance, Address};
 use rand_core::OsRng;
-use zcash_primitives::transaction::components::{issuance as issue_serialization};
+use zcash_primitives::transaction::components::issuance as issue_serialization;
 
 pub struct IssueNote(orchard::note::Note);
 
@@ -74,30 +74,36 @@ pub(crate) fn create_issue_bundle(
     recipient: *const ffi::OrchardRawAddressPtr,
     asset_descr: String,
 ) -> Box<IssueBundle> {
-    let recipient: Address = *unsafe {
-        recipient
-            .cast::<Address>()
-            .as_ref()
-    }.expect("IssuanceAuthorizingKey may not be null.");
+    let recipient: Address = *unsafe { recipient.cast::<Address>().as_ref() }
+        .expect("IssuanceAuthorizingKey may not be null.");
 
-    let isk = unsafe {
-        isk
-            .cast::<IssuanceAuthorizingKey>()
-            .as_ref()
-    }.expect("IssuanceAuthorizingKey may not be null.");
+    let isk = unsafe { isk.cast::<IssuanceAuthorizingKey>().as_ref() }
+        .expect("IssuanceAuthorizingKey may not be null.");
 
     let ik: IssuanceValidatingKey = IssuanceValidatingKey::from(isk);
 
     let rng = OsRng;
 
-    let bundle = issuance::IssueBundle::new(ik, asset_descr, Some(IssueInfo { recipient, value: NoteValue::from_raw(value) }), rng).unwrap().0;
+    let bundle = issuance::IssueBundle::new(
+        ik,
+        asset_descr,
+        Some(IssueInfo {
+            recipient,
+            value: NoteValue::from_raw(value),
+        }),
+        rng,
+    )
+    .unwrap()
+    .0;
 
+    // TODO use real tx sighash
     let sighash: [u8; 32] = bundle.commitment().into();
-    Box::new(IssueBundle(Some(bundle.prepare(sighash).sign(rng, isk).unwrap())))
+    Box::new(IssueBundle(Some(
+        bundle.prepare(sighash).sign(rng, isk).unwrap(),
+    )))
 }
 
 impl IssueBundle {
-
     pub(crate) unsafe fn from_raw_box(bundle: *mut ffi::IssueBundlePtr) -> Box<Self> {
         Box::new(IssueBundle(if bundle.is_null() {
             None

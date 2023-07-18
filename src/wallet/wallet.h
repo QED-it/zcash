@@ -1659,8 +1659,13 @@ public:
     SpendableInputs FindSpendableInputs(
             ZTXOSelector paymentSource,
             uint32_t minDepth,
-            const std::optional<int>& asOfHeight,
-            const std::optional<Asset> asset = Asset::Native()) const;
+            const std::optional<int>& asOfHeight) const;
+
+    SpendableInputs FindSpendableAssets(
+            const Asset asset,
+            ZTXOSelector selector,
+            uint32_t minDepth,
+            const std::optional<int>& asOfHeight) const;
 
     bool SelectorMatchesAddress(const ZTXOSelector& source, const CTxDestination& a0) const;
     bool SelectorMatchesAddress(const ZTXOSelector& source, const libzcash::SproutPaymentAddress& a0) const;
@@ -1803,7 +1808,7 @@ public:
 
     bool AddOrchardZKey(const libzcash::OrchardSpendingKey &sk);
     bool AddOrchardFullViewingKey(const libzcash::OrchardFullViewingKey &fvk);
-    bool AddIssuanceAuthorizingKey(const int accountId, const IssuanceAuthorizingKey &isk);
+    bool AddIssuanceAuthorizingKey(const int accountId, const IssuanceAuthorizingKey &isk) const;
 
     /**
      * Adds an address/ivk mapping to the in-memory wallet. Returns `false` if

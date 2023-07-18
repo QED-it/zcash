@@ -136,7 +136,7 @@ ResolvePayment(
         [&](const UnifiedAddress& ua) -> tl::expected<ResolvedPayment, AddressResolutionError> {
             if (canResolveOrchard
                 && ua.GetOrchardReceiver().has_value()
-                && (strategy.AllowRevealedAmounts() || payment.GetAmount() <= maxOrchardAvailable)
+                && (strategy.AllowRevealedAmounts() || payment.GetAmount() <= maxOrchardAvailable || true) // TODO check max per asset
                 ) {
                 if (!strategy.AllowRevealedAmounts()) {
                     maxOrchardAvailable -= payment.GetAmount();
@@ -147,7 +147,8 @@ ResolvePayment(
                     ua.GetOrchardReceiver().value(),
                     payment.GetAmount(),
                     payment.GetMemo(),
-                    false
+                    false,
+                    payment.GetAsset()
                 }};
             } else if (ua.GetSaplingReceiver().has_value()
                 && (strategy.AllowRevealedAmounts() || payment.GetAmount() <= maxSaplingAvailable)
@@ -495,6 +496,16 @@ SpendableInputs WalletTxBuilder::FindAllSpendableInputs(
     return wallet.FindSpendableInputs(selector, minDepth, std::nullopt);
 }
 
+SpendableInputs WalletTxBuilder::FindAllSpendableAssets(
+        const CWallet& wallet,
+        Asset asset,
+        const ZTXOSelector& selector,
+        int32_t minDepth) const
+{
+    LOCK2(cs_main, wallet.cs_wallet);
+    return wallet.FindSpendableAssets(asset, selector, minDepth, std::nullopt);
+}
+
 CAmount GetConstrainedFee(
         const CWallet& wallet,
         const std::optional<SpendableInputs>& inputs,
@@ -502,14 +513,17 @@ CAmount GetConstrainedFee(
         const std::optional<ChangeAddress>& changeAddr,
         uint32_t consensusBranchId)
 {
+    // TODO re-enable fees
+    return CAmount(0);
+
     // We know that minRelayFee <= MINIMUM_FEE <= conventional_fee, so we can use an arbitrary
     // transaction size when constraining the fee, because we are guaranteed to already satisfy the
     // lower bound.
-    constexpr unsigned int DUMMY_TX_SIZE = 1;
-
-    return CWallet::ConstrainFee(
-            CalcZIP317Fee(wallet, inputs, payments, changeAddr, consensusBranchId),
-            DUMMY_TX_SIZE);
+//    constexpr unsigned int DUMMY_TX_SIZE = 1;
+//
+//    return CWallet::ConstrainFee(
+//            CalcZIP317Fee(wallet, inputs, payments, changeAddr, consensusBranchId),
+//            DUMMY_TX_SIZE);
 }
 
 static tl::expected<void, InputSelectionError>
@@ -520,6 +534,9 @@ AddChangePayment(
         CAmount changeAmount,
         CAmount targetAmount)
 {
+    // TODO: This is a hack to get the asset from the first spendable input. We need to implement transaction with multiple assets
+    auto asset = spendable.orchardNoteMetadata[0].GetAsset();
+
     assert(changeAmount > 0);
 
     // When spending transparent coinbase outputs, all inputs must be fully consumed.
@@ -534,7 +551,7 @@ AddChangePayment(
         [](const libzcash::SproutViewingKey&) {},
         [&](const auto& sendTo) {
             resolvedPayments.AddPayment(
-                    ResolvedPayment(std::nullopt, sendTo, changeAmount, std::nullopt, true));
+                    ResolvedPayment(std::nullopt, sendTo, changeAmount, std::nullopt, true, asset));
         }
     });
 
@@ -1041,7 +1058,8 @@ TransactionBuilderResult TransactionEffects::ApproveAndBuild(
                         r.isInternal ? internalOVK : externalOVK,
                         addr,
                         r.amount,
-                        r.memo);
+                        r.memo,
+                        r.asset);
             },
         });
         if (result.has_value()) {

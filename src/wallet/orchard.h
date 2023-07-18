@@ -401,7 +401,7 @@ public:
         orchard_wallet_add_full_viewing_key(inner.get(), fvk.inner.get());
     }
 
-    void AddIssuanceAuthorizingKey(const int accountId, const IssuanceAuthorizingKey& isk) {
+    void AddIssuanceAuthorizingKey(const int accountId, const IssuanceAuthorizingKey& isk) const {
         orchard_wallet_add_issuance_authorizing_key(inner.get(), accountId, isk.inner.get());
     }
 

@@ -13,6 +13,7 @@
 #include "zcash/util.h"
 
 #include <primitives/orchard.h>
+#include <primitives/issue.h>
 #include <rust/bridge.h>
 
 namespace libzcash {
@@ -392,6 +393,10 @@ public:
 
     merkle_frontier::OrchardAppendResult AppendBundle(const OrchardBundle& bundle) {
         return inner->append_bundle(*bundle.GetDetails());
+    }
+
+    merkle_frontier::OrchardAppendResult AppendIssueBundle(const IssueBundle& bundle) {
+        return inner->append_issue_bundle(*bundle.GetDetails());
     }
 
     const uint256 root() const {
