@@ -11,12 +11,6 @@ from test_framework.util import (
     start_nodes,
 )
 
-import sys, signal
-
-def signal_handler(signal, frame):
-    print("\nProgram exiting gracefully")
-    sys.exit(0)
-
 class IssueTest(BitcoinTestFramework):
     def __init__(self):
         super().__init__()
@@ -32,23 +26,44 @@ class IssueTest(BitcoinTestFramework):
         # Sanity-check the test harness
         assert_equal(self.nodes[0].getblockcount(), 200)
 
-        # Get a new Orchard account on node 0
-        acct0 = self.nodes[0].z_getnewaccount()['account']
-        ua0 = self.nodes[0].z_getaddressforaccount(acct0, ['orchard'])['address']
+        # Get a new Orchard account on node 0 (Alice)
+        acct0_alice = self.nodes[0].z_getnewaccount()['account']
+        ua0_alice = self.nodes[0].z_getaddressforaccount(acct0_alice, ['orchard'])['address']
 
-        # Get a new Orchard account on node 1
-        acct1 = self.nodes[1].z_getnewaccount()['account']
-        ua1 = self.nodes[1].z_getaddressforaccount(acct1, ['orchard'])['address']
+        # Get a new Orchard account on node 1 (Felix)
+        acct0_felix = self.nodes[1].z_getnewaccount()['account']
+        ua0_felix = self.nodes[1].z_getaddressforaccount(acct0_felix, ['orchard'])['address']
+
+        # Get a new Orchard account on node 2 (Bob)
+        acct0_bob = self.nodes[2].z_getnewaccount()['account']
+        ua0_bob = self.nodes[2].z_getaddressforaccount(acct0_bob, ['orchard'])['address']
 
         # Activate NU5
         self.nodes[0].generate(5)
         self.sync_all()
 
+        # Print details post account setup:
+
+        #Alice:
+        print("\n\nAlice's Unified Address on Account 0 is:", ua0_alice)
+        print("\nAlice's wallet details:\n")
+        print(self.nodes[0].getwalletinfo())
+
+        #Felix:
+        print("\n\nFelix's Unified Address on Account 0 is:", ua0_felix)
+        print("\nFelix's wallet details:\n")
+        print(self.nodes[1].getwalletinfo())
+
+        #Bob:
+        print("\n\nBob's Unified Address on Account 0 is:", ua0_bob)
+        print("\nBob's wallet details:\n")
+        print(self.nodes[2].getwalletinfo())
+
         # Issue assets to an address on node 0
-        self.nodes[0].issue(0, ua0, "WBTC", 4001, True)
+        self.nodes[0].issue(0, ua0_alice, "WBTC", 4001, True)
 
         # Issue assets to an address on node 1
-        self.nodes[0].issue(0, ua1, "WBTC", 42, True)
+        self.nodes[0].issue(0, ua0_felix, "WBTC", 42, True)
 
         self.sync_all()
         self.nodes[0].generate(1)
@@ -68,8 +83,4 @@ class IssueTest(BitcoinTestFramework):
             assert_equal(value['confirmed_balance'], 42)
 
 if __name__ == '__main__':
-    signal.signal(signal.SIGINT, signal_handler)
     IssueTest().main()
-    while true:
-        print(".")
-

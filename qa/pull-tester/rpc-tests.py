@@ -179,7 +179,6 @@ EXTENDED_SCRIPTS = [
 
 ZSA_SCRIPTS = [
     # These are tests for the ZSA protocol updates.
-    'issuance.py',
     'demo-setup.py',
 ]
 
