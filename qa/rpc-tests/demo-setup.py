@@ -9,7 +9,10 @@ from test_framework.util import (
     assert_equal,
     nuparams,
     start_nodes,
+    rpc_url,
 )
+
+import time
 
 class IssueTest(BitcoinTestFramework):
     def __init__(self):
@@ -45,19 +48,24 @@ class IssueTest(BitcoinTestFramework):
         # Print details post account setup:
 
         #Alice:
-        print("\n\nAlice's Unified Address on Account 0 is:", ua0_alice)
+        print("\n\nAlice's port is:", rpc_url(0))
+        print("\nAlice's Unified Address on Account 0 is:", ua0_alice)
         print("\nAlice's wallet details:\n")
         print(self.nodes[0].getwalletinfo())
 
         #Felix:
-        print("\n\nFelix's Unified Address on Account 0 is:", ua0_felix)
+        print("\n\nFelix's port is:", rpc_url(1))
+        print("\nFelix's Unified Address on Account 0 is:", ua0_felix)
         print("\nFelix's wallet details:\n")
         print(self.nodes[1].getwalletinfo())
 
         #Bob:
-        print("\n\nBob's Unified Address on Account 0 is:", ua0_bob)
+        print("\n\nBob's port is:", rpc_url(2))
+        print("\nBob's Unified Address on Account 0 is:", ua0_bob)
         print("\nBob's wallet details:\n")
         print(self.nodes[2].getwalletinfo())
+
+        time.sleep(999999)
 
         # Issue assets to an address on node 0
         self.nodes[0].issue(0, ua0_alice, "WBTC", 4001, True)
