@@ -9,7 +9,10 @@ from test_framework.util import (
     assert_equal,
     nuparams,
     start_nodes,
+    wait_and_assert_operationid_status
 )
+from asset_issuance import issue_asset, check_asset_balance, orchard_address
+
 
 class IssueTest(BitcoinTestFramework):
     def __init__(self):
@@ -26,41 +29,34 @@ class IssueTest(BitcoinTestFramework):
         # Sanity-check the test harness
         assert_equal(self.nodes[0].getblockcount(), 200)
 
-        # Get a new Orchard account on node 0
-        acct0 = self.nodes[0].z_getnewaccount()['account']
-        ua0 = self.nodes[0].z_getaddressforaccount(acct0, ['orchard'])['address']
-
-        # Get a new Orchard account on node 1
-        acct1 = self.nodes[1].z_getnewaccount()['account']
-        ua1 = self.nodes[1].z_getaddressforaccount(acct1, ['orchard'])['address']
-
         # Activate NU5
         self.nodes[0].generate(5)
         self.sync_all()
 
-        # Issue assets to an address on node 0
-        self.nodes[0].issue(0, ua0, "WBTC", 4001, True)
+        address0 = orchard_address(self.nodes[0])
+        address1 = orchard_address(self.nodes[1])
+        address2 = orchard_address(self.nodes[2])
 
-        # Issue assets to an address on node 1
-        self.nodes[0].issue(0, ua1, "WBTC", 42, True)
+        issued = 4003
+        transfer1 = 1
+        transfer2 = 2
+
+        # Issue assets to an address on node 0
+        asset = issue_asset(self, 0, address0, "WBTC", issued, True)
+        check_asset_balance(self, 0, asset, issued)
+
+        # Send assets from node 0 to node 1
+        recipients = [{"address": address1, "amount": transfer1, "asset": asset}, {"address": address2, "amount": transfer2, "asset": asset}]
+        opid = self.nodes[0].z_sendassets(address0, recipients, 1)
+        wait_and_assert_operationid_status(self.nodes[0], opid)
 
         self.sync_all()
         self.nodes[0].generate(1)
         self.sync_all()
 
-        walletinfo0 = self.nodes[0].getwalletinfo()
-        print(walletinfo0)
-        assert_equal(len(walletinfo0['asset_balances'].items()), 1)
-        for key, value in walletinfo0['asset_balances'].items():
-            assert_equal(value['confirmed_balance'], 4001)
-
-
-        walletinfo1 = self.nodes[1].getwalletinfo()
-        print(walletinfo1)
-        assert_equal(len(walletinfo1['asset_balances'].items()), 1)
-        for key, value in walletinfo1['asset_balances'].items():
-            assert_equal(value['confirmed_balance'], 42)
-
+        check_asset_balance(self, 0, asset, issued - transfer1 - transfer2)
+        check_asset_balance(self, 1, asset, transfer1)
+        check_asset_balance(self, 2, asset, transfer2)
 
 
 if __name__ == '__main__':

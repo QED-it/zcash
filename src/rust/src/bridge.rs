@@ -386,6 +386,10 @@ pub(crate) mod ffi {
         fn root(self: &Orchard) -> [u8; 32];
         fn size(self: &Orchard) -> u64;
         fn append_bundle(self: &mut Orchard, bundle: &Bundle) -> Result<OrchardAppendResult>;
+        fn append_issue_bundle(
+            self: &mut Orchard,
+            bundle: &IssueBundle,
+        ) -> Result<OrchardAppendResult>;
         unsafe fn init_wallet(self: &Orchard, wallet: *mut OrchardWallet) -> bool;
     }
 

@@ -401,7 +401,7 @@ public:
         orchard_wallet_add_full_viewing_key(inner.get(), fvk.inner.get());
     }
 
-    void AddIssuanceAuthorizingKey(const int accountId, const IssuanceAuthorizingKey& isk) {
+    void AddIssuanceAuthorizingKey(const int accountId, const IssuanceAuthorizingKey& isk) const {
         orchard_wallet_add_issuance_authorizing_key(inner.get(), accountId, isk.inner.get());
     }
 
@@ -451,14 +451,21 @@ public:
         const std::optional<libzcash::OrchardIncomingViewingKey>& ivk,
         bool ignoreMined,
         bool requireSpendingKey,
-        bool nativeOnly) const {
+        std::optional<Asset> asset = Asset::Native()) const {
+
+        bool allAssets = !asset.has_value();
+        unsigned char *assetId = nullptr;
+        if (asset.has_value()) {
+            assetId = (unsigned char *)asset.value().id;
+        }
 
         orchard_wallet_get_filtered_notes(
             inner.get(),
             ivk.has_value() ? ivk.value().inner.get() : nullptr,
+            assetId,
             ignoreMined,
             requireSpendingKey,
-            nativeOnly,
+            allAssets,
             &orchardNotesRet,
             PushOrchardNoteMeta
             );

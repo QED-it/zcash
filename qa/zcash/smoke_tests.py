@@ -229,6 +229,16 @@ def z_sendmany(results, case, zcash, from_addr, recipients, privacy_policy):
 def issue(results, case, zcash, account, addr, asset, amount, finalize):
     return async_txid_cmd(results, case, zcash, 'issue', [account, addr, asset, amount, finalize])
 
+def z_sendassets(results, case, zcash, from_addr, recipients):
+    return async_txid_cmd(results, case, zcash, 'z_sendassets', [
+        from_addr,
+        [{
+            'address': to_addr,
+            'amount': amount,
+            'asset': asset,
+        } for (to_addr, amount, asset) in recipients]
+    ])
+
 def check_z_sendmany(results, case, zcash, from_addr, recipients, privacy_policy):
     txid = z_sendmany(results, case, zcash, from_addr, recipients, privacy_policy)
     if txid is None:

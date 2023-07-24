@@ -77,17 +77,22 @@ void Builder::AddOutput(
     const std::optional<uint256>& ovk,
     const libzcash::OrchardRawAddress& to,
     CAmount value,
-    const std::optional<libzcash::Memo>& memo)
+    const std::optional<libzcash::Memo>& memo,
+    Asset asset)
 {
     if (!inner) {
         throw std::logic_error("orchard::Builder has already been used");
     }
+
+    // TODO implement multi-asset transfers
+    primaryAsset = asset;
 
     orchard_builder_add_recipient(
         inner.get(),
         ovk.has_value() ? ovk->begin() : nullptr,
         to.inner.get(),
         value,
+        asset.id,
         memo.has_value() ? memo.value().ToBytes().data() : nullptr);
 
     hasActions = true;
@@ -291,7 +296,8 @@ void TransactionBuilder::AddOrchardOutput(
     const std::optional<uint256>& ovk,
     const libzcash::OrchardRawAddress& to,
     CAmount value,
-    const std::optional<libzcash::Memo>& memo)
+    const std::optional<libzcash::Memo>& memo,
+    Asset asset)
 {
     if (!orchardBuilder.has_value()) {
         // Try to give a useful error.
@@ -303,7 +309,7 @@ void TransactionBuilder::AddOrchardOutput(
             throw std::runtime_error("TransactionBuilder cannot add Orchard output without Orchard anchor");
         }
     }
-    orchardBuilder.value().AddOutput(ovk, to, value, memo);
+    orchardBuilder.value().AddOutput(ovk, to, value, memo, asset);
     valueBalanceOrchard -= value;
 }
 
@@ -476,12 +482,13 @@ TransactionBuilderResult TransactionBuilder::Build()
     //
 
     if (change > 0) {
+        auto asset = orchardBuilder.value().primaryAsset.value();
         // Send change to the specified change address. If no change address
         // was set, send change to the first Sapling address given as input
         // if any; otherwise the first Sprout address given as input.
         // (A t-address can only be used as the change address if explicitly set.)
         if (orchardChangeAddr) {
-            AddOrchardOutput(orchardChangeAddr->first, orchardChangeAddr->second, change, std::nullopt);
+            AddOrchardOutput(orchardChangeAddr->first, orchardChangeAddr->second, change, std::nullopt, asset);
         } else if (saplingChangeAddr) {
             AddSaplingOutput(saplingChangeAddr->first, saplingChangeAddr->second, change, std::nullopt);
         } else if (sproutChangeAddr) {
@@ -491,7 +498,7 @@ TransactionBuilderResult TransactionBuilder::Build()
             AddTransparentOutput(tChangeAddr.value(), change);
         } else if (firstOrchardSpendAddr.has_value()) {
             auto ovk = orchardSpendingKeys[0].ToFullViewingKey().ToInternalOutgoingViewingKey();
-            AddOrchardOutput(ovk, firstOrchardSpendAddr.value(), change, std::nullopt);
+            AddOrchardOutput(ovk, firstOrchardSpendAddr.value(), change, std::nullopt, asset);
         } else if (firstSaplingSpendAddr.has_value()) {
             uint256 ovk;
             libzcash::SaplingPaymentAddress changeAddr;

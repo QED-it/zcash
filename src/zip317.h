@@ -27,7 +27,7 @@ static const size_t DEFAULT_BLOCK_UNPAID_ACTION_LIMIT = 50;
 static const size_t DEFAULT_TX_UNPAID_ACTION_LIMIT = DEFAULT_BLOCK_UNPAID_ACTION_LIMIT;
 
 /// This is the lowest the conventional fee can be in ZIP 317.
-static const CAmount MINIMUM_FEE = MARGINAL_FEE * GRACE_ACTIONS;
+static const CAmount MINIMUM_FEE = 0; // MARGINAL_FEE * GRACE_ACTIONS; TODO implement ZSA fees
 
 /// Return the conventional fee for the given `logicalActionCount` calculated according to
 /// <https://zips.z.cash/zip-0317#fee-calculation>.

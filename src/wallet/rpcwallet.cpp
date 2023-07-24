@@ -45,6 +45,7 @@
 #include "wallet/asyncrpcoperation_mergetoaddress.h"
 #include "wallet/asyncrpcoperation_saplingmigration.h"
 #include "wallet/asyncrpcoperation_sendmany.h"
+#include "wallet/asyncrpcoperation_sendassets.h"
 #include "wallet/asyncrpcoperation_shieldcoinbase.h"
 #include "wallet/wallet_tx_builder.h"
 
@@ -348,6 +349,298 @@ UniValue issue(const UniValue &params, bool fHelp) {
     IssueAsset(orchardAddress.value(), nAmount, asset, finalize, isk,wtx);
 
     return wtx.GetHash().GetHex();
+}
+
+static std::optional<libzcash::Memo> ParseMemo(const UniValue& memoValue)
+{
+    if (memoValue.isNull()) {
+        return std::nullopt;
+    } else {
+        auto memoStr = memoValue.get_str();
+        auto rawMemo = ParseHex(memoStr);
+
+        // If ParseHex comes across a non-hex char, it will stop but still return results so far.
+        if (memoStr.size() != rawMemo.size() * 2) {
+            throw JSONRPCError(
+                    RPC_INVALID_PARAMETER,
+                    "Invalid parameter, expected memo data in hexadecimal format.");
+        } else {
+            return libzcash::Memo::FromBytes(rawMemo)
+                    .map_error([](auto err) {
+                        switch (err) {
+                            case libzcash::Memo::ConversionError::MemoTooLong:
+                                throw JSONRPCError(
+                                        RPC_INVALID_PARAMETER,
+                                        strprintf(
+                                                "Invalid parameter, memo is longer than the maximum allowed %d bytes.",
+                                                libzcash::Memo::SIZE));
+                            default:
+                                assert(false);
+                        }
+                    })
+                    .value();
+        }
+    }
+}
+
+
+size_t EstimateTxSize(
+        const ZTXOSelector& ztxoSelector,
+        const std::vector<Payment>& recipients,
+        int nextBlockHeight) {
+    CMutableTransaction mtx;
+    mtx.fOverwintered = true;
+    mtx.nConsensusBranchId = CurrentEpochBranchId(nextBlockHeight, Params().GetConsensus());
+
+    bool fromSprout = ztxoSelector.SelectsSprout();
+    bool fromTaddr = ztxoSelector.SelectsTransparent();
+
+    // As a sanity check, estimate and verify that the size of the transaction will be valid.
+    // Depending on the input notes, the actual tx size may turn out to be larger and perhaps invalid.
+    size_t txsize = 0;
+    size_t taddrRecipientCount = 0;
+    size_t saplingRecipientCount = 0;
+    size_t orchardRecipientCount = 0;
+    for (const Payment& recipient : recipients) {
+        examine(recipient.GetAddress(), match {
+                [&](const CKeyID&) {
+                    taddrRecipientCount += 1;
+                },
+                [&](const CScriptID&) {
+                    taddrRecipientCount += 1;
+                },
+                [&](const libzcash::SaplingPaymentAddress& addr) {
+                    saplingRecipientCount += 1;
+                },
+                [&](const libzcash::SproutPaymentAddress& addr) {
+                    JSDescription jsdesc;
+                    jsdesc.proof = GrothProof();
+                    mtx.vJoinSplit.push_back(jsdesc);
+                },
+                [&](const libzcash::UnifiedAddress& addr) {
+                    if (addr.GetOrchardReceiver().has_value()) {
+                        orchardRecipientCount += 1;
+                    } else if (addr.GetSaplingReceiver().has_value()) {
+                        saplingRecipientCount += 1;
+                    } else if (addr.GetP2PKHReceiver().has_value()
+                               || addr.GetP2SHReceiver().has_value()) {
+                        taddrRecipientCount += 1;
+                    }
+                }
+        });
+    }
+
+    bool nu5Active = Params().GetConsensus().NetworkUpgradeActive(nextBlockHeight, Consensus::UPGRADE_NU5);
+
+    if (fromSprout || !nu5Active) {
+        mtx.nVersionGroupId = SAPLING_VERSION_GROUP_ID;
+        mtx.nVersion = SAPLING_TX_VERSION;
+    } else {
+        mtx.nVersionGroupId = ZIP225_VERSION_GROUP_ID;
+        mtx.nVersion = ZIP225_TX_VERSION;
+    }
+    // Fine to call this because we are only testing that `mtx` is a valid size.
+    mtx.saplingBundle = sapling::test_only_invalid_bundle(0, saplingRecipientCount, 0);
+
+    CTransaction tx(mtx);
+    txsize += GetSerializeSize(tx, SER_NETWORK, tx.nVersion);
+    if (fromTaddr) {
+        txsize += CTXIN_SPEND_P2PKH_SIZE;
+        txsize += CTXOUT_REGULAR_SIZE; // There will probably be taddr change
+    }
+    txsize += CTXOUT_REGULAR_SIZE * taddrRecipientCount;
+
+    if (orchardRecipientCount > 0) {
+        // - The Orchard transaction builder pads to a minimum of 2 actions.
+        // - We subtract 1 because `GetSerializeSize(tx, ...)` already counts
+        //   `ZC_ZIP225_ORCHARD_NUM_ACTIONS_BASE_SIZE`.
+        txsize += ZC_ZIP225_ORCHARD_BASE_SIZE - 1 + ZC_ZIP225_ORCHARD_MARGINAL_SIZE * std::max(2, (int) orchardRecipientCount) + ZC_ISSUE_BASE_SIZE;
+    }
+    return txsize;
+}
+
+
+UniValue z_sendassets(const UniValue& params, bool fHelp)
+{
+    if (!EnsureWalletIsAvailable(fHelp))
+        return NullUniValue;
+
+    if (fHelp || params.size() < 2 || params.size() > 3)
+        throw runtime_error(
+                "z_sendassets \"fromaddress\" [{\"address\":... ,\"amount\":... ,\"asset\":...},...] ( minconf )\n"
+                "\nSend a transaction with multiple recipients. Amounts are decimal numbers with at"
+                "\nmost 8 digits of precision. When sending from a unified address,"
+                "\nchange is returned to the internal-only address for the associated unified account."
+                + HelpRequiringPassphrase() + "\n"
+                "\nArguments:\n"
+                "1. \"fromaddress\"         (string, required) The shielded address to send the funds from.\n"
+                "                           If a unified address is provided for this argument, the TXOs to be spent will be selected from those\n"
+                "                           associated with the account corresponding to that unified address, from value pools corresponding\n"
+                "                           to the receivers included in the UA.\n"
+                "2. \"amounts\"             (array, required) An array of json objects representing the amounts to send.\n"
+                "    [{\n"
+                "      \"address\":address  (string, required) The address is a taddr, zaddr, or Unified Address\n"
+                "      \"amount\":amount    (numeric, required) The numeric amount in " + CURRENCY_UNIT + " is the value\n"
+                "      \"asset\":asset      (string, required) AssetBase in hex\n"
+                "      \"memo\":memo        (string, optional) If the address is a zaddr, raw data represented in hexadecimal string format. If\n"
+                "                           the output is being sent to a transparent address, it’s an error to include this field.\n"
+                "    }, ... ]\n"
+                "3. minconf               (numeric, optional, default=" + strprintf("%u", DEFAULT_NOTE_CONFIRMATIONS) + ") Only use funds confirmed at least this many times.\n"
+                "\nResult:\n"
+                "\"operationid\"          (string) An operationid to pass to z_getoperationstatus to get the result of the operation.\n"
+                "\nExamples:\n"
+                + HelpExampleCli("z_sendassets", "\"ANY_TADDR\" '[{\"address\": \"t1M72Sfpbz1BPpXFHz9m3CdqATR44Jvaydd\", \"amount\": 2.0}]'")
+        );
+
+    LOCK2(cs_main, pwalletMain->cs_wallet);
+
+    const auto& chainparams = Params();
+    int nextBlockHeight = chainActive.Height() + 1;
+
+    ThrowIfInitialBlockDownload();
+    if (!chainparams.GetConsensus().NetworkUpgradeActive(nextBlockHeight, Consensus::UPGRADE_SAPLING)) {
+        throw JSONRPCError(
+                RPC_INVALID_PARAMETER, "Cannot create shielded transactions before Sapling has activated");
+    }
+
+    KeyIO keyIO(chainparams);
+
+    UniValue outputs = params[1].get_array();
+    if (outputs.size() == 0) {
+        throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid parameter, amounts array is empty.");
+    }
+
+    std::set<PaymentAddress> recipientAddrs;
+    std::vector<Payment> recipients;
+
+    CAmount nTotalOut = 0;
+    size_t nOrchardOutputs = 0;
+    for (const UniValue& o : outputs.getValues()) {
+        if (!o.isObject())
+            throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid parameter, expected object");
+
+        // sanity check, report error if unknown key-value pairs
+        for (const std::string& s : o.getKeys()) {
+            if (s != "address" && s != "amount" && s != "memo" && s != "asset")
+                throw JSONRPCError(RPC_INVALID_PARAMETER, string("Invalid parameter, unknown key: ") + s);
+        }
+
+        // TODO check that we only accept Orchard adresses
+        std::string addrStr = find_value(o, "address").get_str();
+        auto addr = keyIO.DecodePaymentAddress(addrStr);
+        if (!addr.has_value()) {
+            throw JSONRPCError(
+                    RPC_INVALID_PARAMETER,
+                    std::string("Invalid parameter, unknown address format: ") + addrStr);
+        }
+
+        if (!recipientAddrs.insert(addr.value()).second) {
+            throw JSONRPCError(RPC_INVALID_PARAMETER, string("Invalid parameter, duplicated recipient address: ") + addrStr);
+        }
+
+        auto memo = ParseMemo(find_value(o, "memo"));
+
+        UniValue av = find_value(o, "amount");
+        CAmount nAmount = AmountFromValue( av );
+        if (nAmount < 0) {
+            throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid parameter, amount must be positive");
+        }
+
+        std::string assetStr = find_value(o, "asset").get_str();
+        Asset asset = Asset(assetStr);
+
+        recipients.push_back(Payment(addr.value(), nAmount, asset, memo));
+        nTotalOut += nAmount;
+    }
+    if (recipients.empty()) {
+        throw JSONRPCError(RPC_INVALID_PARAMETER, "No recipients");
+    }
+
+    // Check that the from address is valid.
+    // Unified address (UA) allowed here (#5185)
+    auto fromaddress = params[0].get_str();
+    std::optional<PaymentAddress> sender;
+    if (fromaddress != "ANY_TADDR") {
+        auto decoded = keyIO.DecodePaymentAddress(fromaddress);
+        if (decoded.has_value()) {
+            sender = decoded.value();
+        } else {
+            throw JSONRPCError(
+                    RPC_INVALID_ADDRESS_OR_KEY,
+                    "Invalid from address: should be a taddr, zaddr, UA, or the string 'ANY_TADDR'.");
+        }
+    }
+
+    auto ztxoSelector = [&]() {
+        if (!sender.has_value()) {
+            return CWallet::LegacyTransparentZTXOSelector(true, TransparentCoinbasePolicy::Disallow);
+        } else {
+            auto ztxoSelectorOpt = pwalletMain->ZTXOSelectorForAddress(
+                    sender.value(),
+                    true,
+                    TransparentCoinbasePolicy::Disallow,
+                    UnifiedAccountSpendingPolicy::ShieldedOnly);
+            if (!ztxoSelectorOpt.has_value()) {
+                throw JSONRPCError(
+                        RPC_INVALID_ADDRESS_OR_KEY,
+                        "Invalid from address, no payment source found for address.");
+            }
+
+            auto selectorAccount = pwalletMain->FindAccountForSelector(ztxoSelectorOpt.value());
+            bool unknownOrLegacy = !selectorAccount.has_value() || selectorAccount.value() == ZCASH_LEGACY_ACCOUNT;
+            examine(sender.value(), match {
+                    [&](const libzcash::UnifiedAddress& ua) {
+                        if (unknownOrLegacy) {
+                            throw JSONRPCError(
+                                    RPC_INVALID_ADDRESS_OR_KEY,
+                                    "Invalid from address, UA does not correspond to a known account.");
+                        }
+                    },
+                    [&](const auto& other) {
+                        if (!unknownOrLegacy) {
+                            throw JSONRPCError(
+                                    RPC_INVALID_ADDRESS_OR_KEY,
+                                    "Invalid from address: is a bare receiver from a Unified Address in this wallet. Provide the UA as returned by z_getaddressforaccount instead.");
+                        }
+                    }
+            });
+
+            return ztxoSelectorOpt.value();
+        }
+    }();
+
+    // Sanity check for transaction size
+    // TODO: move this to the builder?
+    auto txsize = EstimateTxSize(ztxoSelector, recipients, nextBlockHeight);
+    if (txsize > MAX_TX_SIZE_AFTER_SAPLING) {
+        throw JSONRPCError(
+                RPC_INVALID_PARAMETER,
+                strprintf("Too many outputs, size of raw transaction would be larger than limit of %d bytes", MAX_TX_SIZE_AFTER_SAPLING));
+    }
+
+    // Minimum confirmations
+    int nMinDepth = parseMinconf(DEFAULT_NOTE_CONFIRMATIONS, params, 2, std::nullopt);
+
+    // Use input parameters as the optional context info to be returned by z_getoperationstatus and z_getoperationresult.
+    UniValue o(UniValue::VOBJ);
+    o.pushKV("fromaddress", params[0]);
+    o.pushKV("amounts", params[1]);
+    o.pushKV("minconf", nMinDepth);
+
+    UniValue contextInfo = o;
+
+    // Create operation and add to global queue
+    auto nAnchorDepth = std::min((unsigned int) nMinDepth, nAnchorConfirmations);
+    WalletTxBuilder builder(chainparams, minRelayTxFee);
+
+    std::shared_ptr<AsyncRPCQueue> q = getAsyncRPCQueue();
+    std::shared_ptr<AsyncRPCOperation> operation(
+            new AsyncRPCOperation_sendassets(
+                    std::move(builder), ztxoSelector, recipients, nMinDepth, nAnchorDepth, contextInfo)
+    );
+    q->addOperation(operation);
+    AsyncRPCOperationId operationId = operation->getId();
+    return operationId;
 }
 
 static void SendMoney(const CTxDestination &address, CAmount nValue, bool fSubtractFeeFromAmount, CWalletTx& wtxNew)
@@ -4827,113 +5120,6 @@ UniValue z_getoperationstatus_IMPL(const UniValue& params, bool fRemoveFinishedO
     return ret;
 }
 
-size_t EstimateTxSize(
-        const ZTXOSelector& ztxoSelector,
-        const std::vector<Payment>& recipients,
-        int nextBlockHeight) {
-    CMutableTransaction mtx;
-    mtx.fOverwintered = true;
-    mtx.nConsensusBranchId = CurrentEpochBranchId(nextBlockHeight, Params().GetConsensus());
-
-    bool fromSprout = ztxoSelector.SelectsSprout();
-    bool fromTaddr = ztxoSelector.SelectsTransparent();
-
-    // As a sanity check, estimate and verify that the size of the transaction will be valid.
-    // Depending on the input notes, the actual tx size may turn out to be larger and perhaps invalid.
-    size_t txsize = 0;
-    size_t taddrRecipientCount = 0;
-    size_t saplingRecipientCount = 0;
-    size_t orchardRecipientCount = 0;
-    for (const Payment& recipient : recipients) {
-        examine(recipient.GetAddress(), match {
-            [&](const CKeyID&) {
-                taddrRecipientCount += 1;
-            },
-            [&](const CScriptID&) {
-                taddrRecipientCount += 1;
-            },
-            [&](const libzcash::SaplingPaymentAddress& addr) {
-                saplingRecipientCount += 1;
-            },
-            [&](const libzcash::SproutPaymentAddress& addr) {
-                JSDescription jsdesc;
-                jsdesc.proof = GrothProof();
-                mtx.vJoinSplit.push_back(jsdesc);
-            },
-            [&](const libzcash::UnifiedAddress& addr) {
-                if (addr.GetOrchardReceiver().has_value()) {
-                    orchardRecipientCount += 1;
-                } else if (addr.GetSaplingReceiver().has_value()) {
-                    saplingRecipientCount += 1;
-                } else if (addr.GetP2PKHReceiver().has_value()
-                           || addr.GetP2SHReceiver().has_value()) {
-                    taddrRecipientCount += 1;
-                }
-            }
-        });
-    }
-
-    bool nu5Active = Params().GetConsensus().NetworkUpgradeActive(nextBlockHeight, Consensus::UPGRADE_NU5);
-
-    if (fromSprout || !nu5Active) {
-        mtx.nVersionGroupId = SAPLING_VERSION_GROUP_ID;
-        mtx.nVersion = SAPLING_TX_VERSION;
-    } else {
-        mtx.nVersionGroupId = ZIP225_VERSION_GROUP_ID;
-        mtx.nVersion = ZIP225_TX_VERSION;
-    }
-    // Fine to call this because we are only testing that `mtx` is a valid size.
-    mtx.saplingBundle = sapling::test_only_invalid_bundle(0, saplingRecipientCount, 0);
-
-    CTransaction tx(mtx);
-    txsize += GetSerializeSize(tx, SER_NETWORK, tx.nVersion);
-    if (fromTaddr) {
-        txsize += CTXIN_SPEND_P2PKH_SIZE;
-        txsize += CTXOUT_REGULAR_SIZE; // There will probably be taddr change
-    }
-    txsize += CTXOUT_REGULAR_SIZE * taddrRecipientCount;
-
-    if (orchardRecipientCount > 0) {
-        // - The Orchard transaction builder pads to a minimum of 2 actions.
-        // - We subtract 1 because `GetSerializeSize(tx, ...)` already counts
-        //   `ZC_ZIP225_ORCHARD_NUM_ACTIONS_BASE_SIZE`.
-        txsize += ZC_ZIP225_ORCHARD_BASE_SIZE - 1 + ZC_ZIP225_ORCHARD_MARGINAL_SIZE * std::max(2, (int) orchardRecipientCount) + ZC_ISSUE_BASE_SIZE;
-    }
-    return txsize;
-}
-
-static std::optional<libzcash::Memo> ParseMemo(const UniValue& memoValue)
-{
-    if (memoValue.isNull()) {
-        return std::nullopt;
-    } else {
-        auto memoStr = memoValue.get_str();
-        auto rawMemo = ParseHex(memoStr);
-
-        // If ParseHex comes across a non-hex char, it will stop but still return results so far.
-        if (memoStr.size() != rawMemo.size() * 2) {
-            throw JSONRPCError(
-                    RPC_INVALID_PARAMETER,
-                    "Invalid parameter, expected memo data in hexadecimal format.");
-        } else {
-            return libzcash::Memo::FromBytes(rawMemo)
-                .map_error([](auto err) {
-                    switch (err) {
-                        case libzcash::Memo::ConversionError::MemoTooLong:
-                            throw JSONRPCError(
-                                    RPC_INVALID_PARAMETER,
-                                    strprintf(
-                                            "Invalid parameter, memo is longer than the maximum allowed %d bytes.",
-                                            libzcash::Memo::SIZE));
-                        default:
-                            assert(false);
-                    }
-                })
-                .value();
-        }
-    }
-}
-
 UniValue z_sendmany(const UniValue& params, bool fHelp)
 {
     if (!EnsureWalletIsAvailable(fHelp))
@@ -6129,6 +6315,7 @@ static const CRPCCommand commands[] =
     { "wallet",             "z_viewtransaction",        &z_viewtransaction,        false },
     { "wallet",             "z_getnotescount",          &z_getnotescount,          false },
     { "wallet",             "issue",                    &issue,                    true },
+    { "wallet",             "z_sendassets",             &z_sendassets,             true },
     // TODO: rearrange into another category
     { "disclosure",         "z_getpaymentdisclosure",   &z_getpaymentdisclosure,   true  },
     { "disclosure",         "z_validatepaymentdisclosure", &z_validatepaymentdisclosure, true }

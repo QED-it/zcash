@@ -19,7 +19,7 @@ use zcash_primitives::{
 
 use orchard::issuance::{IssueBundle, Signed};
 use orchard::keys::IssuanceAuthorizingKey;
-use orchard::note::ExtractedNoteCommitment;
+use orchard::note::{AssetBase, ExtractedNoteCommitment};
 use orchard::{
     bundle::Authorized,
     keys::{FullViewingKey, IncomingViewingKey, OutgoingViewingKey, Scope, SpendingKey},
@@ -735,7 +735,7 @@ impl Wallet {
         ivk: Option<&IncomingViewingKey>,
         ignore_mined: bool,
         require_spending_key: bool,
-        native_only: bool,
+        asset: Option<AssetBase>,
     ) -> Vec<(OutPoint, DecryptedNote)> {
         tracing::trace!("Filtering notes");
         self.wallet_received_notes
@@ -745,7 +745,7 @@ impl Wallet {
                     .decrypted_notes
                     .iter()
                     .filter_map(move |(idx, dnote)| {
-                        if native_only && dnote.note.asset().is_native().unwrap_u8() == 0 {
+                        if asset.is_some() && asset.unwrap() != dnote.note.asset() {
                             return None;
                         }
 
@@ -1186,17 +1186,26 @@ pub type NotePushCb = unsafe extern "C" fn(obj: Option<FFICallbackReceiver>, met
 pub extern "C" fn orchard_wallet_get_filtered_notes(
     wallet: *const Wallet,
     ivk: *const IncomingViewingKey,
+    asset_bytes: *const [u8; 32],
     ignore_mined: bool,
     require_spending_key: bool,
-    native_only: bool,
+    all_assets: bool,
     result: Option<FFICallbackReceiver>,
     push_cb: Option<NotePushCb>,
 ) {
     let wallet = unsafe { wallet.as_ref() }.expect("Wallet pointer may not be null.");
     let ivk = unsafe { ivk.as_ref() };
+    let asset = if all_assets {
+        None
+    } else {
+        let safe_asset_bytes = unsafe { asset_bytes.as_ref() }
+            .copied()
+            .expect("Asset may not be null");
+        Some(AssetBase::from_bytes(&safe_asset_bytes).unwrap())
+    };
 
     for (outpoint, dnote) in
-        wallet.get_filtered_notes(ivk, ignore_mined, require_spending_key, native_only)
+        wallet.get_filtered_notes(ivk, ignore_mined, require_spending_key, asset)
     {
         let metadata = FFINoteMetadata {
             txid: *outpoint.txid.as_ref(),

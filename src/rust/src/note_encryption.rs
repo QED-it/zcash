@@ -1,8 +1,7 @@
 use std::convert::TryInto;
 
-use zcash_note_encryption::{
-    try_output_recovery_with_ovk, EphemeralKeyBytes, ShieldedOutput,
-};
+use zcash_note_encryption::{try_output_recovery_with_ovk, EphemeralKeyBytes, ShieldedOutput};
+use zcash_primitives::sapling::note_encryption::{CompactNoteCiphertextBytes, NoteCiphertextBytes};
 use zcash_primitives::{
     consensus::BlockHeight,
     keys::OutgoingViewingKey,
@@ -14,7 +13,6 @@ use zcash_primitives::{
         SaplingIvk,
     },
 };
-use zcash_primitives::sapling::note_encryption::{CompactNoteCiphertextBytes, NoteCiphertextBytes};
 
 use crate::{bridge::ffi::SaplingShieldedOutput, params::Network};
 

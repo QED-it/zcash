@@ -69,7 +69,7 @@ static const bool DEFAULT_WHITELISTRELAY = true;
 /** Default for DEFAULT_WHITELISTFORCERELAY. */
 static const bool DEFAULT_WHITELISTFORCERELAY = true;
 /** Default for -minrelaytxfee, minimum relay fee rate for transactions in zatoshis per 1000 bytes. TODO(misnamed, this is a rate) */
-static const unsigned int DEFAULT_MIN_RELAY_TX_FEE = 100;
+static const unsigned int DEFAULT_MIN_RELAY_TX_FEE = 0; // TODO re-enable fees = 100
 /** Default for -maxtxfee in zatoshis. */
 static const CAmount DEFAULT_TRANSACTION_MAXFEE = 0.1 * COIN;
 /** Discourage users from setting fee rates higher than this in zatoshis per 1000 bytes. */

@@ -312,6 +312,7 @@ BITCOIN_CORE_H = \
   wallet/asyncrpcoperation_mergetoaddress.h \
   wallet/asyncrpcoperation_saplingmigration.h \
   wallet/asyncrpcoperation_sendmany.h \
+  wallet/asyncrpcoperation_sendassets.h \
   wallet/asyncrpcoperation_shieldcoinbase.h \
   wallet/wallet_tx_builder.h \
   wallet/crypter.h \
@@ -411,6 +412,7 @@ libbitcoin_wallet_a_SOURCES = \
   wallet/asyncrpcoperation_mergetoaddress.cpp \
   wallet/asyncrpcoperation_saplingmigration.cpp \
   wallet/asyncrpcoperation_sendmany.cpp \
+  wallet/asyncrpcoperation_sendassets.cpp \
   wallet/asyncrpcoperation_shieldcoinbase.cpp \
   wallet/wallet_tx_builder.cpp \
   wallet/crypter.cpp \

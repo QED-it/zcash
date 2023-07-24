@@ -106,6 +106,9 @@ public:
         return *this;
     }
 
+    // TODO temporary measure to ensure single-asset bundles
+    std::optional<Asset> primaryAsset;
+
     /// Adds a note to be spent in this bundle.
     ///
     /// Returns `false` if the given Merkle path does not have the required anchor
@@ -117,7 +120,8 @@ public:
         const std::optional<uint256>& ovk,
         const libzcash::OrchardRawAddress& to,
         CAmount value,
-        const std::optional<libzcash::Memo>& memo);
+        const std::optional<libzcash::Memo>& memo,
+        Asset asset);
 
     /// Returns `true` if any spends or outputs have been added to this builder. This can
     /// be used to avoid calling `Build()` and creating a dummy Orchard bundle.
@@ -349,7 +353,8 @@ public:
         const std::optional<uint256>& ovk,
         const libzcash::OrchardRawAddress& to,
         CAmount value,
-        const std::optional<libzcash::Memo>& memo);
+        const std::optional<libzcash::Memo>& memo,
+        Asset asset);
 
     // Throws if the anchor does not match the anchor used by
     // previously-added Sapling spends.

@@ -97,6 +97,7 @@ pub extern "C" fn orchard_builder_add_recipient(
     ovk: *const [u8; 32],
     recipient: *const orchard::Address,
     value: u64,
+    asset_bytes: *const [u8; 32],
     memo: *const [u8; 512],
 ) -> bool {
     let builder = unsafe { builder.as_mut() }.expect("Builder may not be null.");
@@ -106,8 +107,12 @@ pub extern "C" fn orchard_builder_add_recipient(
     let recipient = unsafe { recipient.as_ref() }.expect("Recipient may not be null.");
     let value = NoteValue::from_raw(value);
     let memo = unsafe { memo.as_ref() }.copied();
+    let safe_asset_bytes = unsafe { asset_bytes.as_ref() }
+        .copied()
+        .expect("Asset may not be null");
+    let asset = AssetBase::from_bytes(&safe_asset_bytes).unwrap();
 
-    match builder.add_recipient(ovk, *recipient, value, AssetBase::native(), memo) {
+    match builder.add_recipient(ovk, *recipient, value, asset, memo) {
         Ok(()) => true,
         Err(e) => {
             error!("Failed to add Orchard recipient: {}", e);

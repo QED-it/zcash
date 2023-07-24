@@ -25,6 +25,16 @@ public:
         std::copy(id, id + ZC_ORCHARD_ZSA_ASSET_ID_SIZE, this->id);
     }
 
+    Asset(std::string hex) {
+        std::vector<unsigned char> bytes;
+        for (unsigned int i = 0; i < hex.length(); i += 2) {
+            std::string byteString = hex.substr(i, 2);
+            unsigned char byte = (unsigned char) strtol(byteString.c_str(), NULL, 16);
+            bytes.push_back(byte);
+        }
+        std::copy(bytes.begin(), bytes.end(), this->id);
+    }
+
     /**
      * Similar to 'derive' method from Rust
      * @param ik asset issuance key

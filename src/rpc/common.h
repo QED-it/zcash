@@ -182,7 +182,8 @@ static const CRPCConvertTable rpcCvtTable =
     { "z_mergetoaddress",            {{o, s}, {o, o, o, n, s}} },
     { "z_listoperationids",          {{}, {s}} },
     { "z_getnotescount",             {{}, {o, o}} },
-    { "issue",                       { {s, s, s, s, s}, {} }},
+    { "issue",                       {{s, s, s, s, s}, {} }},
+    { "z_sendassets",                {{s, o}, {o} }},
     // server
     { "help",                        {{}, {s}} },
     { "setlogfilter",                {{s}, {}} },

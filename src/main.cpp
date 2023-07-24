@@ -1767,9 +1767,6 @@ bool AcceptToMemoryPool(
         return false;
     }
 
-    LogPrint("mempool", "Checking txid %s", tx.GetHash().ToString());
-    LogPrint("mempool", "issue bundle num actions = %d, actions num = %d", tx.GetIssueBundle().GetDetails()->num_actions(), tx.GetIssueBundle().GetDetails()->actions().size());
-
     auto verifier = ProofVerifier::Strict();
     if (!CheckTransaction(tx, state, verifier))
         return false;
@@ -1903,33 +1900,32 @@ bool AcceptToMemoryPool(
         CTxMemPoolEntry entry(tx, nFees, GetTime(), chainActive.Height(), pool.HasNoInputsOf(tx), fSpendsCoinbase, nSigOps, consensusBranchId);
         unsigned int nSize = entry.GetTxSize();
 
-        // TODO return fees
-//        // No transactions are allowed with modified fee below the minimum relay fee,
-//        // except from disconnected blocks. The minimum relay fee will never be more
-//        // than LEGACY_DEFAULT_FEE zatoshis.
-//        CAmount minRelayFee = ::minRelayTxFee.GetFeeForRelay(nSize);
-//        if (fLimitFree && nModifiedFees < minRelayFee) {
-//            LogPrint("mempool",
-//                    "Not accepting transaction with txid %s, size %d bytes, effective fee %d " + MINOR_CURRENCY_UNIT +
-//                    ", and fee delta %d " + MINOR_CURRENCY_UNIT + " to the mempool due to insufficient fee. " +
-//                    " The minimum acceptance/relay fee for this transaction is %d " + MINOR_CURRENCY_UNIT,
-//                    tx.GetHash().ToString(), nSize, nModifiedFees, nModifiedFees - nFees, minRelayFee);
-//            return state.DoS(0, false, REJECT_INSUFFICIENTFEE, "min relay fee not met");
-//        }
-//
-//        // Transactions with more than `-txunpaidactionlimit` unpaid actions (calculated
-//        // using the modified fee) are not accepted to the mempool or relayed.
-//        // <https://zips.z.cash/zip-0317#transaction-relaying>
-//        size_t nUnpaidActionCount = entry.GetUnpaidActionCount();
-//        if (nUnpaidActionCount > nTxUnpaidActionLimit) {
-//            LogPrint("mempool",
-//                    "Not accepting transaction with txid %s, size %d bytes, effective fee %d " + MINOR_CURRENCY_UNIT +
-//                    ", and fee delta %d " + MINOR_CURRENCY_UNIT + " to the mempool because it has %d unpaid actions"
-//                    ", which is over the limit of %d. The conventional fee for this transaction is %d " + MINOR_CURRENCY_UNIT,
-//                    tx.GetHash().ToString(), nSize, nModifiedFees, nModifiedFees - nFees, nUnpaidActionCount,
-//                    nTxUnpaidActionLimit, tx.GetConventionalFee());
-//            return state.DoS(0, false, REJECT_INSUFFICIENTFEE, "tx unpaid action limit exceeded");
-//        }
+        // No transactions are allowed with modified fee below the minimum relay fee,
+        // except from disconnected blocks. The minimum relay fee will never be more
+        // than LEGACY_DEFAULT_FEE zatoshis.
+        CAmount minRelayFee = ::minRelayTxFee.GetFeeForRelay(nSize);
+        if (fLimitFree && nModifiedFees < minRelayFee) {
+            LogPrint("mempool",
+                    "Not accepting transaction with txid %s, size %d bytes, effective fee %d " + MINOR_CURRENCY_UNIT +
+                    ", and fee delta %d " + MINOR_CURRENCY_UNIT + " to the mempool due to insufficient fee. " +
+                    " The minimum acceptance/relay fee for this transaction is %d " + MINOR_CURRENCY_UNIT,
+                    tx.GetHash().ToString(), nSize, nModifiedFees, nModifiedFees - nFees, minRelayFee);
+            return state.DoS(0, false, REJECT_INSUFFICIENTFEE, "min relay fee not met");
+        }
+
+        // Transactions with more than `-txunpaidactionlimit` unpaid actions (calculated
+        // using the modified fee) are not accepted to the mempool or relayed.
+        // <https://zips.z.cash/zip-0317#transaction-relaying>
+        size_t nUnpaidActionCount = entry.GetUnpaidActionCount();
+        if (nUnpaidActionCount > nTxUnpaidActionLimit) {
+            LogPrint("mempool",
+                    "Not accepting transaction with txid %s, size %d bytes, effective fee %d " + MINOR_CURRENCY_UNIT +
+                    ", and fee delta %d " + MINOR_CURRENCY_UNIT + " to the mempool because it has %d unpaid actions"
+                    ", which is over the limit of %d. The conventional fee for this transaction is %d " + MINOR_CURRENCY_UNIT,
+                    tx.GetHash().ToString(), nSize, nModifiedFees, nModifiedFees - nFees, nUnpaidActionCount,
+                    nTxUnpaidActionLimit, tx.GetConventionalFee());
+            return state.DoS(0, false, REJECT_INSUFFICIENTFEE, "tx unpaid action limit exceeded");
+        }
 
         if (fRejectAbsurdFee && nFees > maxTxFee) {
             return state.Invalid(false,
@@ -2614,22 +2610,24 @@ bool CheckTxInputs(const CTransaction& tx, CValidationState& state, const CCoins
 
         }
 
-        nValueIn += tx.GetShieldedValueIn();
-        if (!MoneyRange(nValueIn))
-            return state.DoS(100, error("CheckInputs(): shielded input to transparent value pool out of range"),
-                             REJECT_INVALID, "bad-txns-inputvalues-outofrange");
-
-        if (nValueIn < tx.GetValueOut())
-            return state.DoS(100, false, REJECT_INVALID, "bad-txns-in-belowout", false,
-                strprintf("value in (%s) < value out (%s)", FormatMoney(nValueIn), FormatMoney(tx.GetValueOut())));
-
-        // Tally transaction fees
-        CAmount nTxFee = nValueIn - tx.GetValueOut();
-        if (nTxFee < 0)
-            return state.DoS(100, false, REJECT_INVALID, "bad-txns-fee-negative");
-        nFees += nTxFee;
-        if (!MoneyRange(nFees))
-            return state.DoS(100, false, REJECT_INVALID, "bad-txns-fee-outofrange");
+        // TODO Implement fees and inputs check per asset
+//        nValueIn += tx.GetShieldedValueIn();
+//
+//        if (!MoneyRange(nValueIn))
+//            return state.DoS(100, error("CheckInputs(): shielded input to transparent value pool out of range"),
+//                             REJECT_INVALID, "bad-txns-inputvalues-outofrange");
+//
+//        if (nValueIn < tx.GetValueOut())
+//            return state.DoS(100, false, REJECT_INVALID, "bad-txns-in-belowout", false,
+//                strprintf("value in (%s) < value out (%s)", FormatMoney(nValueIn), FormatMoney(tx.GetValueOut())));
+//
+//        // Tally transaction fees
+//        CAmount nTxFee = nValueIn - tx.GetValueOut();
+//        if (nTxFee < 0)
+//            return state.DoS(100, false, REJECT_INVALID, "bad-txns-fee-negative");
+//        nFees += nTxFee;
+//        if (!MoneyRange(nFees))
+//            return state.DoS(100, false, REJECT_INVALID, "bad-txns-fee-outofrange");
     }
     return true;
 }
@@ -3459,6 +3457,28 @@ bool ConnectBlock(const CBlock& block, CValidationState& state, CBlockIndex* pin
                 return state.DoS(100,
                     error("ConnectBlock(): block would overfill the Orchard commitment tree."),
                     REJECT_INVALID, "orchard-commitment-tree-full");
+            }
+        }
+
+        if (tx.GetIssueBundle().IsPresent()) {
+            try {
+                auto appendResult = orchard_tree.AppendIssueBundle(tx.GetIssueBundle());
+                if (fUpdateOrchardSubtrees && appendResult.has_subtree_boundary) {
+                    libzcash::SubtreeData subtree(appendResult.completed_subtree_root, pindex->nHeight);
+
+                    view.PushSubtree(ORCHARD, subtree);
+                    auto latest = view.GetLatestSubtree(ORCHARD);
+
+                    // The latest subtree, according to the view, should now be one
+                    // less than the "current" subtree index according to the tree
+                    // itself, after the append takes place earlier in this loop.
+                    assert(latest.has_value());
+                    assert((latest->index + 1) == orchard_tree.current_subtree_index());
+                }
+            } catch (const rust::Error& e) {
+                return state.DoS(100,
+                                 error("ConnectBlock(): block would overfill the Orchard commitment tree."),
+                                 REJECT_INVALID, "orchard-commitment-tree-full");
             }
         }
 
@@ -8154,9 +8174,6 @@ CMutableTransaction CreateNewContextualCMutableTransaction(
     mtx.fOverwintered   = txVersionInfo.fOverwintered;
     mtx.nVersionGroupId = txVersionInfo.nVersionGroupId;
     mtx.nVersion        = txVersionInfo.nVersion;
-
-    LogPrint("mempool", "TCreateNewContextualCMutableTransaction-nVersionGroupId: %d\n", mtx.nVersionGroupId);
-    LogPrint("mempool", "CreateNewContextualCMutableTransaction-nVersion: %d\n", mtx.nVersion);
 
     if (mtx.fOverwintered) {
         if (mtx.nVersion >= ZIP225_TX_VERSION) {

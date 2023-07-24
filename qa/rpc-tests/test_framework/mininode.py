@@ -524,20 +524,79 @@ class OrchardBundle(object):
             )
 
 
-class IssueBundle(object):
+class Note(object):
+    def __init__(self):
+        self.recipient = None
+        self.value = 0
+        self.asset = None
+        self.rho = None
+        self.rseed = None
 
     def deserialize(self, f):
-        num_actions = struct.unpack("<B", f.read(1))[0]
-        if num_actions != 0:
-            raise Exception("Non-empty IssueBundle is not implemented in mininode")
+        self.recipient = f.read(43)
+        self.value = struct.unpack("<q", f.read(8))[0]
+        self.asset = f.read(32)
+        self.rho = f.read(32)
+        self.rseed = f.read(32)
 
     def serialize(self):
         r = b""
-        r += ser_compact_size(0)
+        r += self.recipient
+        r += struct.pack("<q", self.value)
+        r += self.asset
+        r += self.rho
+        r += self.rseed
         return r
 
     def __repr__(self):
-        return "IssueBundle(Empty)"
+        return "Note(value=%i, asset=%s)" % (
+            self.value,
+            self.asset.hex(),
+        )
+
+class IssueAction(object):
+    def __init__(self):
+        self.asset_desc = None
+        self.finalize = False
+        self.notes = []
+
+    def deserialize(self, f):
+        self.finalize = f.read(1)[0] != 0
+        self.notes = deser_vector(f, Note)
+        self.asset_desc = deser_char_vector(f)
+
+    def serialize(self):
+        r = b""
+        r += struct.pack("B", 1 if self.finalize else 0)
+        r += ser_vector(self.notes)
+        r += ser_char_vector(self.asset_desc)
+        return r
+
+    def __repr__(self):
+        return "IssueAction(notes=%r)" % self.notes
+
+class IssueBundle(object):
+    def __init__(self):
+        self.actions = []
+        self.ik = None
+        self.authorization = None
+
+    def deserialize(self, f):
+        self.actions = deser_vector(f, IssueAction)
+        if len(self.actions) > 0:
+            self.ik = f.read(32)
+            self.authorization = f.read(64)
+
+    def serialize(self):
+        r = b""
+        r += ser_vector(self.actions)
+        if len(self.actions) > 0:
+            r += self.ik
+            r += self.authorization
+        return r
+
+    def __repr__(self):
+        return "IssueBundle(actions=%r)" % self.actions
 
 class Groth16Proof(object):
     def __init__(self):

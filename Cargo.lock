@@ -1353,7 +1353,7 @@ checksum = "624a8340c38c1b80fd549087862da4ba43e08858af025b236e509b6649fc13d5"
 [[package]]
 name = "orchard"
 version = "0.5.0"
-source = "git+https://github.com/QED-it/orchard?branch=ivk-to-bytes-visibility-downgrade#3ba61462638a5c0e39a022cb8ddc16559c24dd06"
+source = "git+https://github.com/QED-it/orchard?branch=ivk-to-bytes-visibility-downgrade#089df65fbb17a053b3060af1b704401c1ee86a7a"
 dependencies = [
  "aes",
  "bitvec",
