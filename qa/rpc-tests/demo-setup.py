@@ -65,7 +65,12 @@ class IssueTest(BitcoinTestFramework):
         print("\nBob's wallet details:\n")
         print(self.nodes[2].getwalletinfo())
 
-        time.sleep(999999)
+        counter = 0
+        while True: 
+            n = input("\n\nPlease input the number of blocks to generate and press Enter, or press Ctrl+C to exit: ")
+            nx = counter % self.num_nodes
+            self.nodes[nx].generate(int(n))
+            counter += 1
 
         # Issue assets to an address on node 0
         self.nodes[0].issue(0, ua0_alice, "WBTC", 4001, True)
