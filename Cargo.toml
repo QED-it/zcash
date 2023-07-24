@@ -120,7 +120,7 @@ panic = 'abort'
 codegen-units = 1
 
 [patch.crates-io]
-orchard = { version = "0.5", git = "https://github.com/QED-it/orchard", branch = "ivk-to-bytes-visibility-downgrade" }
+orchard = { version = "0.5", git = "https://github.com/QED-it/orchard", branch = "ivk-to-bytes-visibility-downgrade-with-burn-valid" }
 zcash_note_encryption = { version = "0.4", git = "https://github.com/QED-it/librustzcash.git", branch = "zsa-bundle-in-v5-vector-serialization_with_burn_validation_new" }
 zcash_address = { version = "0.3", git = "https://github.com/QED-it/librustzcash.git", branch = "zsa-bundle-in-v5-vector-serialization_with_burn_validation_new" }
 zcash_primitives = { version = "0.12", git = "https://github.com/QED-it/librustzcash.git", branch = "zsa-bundle-in-v5-vector-serialization_with_burn_validation_new" }
