@@ -31,15 +31,17 @@ class IssueTest(BitcoinTestFramework):
 
         # Get a new Orchard account on node 0 (Alice)
         acct0_alice = self.nodes[0].z_getnewaccount()['account']
+        acct1_alice = self.nodes[0].z_getnewaccount()['account']
         ua0_alice = self.nodes[0].z_getaddressforaccount(acct0_alice, ['orchard'])['address']
+        ua1_alice = self.nodes[0].z_getaddressforaccount(acct1_alice, ['orchard'])['address']
 
         # Get a new Orchard account on node 1 (Felix)
         acct0_felix = self.nodes[1].z_getnewaccount()['account']
         ua0_felix = self.nodes[1].z_getaddressforaccount(acct0_felix, ['orchard'])['address']
 
-        # Get a new Orchard account on node 2 (Bob)
-        acct0_bob = self.nodes[2].z_getnewaccount()['account']
-        ua0_bob = self.nodes[2].z_getaddressforaccount(acct0_bob, ['orchard'])['address']
+        # Get a new Orchard account on node 2 (Manufacturer)
+        acct0_mfg = self.nodes[2].z_getnewaccount()['account']
+        ua0_mfg = self.nodes[2].z_getaddressforaccount(acct0_mfg, ['orchard'])['address']
 
         # Activate NU5
         self.nodes[0].generate(5)
@@ -50,6 +52,7 @@ class IssueTest(BitcoinTestFramework):
         #Alice:
         print("\n\nAlice's port is:", rpc_url(0))
         print("\nAlice's Unified Address on Account 0 is:", ua0_alice)
+        print("\nAlice's Unified Address on Account 1 is:", ua1_alice)
         print("\nAlice's wallet details:\n")
         print(self.nodes[0].getwalletinfo())
 
@@ -59,10 +62,10 @@ class IssueTest(BitcoinTestFramework):
         print("\nFelix's wallet details:\n")
         print(self.nodes[1].getwalletinfo())
 
-        #Bob:
-        print("\n\nBob's port is:", rpc_url(2))
-        print("\nBob's Unified Address on Account 0 is:", ua0_bob)
-        print("\nBob's wallet details:\n")
+        #Manufacturer:
+        print("\n\nThe manufacturer's port is:", rpc_url(2))
+        print("\nThe manufacturer's Unified Address on Account 0 is:", ua0_mfg)
+        print("\nThe manufacturer's wallet details:\n")
         print(self.nodes[2].getwalletinfo())
 
         counter = 0
@@ -73,27 +76,27 @@ class IssueTest(BitcoinTestFramework):
             counter += 1
 
         # Issue assets to an address on node 0
-        self.nodes[0].issue(0, ua0_alice, "WBTC", 4001, True)
+#        self.nodes[0].issue(0, ua0_alice, "WBTC", 4001, True)
 
         # Issue assets to an address on node 1
-        self.nodes[0].issue(0, ua0_felix, "WBTC", 42, True)
+#        self.nodes[0].issue(0, ua0_felix, "WBTC", 42, True)
 
-        self.sync_all()
-        self.nodes[0].generate(1)
-        self.sync_all()
+#        self.sync_all()
+#        self.nodes[0].generate(1)
+#        self.sync_all()
 
-        walletinfo0 = self.nodes[0].getwalletinfo()
-        print(walletinfo0)
-        assert_equal(len(walletinfo0['asset_balances'].items()), 1)
-        for key, value in walletinfo0['asset_balances'].items():
-            assert_equal(value['confirmed_balance'], 4001)
+#        walletinfo0 = self.nodes[0].getwalletinfo()
+#        print(walletinfo0)
+#        assert_equal(len(walletinfo0['asset_balances'].items()), 1)
+#        for key, value in walletinfo0['asset_balances'].items():
+#            assert_equal(value['confirmed_balance'], 4001)
 
 
-        walletinfo1 = self.nodes[1].getwalletinfo()
-        print(walletinfo1)
-        assert_equal(len(walletinfo1['asset_balances'].items()), 1)
-        for key, value in walletinfo1['asset_balances'].items():
-            assert_equal(value['confirmed_balance'], 42)
+#        walletinfo1 = self.nodes[1].getwalletinfo()
+#        print(walletinfo1)
+#        assert_equal(len(walletinfo1['asset_balances'].items()), 1)
+#        for key, value in walletinfo1['asset_balances'].items():
+#            assert_equal(value['confirmed_balance'], 42)
 
 if __name__ == '__main__':
     IssueTest().main()
