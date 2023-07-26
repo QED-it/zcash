@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2022 The Zcash developers
+// Copyright (c) 2017-2023 The Zcash developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or https://www.opensource.org/licenses/mit-license.php .
 
@@ -9,9 +9,11 @@
 #include "init.h"
 #include "ui_interface.h"
 #include "util/system.h"
-#include "chainparams.h"
 
 // Flags that enable deprecated functionality.
+bool fEnableGbtOldHashes = true;
+bool fEnableDeprecationInfoDeprecationHeight = true;
+bool fEnableAddrTypeField = true;
 #ifdef ENABLE_WALLET
 bool fEnableGetNewAddress = true;
 bool fEnableGetRawChangeAddress = true;
@@ -20,20 +22,20 @@ bool fEnableZGetBalance = true;
 bool fEnableZGetTotalBalance = true;
 bool fEnableZListAddresses = true;
 bool fEnableLegacyPrivacyStrategy = true;
-bool fEnableZCRawReceive = true;
-bool fEnableZCRawJoinSplit = true;
-bool fEnableZCRawKeygen = true;
-bool fEnableAddrTypeField = true;
-bool fEnableDumpWallet = true;
 bool fEnableWalletTxVJoinSplit = true;
 #endif
 
 static const std::string CLIENT_VERSION_STR = FormatVersion(CLIENT_VERSION);
 
-void EnforceNodeDeprecation(int nHeight, bool forceLogging, bool fThread) {
+int64_t EstimatedNodeDeprecationTime(const CClock& clock, int nHeight) {
+    auto blocksToDeprecation = DEPRECATION_HEIGHT - nHeight;
 
+    return clock.GetTime() + (blocksToDeprecation * Consensus::POST_BLOSSOM_POW_TARGET_SPACING);
+}
+
+void EnforceNodeDeprecation(const CChainParams& params, int nHeight, bool forceLogging, bool fThread) {
     // Do not enforce deprecation in regtest or on testnet
-    std::string networkID = Params().NetworkIDString();
+    std::string networkID = params.NetworkIDString();
     if (networkID != "main") return;
 
     int blocksToDeprecation = DEPRECATION_HEIGHT - nHeight;
@@ -64,7 +66,7 @@ void EnforceNodeDeprecation(int nHeight, bool forceLogging, bool fThread) {
     }
 }
 
-std::optional<std::string> SetAllowedDeprecatedFeaturesFromCLIArgs() {
+std::optional<std::string> LoadAllowedDeprecatedFeatures() {
     auto args = GetMultiArg("-allowdeprecated");
     std::set<std::string> allowdeprecated(args.begin(), args.end());
 
@@ -95,6 +97,9 @@ std::optional<std::string> SetAllowedDeprecatedFeaturesFromCLIArgs() {
                 unrecMsg, GetAllowableDeprecatedFeatures());
     }
 
+    fEnableGbtOldHashes = allowdeprecated.count("gbt_oldhashes") > 0;
+    fEnableDeprecationInfoDeprecationHeight = allowdeprecated.count("deprecationinfo_deprecationheight") > 0;
+    fEnableAddrTypeField = allowdeprecated.count("addrtype") > 0;
 #ifdef ENABLE_WALLET
     fEnableLegacyPrivacyStrategy = allowdeprecated.count("legacy_privacy") > 0;
     fEnableGetNewAddress = allowdeprecated.count("getnewaddress") > 0;
@@ -103,11 +108,6 @@ std::optional<std::string> SetAllowedDeprecatedFeaturesFromCLIArgs() {
     fEnableZGetBalance = allowdeprecated.count("z_getbalance") > 0;
     fEnableZGetTotalBalance = allowdeprecated.count("z_gettotalbalance") > 0;
     fEnableZListAddresses = allowdeprecated.count("z_listaddresses") > 0;
-    fEnableZCRawReceive = allowdeprecated.count("zcrawreceive") > 0;
-    fEnableZCRawJoinSplit = allowdeprecated.count("zcrawjoinsplit") > 0;
-    fEnableZCRawKeygen = allowdeprecated.count("zcrawkeygen") > 0;
-    fEnableAddrTypeField = allowdeprecated.count("addrtype") > 0;
-    fEnableDumpWallet = allowdeprecated.count("dumpwallet") > 0;
     fEnableWalletTxVJoinSplit = allowdeprecated.count("wallettxvjoinsplit") > 0;
 #endif
 

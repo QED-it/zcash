@@ -1,6 +1,6 @@
 // Copyright (c) 2009-2010 Satoshi Nakamoto
 // Copyright (c) 2009-2014 The Bitcoin Core developers
-// Copyright (c) 2016-2022 The Zcash developers
+// Copyright (c) 2016-2023 The Zcash developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or https://www.opensource.org/licenses/mit-license.php .
 
@@ -26,6 +26,7 @@
 #include <windows.h>
 #include <ws2tcpip.h>
 #include <stdint.h>
+
 #else
 #include <fcntl.h>
 #include <sys/mman.h>
@@ -38,6 +39,9 @@
 #include <ifaddrs.h>
 #include <limits.h>
 #include <netdb.h>
+#endif
+#if defined(__MINGW32__) || !defined(WIN32)
+// MinGW needs this for isatty.
 #include <unistd.h>
 #endif
 

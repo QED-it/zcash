@@ -8,6 +8,7 @@ from test_framework.test_framework import BitcoinTestFramework
 from test_framework.authproxy import JSONRPCException
 from test_framework.util import assert_equal, start_nodes, start_node, \
     connect_nodes_bi, sync_blocks, sync_mempools
+from test_framework.zip317 import conventional_fee
 
 from decimal import Decimal
 
@@ -19,7 +20,11 @@ class WalletTest (BitcoinTestFramework):
         self.num_nodes = 4
 
     def setup_network(self, split=False):
-        self.nodes = start_nodes(3, self.options.tmpdir)
+        self.nodes = start_nodes(3, self.options.tmpdir, extra_args=[[
+            '-minrelaytxfee=0',
+            '-allowdeprecated=getnewaddress',
+            '-allowdeprecated=z_getbalance',
+        ]] * 3)
         connect_nodes_bi(self.nodes,0,1)
         connect_nodes_bi(self.nodes,1,2)
         connect_nodes_bi(self.nodes,0,2)
@@ -97,7 +102,9 @@ class WalletTest (BitcoinTestFramework):
 
         # Catch an attempt to send a transaction with an absurdly high fee.
         # Send 1.0 ZEC from an utxo of value 10.0 ZEC but don't specify a change output, so then
-        # the change of 9.0 ZEC becomes the fee, which is greater than estimated fee of 0.0021 ZEC.
+        # the change of 9.0 ZEC becomes the fee, which is considered to be absurdly high because
+        # the fee is more than 4 times the conventional fee.
+        assert(Decimal("9.0") > 4*conventional_fee(1))
         inputs = []
         outputs = {}
         for utxo in node2utxos:
@@ -215,7 +222,7 @@ class WalletTest (BitcoinTestFramework):
         # check integer balances from z_getbalance
         assert_equal(self.nodes[2].z_getbalance(mytaddr, 1, True), 1000000000)
 
-        mytxdetails = self.nodes[2].gettransaction(mytxid)
+        mytxdetails = self.nodes[2].getrawtransaction(mytxid, 1)
         myvjoinsplits = mytxdetails["vjoinsplit"]
         assert_equal(0, len(myvjoinsplits))
         assert("joinSplitPubKey" not in mytxdetails)

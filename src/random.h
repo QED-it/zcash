@@ -1,6 +1,6 @@
 // Copyright (c) 2009-2010 Satoshi Nakamoto
 // Copyright (c) 2009-2014 The Bitcoin Core developers
-// Copyright (c) 2016-2022 The Zcash developers
+// Copyright (c) 2016-2023 The Zcash developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or https://www.opensource.org/licenses/mit-license.php .
 
@@ -13,14 +13,49 @@
 
 #include <functional>
 #include <limits>
-#include <stdint.h>
 
-/**
+#include "int128.h"
+
+/** @file
  * Functions to gather random data via the rand_core OsRng
  */
+
+/** Fill the buffer buf of length num with random unformly distributed bytes, via the rand_core OsRng. */
 void GetRandBytes(unsigned char* buf, size_t num);
+
+/**
+ * Return a random value of type I uniformly distributed on [0, nMax), unless nMax is 0 in which case return 0.
+ * I must be an unsigned numeric type.
+ */
+template <typename I>
+I GetRandGeneric(I nMax)
+{
+    static_assert(std::numeric_limits<I>::min() == 0);
+    // I() for primitive integer types returns 0.
+    if (nMax == I())
+        return I();
+
+    // The range of the random source must be a multiple of the modulus
+    // to give every possible output value an equal possibility
+    I nRange = (std::numeric_limits<I>::max() / nMax) * nMax;
+    I nRand = I();
+    do {
+        GetRandBytes((unsigned char*)&nRand, sizeof(nRand));
+    } while (nRand >= nRange);
+    return (nRand % nMax);
+}
+
+/** Return a random uint128_t uniformly distributed on [0, nMax), unless nMax is 0 in which case return 0. */
+uint128_t GetRandUInt128(uint128_t nMax);
+/** Return a random int128_t uniformly distributed on [0, nMax), unless nMax is 0 in which case return 0. nMax must be >= 0. */
+int128_t GetRandInt128(int128_t nMax);
+/** Return a random uint64_t uniformly distributed on [0, nMax), unless nMax is 0 in which case return 0. */
 uint64_t GetRand(uint64_t nMax);
+/** Return a random int64_t uniformly distributed on [0, nMax), unless nMax is 0 in which case return 0. nMax must be >= 0. */
+int64_t GetRandInt64(int64_t nMax);
+/** Return a random int uniformly distributed on [0, nMax), unless nMax is 0 in which case return 0. nMax must be >= 0. */
 int GetRandInt(int nMax);
+/** Return a random uniformly distributed uint256. */
 uint256 GetRandHash();
 
 /**

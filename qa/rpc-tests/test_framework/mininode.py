@@ -434,7 +434,7 @@ class OrchardAction(object):
         self.rk = deser_uint256(f)
         self.cmx = deser_uint256(f)
         self.ephemeralKey = deser_uint256(f)
-        self.encCiphertext = f.read(580)
+        self.encCiphertext = f.read(612)
         self.outCiphertext = f.read(80)
 
     def serialize(self):
@@ -523,6 +523,80 @@ class OrchardBundle(object):
                 self.bindingSig,
             )
 
+
+class Note(object):
+    def __init__(self):
+        self.recipient = None
+        self.value = 0
+        self.asset = None
+        self.rho = None
+        self.rseed = None
+
+    def deserialize(self, f):
+        self.recipient = f.read(43)
+        self.value = struct.unpack("<q", f.read(8))[0]
+        self.asset = f.read(32)
+        self.rho = f.read(32)
+        self.rseed = f.read(32)
+
+    def serialize(self):
+        r = b""
+        r += self.recipient
+        r += struct.pack("<q", self.value)
+        r += self.asset
+        r += self.rho
+        r += self.rseed
+        return r
+
+    def __repr__(self):
+        return "Note(value=%i, asset=%s)" % (
+            self.value,
+            self.asset.hex(),
+        )
+
+class IssueAction(object):
+    def __init__(self):
+        self.asset_desc = None
+        self.finalize = False
+        self.notes = []
+
+    def deserialize(self, f):
+        self.finalize = f.read(1)[0] != 0
+        self.notes = deser_vector(f, Note)
+        self.asset_desc = deser_char_vector(f)
+
+    def serialize(self):
+        r = b""
+        r += struct.pack("B", 1 if self.finalize else 0)
+        r += ser_vector(self.notes)
+        r += ser_char_vector(self.asset_desc)
+        return r
+
+    def __repr__(self):
+        return "IssueAction(notes=%r)" % self.notes
+
+class IssueBundle(object):
+    def __init__(self):
+        self.actions = []
+        self.ik = None
+        self.authorization = None
+
+    def deserialize(self, f):
+        self.actions = deser_vector(f, IssueAction)
+        if len(self.actions) > 0:
+            self.ik = f.read(32)
+            self.authorization = f.read(64)
+
+    def serialize(self):
+        r = b""
+        r += ser_vector(self.actions)
+        if len(self.actions) > 0:
+            r += self.ik
+            r += self.authorization
+        return r
+
+    def __repr__(self):
+        return "IssueBundle(actions=%r)" % self.actions
 
 class Groth16Proof(object):
     def __init__(self):
@@ -628,7 +702,7 @@ class OutputDescriptionV5(object):
         self.cv = deser_uint256(f)
         self.cmu = deser_uint256(f)
         self.ephemeralKey = deser_uint256(f)
-        self.encCiphertext = f.read(580)
+        self.encCiphertext = f.read(612)
         self.outCiphertext = f.read(80)
 
     def serialize(self):
@@ -665,7 +739,7 @@ class OutputDescription(object):
         self.cv = deser_uint256(f)
         self.cmu = deser_uint256(f)
         self.ephemeralKey = deser_uint256(f)
-        self.encCiphertext = f.read(580)
+        self.encCiphertext = f.read(612)
         self.outCiphertext = f.read(80)
         self.zkproof = Groth16Proof()
         self.zkproof.deserialize(f)
@@ -981,6 +1055,7 @@ class CTransaction(object):
             self.valueBalance = 0
             self.saplingBundle = SaplingBundle()
             self.orchardBundle = OrchardBundle()
+            self.issueBundle = IssueBundle()
             self.shieldedSpends = []
             self.shieldedOutputs = []
             self.vJoinSplit = []
@@ -1000,6 +1075,7 @@ class CTransaction(object):
             self.valueBalance = tx.valueBalance
             self.saplingBundle = copy.deepcopy(tx.saplingBundle)
             self.orchardBundle = copy.deepcopy(tx.orchardBundle)
+            self.issueBundle = copy.deepcopy(tx.issueBundle)
             self.shieldedSpends = copy.deepcopy(tx.shieldedSpends)
             self.shieldedOutputs = copy.deepcopy(tx.shieldedOutputs)
             self.vJoinSplit = copy.deepcopy(tx.vJoinSplit)
@@ -1043,6 +1119,10 @@ class CTransaction(object):
             # Orchard transaction fields
             self.orchardBundle = OrchardBundle()
             self.orchardBundle.deserialize(f)
+
+            # Orchard transaction fields
+            self.issueBundle = IssueBundle()
+            self.issueBundle.deserialize(f)
 
             return
 
@@ -1101,6 +1181,9 @@ class CTransaction(object):
 
             # Orchard transaction fields
             r += self.orchardBundle.serialize()
+
+            # Issuance transaction fields
+            r += self.issueBundle.serialize()
 
             return r
 

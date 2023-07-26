@@ -1,10 +1,11 @@
-// Copyright (c) 2016-2022 The Zcash developers
+// Copyright (c) 2016-2023 The Zcash developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or https://www.opensource.org/licenses/mit-license.php .
 
 #ifndef ZCASH_UTIL_TEST_H
 #define ZCASH_UTIL_TEST_H
 
+#include "chainparams.h"
 #include "coins.h"
 #include "key_io.h"
 #include "wallet/wallet.h"
@@ -33,6 +34,49 @@ public:
         // Always return false so we treat every nullifier as being unspent.
         return false;
     }
+
+    bool GetCoins(const uint256 &txid, CCoins &coins) const { return false; }
+    bool HaveCoins(const uint256 &txid) const { return false; }
+    uint256 GetBestBlock() const {
+        throw std::runtime_error("`GetBestBlock` unimplemented for mock AssumeShieldedInputsExistAndAreSpendable");
+    }
+    uint256 GetBestAnchor(ShieldedType type) const {
+        throw std::runtime_error("`GetBestAnchor` unimplemented for mock AssumeShieldedInputsExistAndAreSpendable");
+    }
+    HistoryIndex GetHistoryLength(uint32_t epochId) const { return 0; }
+    HistoryNode GetHistoryAt(uint32_t epochId, HistoryIndex index) const {
+        throw std::runtime_error("`GetHistoryAt` unimplemented for mock AssumeShieldedInputsExistAndAreSpendable");
+    }
+    uint256 GetHistoryRoot(uint32_t epochId) const {
+        throw std::runtime_error("`GetHistoryRoot` unimplemented for mock AssumeShieldedInputsExistAndAreSpendable");
+    }
+
+    std::optional<libzcash::LatestSubtree> GetLatestSubtree(ShieldedType type) const {
+        throw std::runtime_error("`GetLatestSubtree` unimplemented for mock AssumeShieldedInputsExistAndAreSpendable");
+    };
+    std::optional<libzcash::SubtreeData> GetSubtreeData(
+            ShieldedType type,
+            libzcash::SubtreeIndex index) const {
+        throw std::runtime_error("`GetSubtreeData` unimplemented for mock AssumeShieldedInputsExistAndAreSpendable");
+    };
+
+    bool BatchWrite(CCoinsMap &mapCoins,
+                    const uint256 &hashBlock,
+                    const uint256 &hashSproutAnchor,
+                    const uint256 &hashSaplingAnchor,
+                    const uint256 &hashOrchardAnchor,
+                    CAnchorsSproutMap &mapSproutAnchors,
+                    CAnchorsSaplingMap &mapSaplingAnchors,
+                    CAnchorsOrchardMap &mapOrchardAnchors,
+                    CNullifiersMap &mapSproutNullifiers,
+                    CNullifiersMap &mapSaplingNullifiers,
+                    CNullifiersMap &mapOrchardNullifiers,
+                    CHistoryCacheMap &historyCacheMap,
+                    SubtreeCache &cacheSaplingSubtrees,
+                    SubtreeCache &cacheOrchardSubtrees) {
+        return false;
+    }
+    bool GetStats(CCoinsStats &stats) const { return false; }
 };
 
 // Sprout
@@ -95,7 +139,7 @@ CKey AddTestCKeyToKeyStore(CBasicKeyStore& keyStore);
  */
 TestSaplingNote GetTestSaplingNote(const libzcash::SaplingPaymentAddress& pa, CAmount value);
 
-CWalletTx GetValidSaplingReceive(const Consensus::Params& consensusParams,
+CWalletTx GetValidSaplingReceive(const CChainParams& consensusParams,
                                  CBasicKeyStore& keyStore,
                                  const libzcash::SaplingExtendedSpendingKey &sk,
                                  CAmount value);

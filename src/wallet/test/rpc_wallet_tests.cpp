@@ -1,5 +1,5 @@
 // Copyright (c) 2013-2014 The Bitcoin Core developers
-// Copyright (c) 2020-2022 The Zcash developers
+// Copyright (c) 2020-2023 The Zcash developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or https://www.opensource.org/licenses/mit-license.php .
 
@@ -13,14 +13,13 @@
 #include "wallet/wallet.h"
 
 #include "zcash/Address.hpp"
+#include "zcash/memo.h"
 
 #include "asyncrpcqueue.h"
 #include "asyncrpcoperation.h"
 #include "wallet/asyncrpcoperation_common.h"
-#include "wallet/asyncrpcoperation_mergetoaddress.h"
 #include "wallet/asyncrpcoperation_sendmany.h"
 #include "wallet/asyncrpcoperation_shieldcoinbase.h"
-#include "wallet/memo.h"
 
 #include "init.h"
 #include "util/test.h"
@@ -68,6 +67,13 @@ public:
 private:
     fs::path old_cwd;
 };
+
+CWalletTx FakeWalletTx() {
+    CMutableTransaction mtx;
+    mtx.vout.resize(1);
+    mtx.vout[0].nValue = 1;
+    return CWalletTx(nullptr, mtx);
+}
 
 }
 
@@ -150,13 +156,13 @@ BOOST_AUTO_TEST_CASE(rpc_wallet)
     CTxDestination setaccountDemoAddress(CTxDestination(setaccountDemoPubkey.GetID()));
 
     /*********************************
-     *                  getbalance
+     *          getbalance
      *********************************/
     BOOST_CHECK_NO_THROW(CallRPC("getbalance"));
     BOOST_CHECK_THROW(CallRPC("getbalance " + keyIO.EncodeDestination(demoAddress)), runtime_error);
 
     /*********************************
-     * 			listunspent
+     *          listunspent
      *********************************/
     BOOST_CHECK_NO_THROW(CallRPC("listunspent"));
     BOOST_CHECK_THROW(CallRPC("listunspent string"), runtime_error);
@@ -167,7 +173,7 @@ BOOST_AUTO_TEST_CASE(rpc_wallet)
     BOOST_CHECK(r.get_array().empty());
 
     /*********************************
-     * 		listreceivedbyaddress
+     *          listreceivedbyaddress
      *********************************/
     BOOST_CHECK_NO_THROW(CallRPC("listreceivedbyaddress"));
     BOOST_CHECK_NO_THROW(CallRPC("listreceivedbyaddress 0"));
@@ -201,22 +207,22 @@ BOOST_AUTO_TEST_CASE(rpc_wallet)
     BOOST_CHECK_NO_THROW(CallRPC("listaddressgroupings"));
 
     /*********************************
-     * 		walletconfirmbackup
+     *          walletconfirmbackup
      *********************************/
     BOOST_CHECK_THROW(CallRPC(string("walletconfirmbackup \"badmnemonic\"")), runtime_error);
 
     /*********************************
-     * 		getrawchangeaddress
+     *          getrawchangeaddress
      *********************************/
     BOOST_CHECK_NO_THROW(CallRPC("getrawchangeaddress"));
 
     /*********************************
-     * 		getnewaddress
+     *          getnewaddress
      *********************************/
     BOOST_CHECK_NO_THROW(CallRPC("getnewaddress"));
 
     /*********************************
-     * 	signmessage + verifymessage
+     *          signmessage + verifymessage
      *********************************/
     BOOST_CHECK_NO_THROW(retValue = CallRPC("signmessage " + keyIO.EncodeDestination(demoAddress) + " mymessage"));
     BOOST_CHECK_THROW(CallRPC("signmessage"), runtime_error);
@@ -236,7 +242,7 @@ BOOST_AUTO_TEST_CASE(rpc_wallet)
     BOOST_CHECK(CallRPC("verifymessage " + keyIO.EncodeDestination(demoAddress) + " " + retValue.get_str() + " mymessage").get_bool() == true);
 
     /*********************************
-     * 		listaddresses
+     *          listaddresses
      *********************************/
     BOOST_CHECK_NO_THROW(retValue = CallRPC("listaddresses"));
     UniValue arr = retValue.get_array();
@@ -258,7 +264,7 @@ BOOST_AUTO_TEST_CASE(rpc_wallet)
     }
 
     /*********************************
-     * 	     fundrawtransaction
+     *          fundrawtransaction
      *********************************/
     BOOST_CHECK_THROW(CallRPC("fundrawtransaction 28z"), runtime_error);
     BOOST_CHECK_THROW(CallRPC("fundrawtransaction 01000000000180969800000000001976a91450ce0a4b0ee0ddeb633da85199728b940ac3fe9488ac00000000"), runtime_error);
@@ -802,7 +808,11 @@ void CheckHaveAddr(const std::optional<libzcash::PaymentAddress>& addr) {
     auto addr_of_type = std::get_if<ADDR_TYPE>(&(addr.value()));
     BOOST_ASSERT(addr_of_type != nullptr);
 
-    BOOST_CHECK(pwalletMain->ZTXOSelectorForAddress(*addr_of_type, true, false).has_value());
+    BOOST_CHECK(pwalletMain->ZTXOSelectorForAddress(
+                        *addr_of_type,
+                        true,
+                        TransparentCoinbasePolicy::Allow,
+                        std::nullopt).has_value());
 }
 
 BOOST_AUTO_TEST_CASE(rpc_wallet_z_getnewaddress) {
@@ -1181,8 +1191,8 @@ BOOST_AUTO_TEST_CASE(rpc_z_sendmany_parameters)
             "1 50.00000001"
             ), runtime_error);
 
-    // memo bigger than allowed length of ZC_MEMO_SIZE
-    std::vector<char> v (2 * (ZC_MEMO_SIZE+1));     // x2 for hexadecimal string format
+    // memo bigger than allowed length of `Memo::SIZE`
+    std::vector<char> v (2 * (Memo::SIZE+1));     // x2 for hexadecimal string format
     std::fill(v.begin(),v.end(), 'A');
     std::string badmemo(v.begin(), v.end());
     auto pa = pwalletMain->GenerateNewSproutZKey();
@@ -1194,7 +1204,7 @@ BOOST_AUTO_TEST_CASE(rpc_z_sendmany_parameters)
     // Mutable tx containing contextual information we need to build tx
     UniValue retValue = CallRPC("getblockcount");
     int nHeight = retValue.get_int();
-    TransactionBuilder builder(Params().GetConsensus(), nHeight + 1, std::nullopt, pwalletMain);
+    TransactionBuilder builder(Params(), nHeight + 1, std::nullopt, pwalletMain);
 }
 
 BOOST_AUTO_TEST_CASE(asyncrpcoperation_sign_send_raw_transaction) {
@@ -1215,6 +1225,7 @@ BOOST_AUTO_TEST_CASE(rpc_z_sendmany_internals)
     SelectParams(CBaseChainParams::TESTNET);
     const Consensus::Params& consensusParams = Params().GetConsensus();
     KeyIO keyIO(Params());
+    WalletTxBuilder builder(Params(), minRelayTxFee);
 
     LOCK2(cs_main, pwalletMain->cs_wallet);
 
@@ -1236,11 +1247,17 @@ BOOST_AUTO_TEST_CASE(rpc_z_sendmany_internals)
 
     // there are no utxos to spend
     {
-        auto selector = pwalletMain->ZTXOSelectorForAddress(taddr1, true, false).value();
-        TransactionBuilder builder(consensusParams, nHeight + 1, std::nullopt, pwalletMain);
-        std::vector<ResolvedPayment> recipients = { ResolvedPayment(std::nullopt, zaddr1, 100*COIN, Memo::FromHexOrThrow("DEADBEEF")) };
-        TransactionStrategy strategy;
-        std::shared_ptr<AsyncRPCOperation> operation(new AsyncRPCOperation_sendmany(std::move(builder), selector, recipients, 1, 1, strategy));
+        TransactionStrategy strategy(PrivacyPolicy::AllowRevealedSenders);
+        auto selector = pwalletMain->ZTXOSelectorForAddress(
+                taddr1,
+                true,
+                // In the real transaction builder we use either Require or Disallow, but here we
+                // are checking that there are no UTXOs at all, so we allow either to be selected to
+                // confirm this.
+                TransparentCoinbasePolicy::Allow,
+                strategy.PermittedAccountSpendingPolicy()).value();
+        std::vector<Payment> recipients = { Payment(zaddr1, 100*COIN, Memo::FromBytes({0xDE, 0xAD, 0xBE, 0xEF})) };
+        std::shared_ptr<AsyncRPCOperation> operation(new AsyncRPCOperation_sendmany(std::move(builder), selector, recipients, 1, 1, strategy, std::nullopt));
         operation->main();
         BOOST_CHECK(operation->isFailed());
         std::string msg = operation->getErrorMessage();
@@ -1249,11 +1266,14 @@ BOOST_AUTO_TEST_CASE(rpc_z_sendmany_internals)
 
     // there are no unspent notes to spend
     {
-        auto selector = pwalletMain->ZTXOSelectorForAddress(zaddr1, true, false).value();
-        TransactionBuilder builder(consensusParams, nHeight + 1, std::nullopt, pwalletMain);
-        std::vector<ResolvedPayment> recipients = { ResolvedPayment(std::nullopt, taddr1, 100*COIN, Memo::FromHexOrThrow("DEADBEEF")) };
         TransactionStrategy strategy(PrivacyPolicy::AllowRevealedRecipients);
-        std::shared_ptr<AsyncRPCOperation> operation(new AsyncRPCOperation_sendmany(std::move(builder), selector, recipients, 1, 1, strategy));
+        auto selector = pwalletMain->ZTXOSelectorForAddress(
+                zaddr1,
+                true,
+                TransparentCoinbasePolicy::Disallow,
+                strategy.PermittedAccountSpendingPolicy()).value();
+        std::vector<Payment> recipients = { Payment(taddr1, 100*COIN, Memo::FromBytes({0xDE, 0xAD, 0xBE, 0xEF})) };
+        std::shared_ptr<AsyncRPCOperation> operation(new AsyncRPCOperation_sendmany(std::move(builder), selector, recipients, 1, 1, strategy, std::nullopt));
         operation->main();
         BOOST_CHECK(operation->isFailed());
         std::string msg = operation->getErrorMessage();
@@ -1262,33 +1282,19 @@ BOOST_AUTO_TEST_CASE(rpc_z_sendmany_internals)
 }
 
 BOOST_AUTO_TEST_CASE(memo_hex_parsing) {
-    std::string memo = "DEADBEEF";
-    MemoBytes memoBytes = Memo::FromHexOrThrow(memo).ToBytes();
+    Memo::Bytes memoBytes = Memo::ToBytes(Memo::FromBytes({0xDE, 0xAD, 0xBE, 0xEF}));
     BOOST_CHECK_EQUAL(memoBytes[0], 0xDE);
     BOOST_CHECK_EQUAL(memoBytes[1], 0xAD);
     BOOST_CHECK_EQUAL(memoBytes[2], 0xBE);
     BOOST_CHECK_EQUAL(memoBytes[3], 0xEF);
-    for (int i=4; i<ZC_MEMO_SIZE; i++) {
+    for (int i=4; i<Memo::SIZE; i++) {
         BOOST_CHECK_EQUAL(memoBytes[i], 0x00);  // zero padding
     }
 
     // memo is longer than allowed
-    std::vector<char> v (2 * (ZC_MEMO_SIZE+1));
-    std::fill(v.begin(),v.end(), 'A');
-    std::string bigmemo(v.begin(), v.end());
-    BOOST_CHECK(std::get<MemoError>(Memo::FromHex(bigmemo)) == MemoError::MemoTooLong);
-
-    // invalid hexadecimal string
-    std::fill(v.begin(),v.end(), '@'); // not a hex character
-    std::string badmemo(v.begin(), v.end());
-    BOOST_CHECK(std::get<MemoError>(Memo::FromHex(badmemo)) == MemoError::HexDecodeError);
-
-    // odd length hexadecimal string
-    std::fill(v.begin(),v.end(), 'A');
-    v.resize(v.size() - 1);
-    assert(v.size() %2 == 1); // odd length
-    std::string oddmemo(v.begin(), v.end());
-    BOOST_CHECK(std::get<MemoError>(Memo::FromHex(oddmemo)) == MemoError::HexDecodeError);
+    std::vector<Memo::Byte> bigmemo (Memo::SIZE+1);
+    std::fill(bigmemo.begin(), bigmemo.end(), 0x32);
+    BOOST_CHECK(Memo::FromBytes(bigmemo).error() == Memo::ConversionError::MemoTooLong);
 }
 
 /*
@@ -1506,26 +1512,24 @@ BOOST_AUTO_TEST_CASE(rpc_z_shieldcoinbase_parameters)
     "100 -1"
     ), runtime_error);
 
-    // Mutable tx containing contextual information we need to build tx
-    UniValue retValue = CallRPC("getblockcount");
-    int nHeight = retValue.get_int();
-    CMutableTransaction mtx = CreateNewContextualCMutableTransaction(Params().GetConsensus(), nHeight + 1, false);
-    if (mtx.nVersion == 1) {
-        mtx.nVersion = 2;
-    }
-
     // Test constructor of AsyncRPCOperation_shieldcoinbase
     KeyIO keyIO(Params());
+    WalletTxBuilder builder(Params(), minRelayTxFee);
+    UniValue retValue;
+    BOOST_CHECK_NO_THROW(retValue = CallRPC("getnewaddress"));
+    auto taddr2 = std::get<CKeyID>(keyIO.DecodePaymentAddress(retValue.get_str()).value());
     auto testnetzaddr = std::get<libzcash::SproutPaymentAddress>(keyIO.DecodePaymentAddress("ztjiDe569DPNbyTE6TSdJTaSDhoXEHLGvYoUnBU1wfVNU52TEyT6berYtySkd21njAeEoh8fFJUT42kua9r8EnhBaEKqCpP").value());
+    auto selector = pwalletMain->ZTXOSelectorForAddress(
+            taddr2,
+            true,
+            // In the real transaction builder we use either Require or Disallow, but here we
+            // are checking that there are no UTXOs at all, so we allow either to be selected to
+            // confirm this.
+            TransparentCoinbasePolicy::Allow,
+            UnifiedAccountSpendingPolicy::ShieldedWithSingleTransparentAddress).value();
 
     try {
-        std::shared_ptr<AsyncRPCOperation> operation(new AsyncRPCOperation_shieldcoinbase(TransactionBuilder(), mtx, {}, testnetzaddr, -1 ));
-    } catch (const UniValue& objError) {
-        BOOST_CHECK( find_error(objError, "Fee is out of range"));
-    }
-
-    try {
-        std::shared_ptr<AsyncRPCOperation> operation(new AsyncRPCOperation_shieldcoinbase(TransactionBuilder(), mtx, {}, testnetzaddr, 1));
+        std::shared_ptr<AsyncRPCOperation> operation(new AsyncRPCOperation_shieldcoinbase(std::move(builder), selector, testnetzaddr, std::nullopt, PrivacyPolicy::AllowRevealedSenders, SHIELD_COINBASE_DEFAULT_LIMIT, 1));
     } catch (const UniValue& objError) {
         BOOST_CHECK( find_error(objError, "Empty inputs"));
     }
@@ -1555,7 +1559,7 @@ BOOST_AUTO_TEST_CASE(rpc_z_mergetoaddress_parameters)
 
     // bad from address
     CheckRPCThrows("z_mergetoaddress ** " + taddr2,
-        "Error parsing JSON:**");
+        "Error parsing JSON: **");
 
     // bad from address
     CheckRPCThrows("z_mergetoaddress [\"**\"] " + taddr2,
@@ -1563,11 +1567,11 @@ BOOST_AUTO_TEST_CASE(rpc_z_mergetoaddress_parameters)
 
     // bad from address
     CheckRPCThrows("z_mergetoaddress " + taddr1 + " " + taddr2,
-        "Error parsing JSON:" + taddr1);
+        "Error parsing JSON: " + taddr1);
 
     // bad from address
     CheckRPCThrows("z_mergetoaddress [" + taddr1 + "] " + taddr2,
-        "Error parsing JSON:[" + taddr1 + "]");
+        "Error parsing JSON: [" + taddr1 + "]");
 
     // bad to address
     CheckRPCThrows("z_mergetoaddress [\"" + taddr1 + "\"] INVALID" + taddr2,
@@ -1602,59 +1606,49 @@ BOOST_AUTO_TEST_CASE(rpc_z_mergetoaddress_parameters)
     CheckRPCThrows("z_mergetoaddress [\"ANY_SAPLING\",\"" + aSaplingAddr + "\"] " + taddr2,
         "Cannot specify specific zaddrs when using \"ANY_SPROUT\" or \"ANY_SAPLING\"");
 
-    // memo bigger than allowed length of ZC_MEMO_SIZE
-    std::vector<char> v (2 * (ZC_MEMO_SIZE+1));     // x2 for hexadecimal string format
+    // memo bigger than allowed length of Memo::size
+    std::vector<char> v (2 * (Memo::SIZE+1));     // x2 for hexadecimal string format
     std::fill(v.begin(),v.end(), 'A');
     std::string badmemo(v.begin(), v.end());
     CheckRPCThrows("z_mergetoaddress [\"" + taddr1 + "\"] " + aSproutAddr + " 0.00001 100 100 " + badmemo,
-        "Invalid parameter, size of memo is larger than maximum allowed 512");
+        strprintf("Invalid parameter, memo is longer than the maximum allowed %d bytes.", Memo::SIZE));
 
     // Mutable tx containing contextual information we need to build tx
     UniValue retValue = CallRPC("getblockcount");
     int nHeight = retValue.get_int();
     CMutableTransaction mtx = CreateNewContextualCMutableTransaction(Params().GetConsensus(), nHeight + 1, false);
 
-    // Test constructor of AsyncRPCOperation_mergetoaddress
     KeyIO keyIO(Params());
-    MergeToAddressRecipient testnetzaddr(
-        keyIO.DecodePaymentAddress("ztjiDe569DPNbyTE6TSdJTaSDhoXEHLGvYoUnBU1wfVNU52TEyT6berYtySkd21njAeEoh8fFJUT42kua9r8EnhBaEKqCpP").value(),
-        "testnet memo");
+    WalletTxBuilder builder(Params(), minRelayTxFee);
+    auto saplingKey = pwalletMain->GenerateNewLegacySaplingZKey();
+    NetAmountRecipient testnetzaddr(saplingKey, std::nullopt);
+    auto selector = CWallet::LegacyTransparentZTXOSelector(
+            true,
+            TransparentCoinbasePolicy::Disallow);
+    TransactionStrategy strategy(PrivacyPolicy::AllowRevealedRecipients);
 
-    try {
-        std::shared_ptr<AsyncRPCOperation> operation(new AsyncRPCOperation_mergetoaddress(std::nullopt,  mtx, {}, {}, {}, testnetzaddr, -1 ));
-        BOOST_FAIL("Should have caused an error");
-    } catch (const UniValue& objError) {
-        BOOST_CHECK( find_error(objError, "Fee is out of range"));
-    }
+    builder.PrepareTransaction(*pwalletMain, selector, {}, testnetzaddr, chainActive, strategy, -1, 1)
+        .map_error([&](const auto& err) {
+            // TODO: Provide `operator==` on `InputSelectionError` and use that here.
+            BOOST_CHECK(std::holds_alternative<InvalidFeeError>(err));
+        })
+        .map([](const auto&) {
+            BOOST_FAIL("Fee value of -1 expected to be out of the valid range of values.");
+        });
 
-    try {
-        std::shared_ptr<AsyncRPCOperation> operation(new AsyncRPCOperation_mergetoaddress(std::nullopt, mtx, {}, {}, {}, testnetzaddr, 1));
-        BOOST_FAIL("Should have caused an error");
-    } catch (const UniValue& objError) {
-        BOOST_CHECK( find_error(objError, "No inputs"));
-    }
-
-    std::vector<MergeToAddressInputUTXO> inputs = { MergeToAddressInputUTXO{ COutPoint{uint256(), 0}, 0, CScript()} };
-
-    std::vector<MergeToAddressInputSproutNote> sproutNoteInputs =
-        {MergeToAddressInputSproutNote{JSOutPoint(), SproutNote(), 0, SproutSpendingKey()}};
-    std::vector<MergeToAddressInputSaplingNote> saplingNoteInputs =
-        {MergeToAddressInputSaplingNote{SaplingOutPoint(), SaplingNote({}, uint256(), 0, uint256(), Zip212Enabled::BeforeZip212), 0, SaplingExpandedSpendingKey()}};
-
-    // Sprout and Sapling inputs -> throw
-    try {
-        auto operation = new AsyncRPCOperation_mergetoaddress(std::nullopt, mtx, inputs, sproutNoteInputs, saplingNoteInputs, testnetzaddr, 1);
-        BOOST_FAIL("Should have caused an error");
-    } catch (const UniValue& objError) {
-        BOOST_CHECK(find_error(objError, "Cannot send from both Sprout and Sapling addresses using z_mergetoaddress"));
-    }
-    // Sprout inputs and TransactionBuilder -> throw
-    try {
-        auto operation = new AsyncRPCOperation_mergetoaddress(TransactionBuilder(), mtx, inputs, sproutNoteInputs, {}, testnetzaddr, 1);
-        BOOST_FAIL("Should have caused an error");
-    } catch (const UniValue& objError) {
-        BOOST_CHECK(find_error(objError, "Sprout notes are not supported by the TransactionBuilder"));
-    }
+    builder.PrepareTransaction(*pwalletMain, selector, {}, testnetzaddr, chainActive, strategy, 1, 1)
+        .map_error([&](const auto& err) {
+            // TODO: Provide `operator==` on `InputSelectionError` and use that here.
+            BOOST_CHECK(examine(err, match {
+                [](const InvalidFundsError& ife) {
+                    return std::holds_alternative<InsufficientFundsError>(ife.reason);
+                },
+                [](const auto&) { return false; },
+            }));
+        })
+        .map([](const auto&) {
+            BOOST_FAIL("Expected an error.");
+        });
 }
 
 void TestWTxStatus(const Consensus::Params consensusParams, const int delta) {

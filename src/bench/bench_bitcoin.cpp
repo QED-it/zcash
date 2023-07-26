@@ -1,5 +1,5 @@
 // Copyright (c) 2015 The Bitcoin Core developers
-// Copyright (c) 2020-2022 The Zcash developers
+// Copyright (c) 2020-2023 The Zcash developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or https://www.opensource.org/licenses/mit-license.php .
 
@@ -20,7 +20,6 @@ main(int argc, char** argv)
 {
     SHA256AutoDetect();
     ECC_Start();
-    auto globalVerifyHandle = new ECCVerifyHandle();
     SetupEnvironment();
     fPrintToDebugLog = false; // don't want to write to debug log file
 

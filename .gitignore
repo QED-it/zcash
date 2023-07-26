@@ -44,7 +44,6 @@ confdefs.h
 conftest.cpp
 conftest.err
 
-cache/
 venv-mnf/
 src/univalue/gen
 
@@ -130,3 +129,5 @@ src/fuzzing/*/output
 src/fuzz.cpp
 
 .updatecheck-token
+.env
+poetry.lock

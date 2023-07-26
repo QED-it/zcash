@@ -1,5 +1,5 @@
 // Copyright (c) 2014 The Bitcoin Core developers
-// Copyright (c) 2016-2022 The Zcash developers
+// Copyright (c) 2016-2023 The Zcash developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or https://www.opensource.org/licenses/mit-license.php .
 
@@ -14,6 +14,7 @@
 #include "primitives/transaction.h"
 #include "pubkey.h"
 #include "transaction_builder.h"
+#include "util/test.h"
 #include "zcash/Note.hpp"
 #include "zcash/address/mnemonic.h"
 
@@ -45,6 +46,7 @@ public:
         hashBestSaplingAnchor_ = SaplingMerkleTree::empty_root();
         hashBestOrchardAnchor_ = OrchardMerkleFrontier::empty_root();
     }
+    ~CCoinsViewTest() {}
 
     bool GetSproutAnchorAt(const uint256& rt, SproutMerkleTree &tree) const {
         if (rt == SproutMerkleTree::empty_root()) {
@@ -192,6 +194,20 @@ public:
         }
     }
 
+    HistoryIndex GetHistoryLength(uint32_t epochId) const { return 0; }
+    HistoryNode GetHistoryAt(uint32_t epochId, HistoryIndex index) const { return HistoryNode(); }
+    uint256 GetHistoryRoot(uint32_t epochId) const { return uint256(); }
+
+    std::optional<libzcash::LatestSubtree> GetLatestSubtree(ShieldedType type) const {
+        return std::nullopt;
+    };
+    std::optional<libzcash::SubtreeData> GetSubtreeData(
+            ShieldedType type,
+            libzcash::SubtreeIndex index) const
+    {
+        return std::nullopt;
+    };
+
     bool BatchWrite(CCoinsMap& mapCoins,
                     const uint256& hashBlock,
                     const uint256& hashSproutAnchor,
@@ -203,7 +219,9 @@ public:
                     CNullifiersMap& mapSproutNullifiers,
                     CNullifiersMap& mapSaplingNullifiers,
                     CNullifiersMap& mapOrchardNullifiers,
-                    CHistoryCacheMap &historyCacheMap)
+                    CHistoryCacheMap &historyCacheMap,
+                    SubtreeCache &cacheSaplingSubtrees,
+                    SubtreeCache &cacheOrchardSubtrees)
     {
         for (CCoinsMap::iterator it = mapCoins.begin(); it != mapCoins.end(); ) {
             if (it->second.flags & CCoinsCacheEntry::DIRTY) {
@@ -243,6 +261,7 @@ class CCoinsViewCacheTest : public CCoinsViewCache
 {
 public:
     CCoinsViewCacheTest(CCoinsView* base) : CCoinsViewCache(base) {}
+    ~CCoinsViewCacheTest() {}
 
     void SelfTest() const
     {
@@ -254,7 +273,9 @@ public:
                      memusage::DynamicUsage(cacheSproutNullifiers) +
                      memusage::DynamicUsage(cacheSaplingNullifiers) +
                      memusage::DynamicUsage(cacheOrchardNullifiers) +
-                     memusage::DynamicUsage(historyCacheMap);
+                     memusage::DynamicUsage(historyCacheMap) +
+                     memusage::DynamicUsage(cacheSaplingSubtrees) +
+                     memusage::DynamicUsage(cacheOrchardSubtrees);
         for (CCoinsMap::iterator it = cacheCoins.begin(); it != cacheCoins.end(); it++) {
             ret += it->second.coins.DynamicMemoryUsage();
         }
@@ -279,11 +300,9 @@ public:
         JSDescription jsd;
         jsd.nullifiers[0] = sproutNullifier;
         mutableTx.vJoinSplit.emplace_back(jsd);
-        
-        saplingNullifier = InsecureRand256();
-        SpendDescription sd;
-        sd.nullifier = saplingNullifier;
-        mutableTx.vShieldedSpend.push_back(sd);
+
+        mutableTx.saplingBundle = sapling::test_only_invalid_bundle(1, 0, 0);
+        saplingNullifier = uint256::FromRawBytes(mutableTx.saplingBundle.GetDetails().spends()[0].nullifier());
 
         // The Orchard bundle builder always pads to two Actions, so we can just
         // use an empty builder to create a dummy Orchard bundle.

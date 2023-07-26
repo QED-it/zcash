@@ -11,7 +11,10 @@ from decimal import Decimal
 # Test wallet address behaviour across network upgrades
 class WalletAmountParsingTest(BitcoinTestFramework):
     def setup_network(self, split=False):
-        self.nodes = start_nodes(3, self.options.tmpdir)
+        self.nodes = start_nodes(3, self.options.tmpdir, extra_args=[[
+            '-allowdeprecated=getnewaddress',
+            '-allowdeprecated=z_getnewaddress',
+        ]] * 3)
         connect_nodes_bi(self.nodes,0,1)
         connect_nodes_bi(self.nodes,1,2)
         connect_nodes_bi(self.nodes,0,2)
@@ -66,19 +69,6 @@ class WalletAmountParsingTest(BitcoinTestFramework):
             errorString = e.error['message']
             print(errorString)
             assert(False)
-
-        # This fee is larger than the default fee and since amount=0
-        # it should trigger error
-        fee         = Decimal('0.1')
-        recipients  = [ {"address": myzaddr, "amount": Decimal('0.0') } ]
-        minconf     = 1
-        errorString = ''
-
-        try:
-            myopid = self.nodes[0].z_sendmany(myzaddr, recipients, minconf, fee)
-        except JSONRPCException as e:
-            errorString = e.error['message']
-        assert('Small transaction amount' in errorString)
 
         # This fee is less than default and greater than amount, but still valid
         fee         = Decimal('0.0000001')

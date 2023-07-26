@@ -1,6 +1,6 @@
 // Copyright (c) 2010 Satoshi Nakamoto
 // Copyright (c) 2009-2014 The Bitcoin Core developers
-// Copyright (c) 2018-2022 The Zcash developers
+// Copyright (c) 2018-2023 The Zcash developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or https://www.opensource.org/licenses/mit-license.php .
 
@@ -10,6 +10,7 @@
 #include "amount.h"
 #include "rpc/protocol.h"
 #include "uint256.h"
+#include "zcash/memo.h"
 
 #include <list>
 #include <map>
@@ -198,5 +199,8 @@ int parseMinconf(int defaultValue, const UniValue& params, int index, const std:
 
 extern int interpretHeightArg(int nHeight, int currentHeight);
 extern int parseHeightArg(const std::string& strHeight, int currentHeight);
+
+/// Adds relevant memo-related entries to the JSON `obj`
+void AddMemo(UniValue &obj, const std::optional<libzcash::Memo> &memo);
 
 #endif // BITCOIN_RPC_SERVER_H

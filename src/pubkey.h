@@ -1,6 +1,6 @@
 // Copyright (c) 2009-2010 Satoshi Nakamoto
 // Copyright (c) 2009-2014 The Bitcoin Core developers
-// Copyright (c) 2017-2022 The Zcash developers
+// Copyright (c) 2017-2023 The Zcash developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or https://www.opensource.org/licenses/mit-license.php .
 
@@ -302,17 +302,6 @@ struct CExtPubKey {
         s.read((char *)&code[0], len);
         Decode(code);
     }
-};
-
-/** Users of this module must hold an ECCVerifyHandle. The constructor and
- *  destructor of these are not allowed to run in parallel, though. */
-class ECCVerifyHandle
-{
-    static int refcount;
-
-public:
-    ECCVerifyHandle();
-    ~ECCVerifyHandle();
 };
 
 #endif // BITCOIN_PUBKEY_H

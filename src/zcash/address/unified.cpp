@@ -1,4 +1,4 @@
-// Copyright (c) 2021-2022 The Zcash developers
+// Copyright (c) 2021-2023 The Zcash developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or https://www.opensource.org/licenses/mit-license.php .
 
@@ -33,16 +33,16 @@ bool libzcash::HasTransparent(const std::set<ReceiverType>& receiverTypes) {
 }
 
 Receiver libzcash::RecipientAddressToReceiver(const RecipientAddress& recipient) {
-    return std::visit(match {
+    return examine(recipient, match {
         [](const CKeyID& key) { return Receiver(key); },
         [](const CScriptID& scriptId) { return Receiver(scriptId); },
         [](const libzcash::OrchardRawAddress& addr) { return Receiver(addr); },
         [](const libzcash::SaplingPaymentAddress& addr) { return Receiver(addr); }
-    }, recipient);
+    });
 }
 
 std::string libzcash::DebugPrintReceiver(const Receiver& receiver) {
-    return std::visit(match {
+    return examine(receiver, match {
         [&](const OrchardRawAddress &zaddr) {
             CDataStream ss(SER_NETWORK, PROTOCOL_VERSION);
             ss << zaddr;
@@ -65,7 +65,7 @@ std::string libzcash::DebugPrintReceiver(const Receiver& receiver) {
                 unknown.typecode,
                 HexStr(unknown.data.begin(), unknown.data.end()));
         }
-    }, receiver);
+    });
 };
 
 std::string libzcash::DebugPrintRecipientAddress(const RecipientAddress& addr) {
@@ -132,7 +132,7 @@ UnifiedAddressGenerationResult ZcashdUnifiedFullViewingKey::Address(
     }
 
     if (receiverTypes.count(ReceiverType::P2SH) > 0) {
-        return UnifiedAddressGenerationError::ReceiverTypeNotAvailable;
+        return UnifiedAddressGenerationError::ReceiverTypeNotSupported;
     }
 
     UnifiedAddress ua;
@@ -198,7 +198,7 @@ UnifiedAddressGenerationResult ZcashdUnifiedFullViewingKey::FindAddress(
 
 std::optional<RecipientAddress> ZcashdUnifiedFullViewingKey::GetChangeAddress(const ChangeRequest& req) const {
     std::optional<RecipientAddress> addr;
-    std::visit(match {
+    examine(req, match {
         [&](const TransparentChangeRequest& req) {
             if (transparentKey.has_value()) {
                 auto changeAddr = transparentKey.value().GetChangeAddress(req.GetIndex());
@@ -217,7 +217,7 @@ std::optional<RecipientAddress> ZcashdUnifiedFullViewingKey::GetChangeAddress(co
                 addr = orchardKey.value().GetChangeAddress();
             }
         }
-    }, req);
+    });
     return addr;
 }
 

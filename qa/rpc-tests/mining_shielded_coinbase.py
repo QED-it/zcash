@@ -30,11 +30,16 @@ class ShieldCoinbaseTest (BitcoinTestFramework):
 
     def start_node_with(self, index, extra_args=[]):
         args = [
+            '-minrelaytxfee=0',
             nuparams(BLOSSOM_BRANCH_ID, 1),
             nuparams(HEARTWOOD_BRANCH_ID, 10),
             nuparams(CANOPY_BRANCH_ID, 20),
             nuparams(NU5_BRANCH_ID, 20),
-            "-nurejectoldversions=false",
+            '-nurejectoldversions=false',
+            '-allowdeprecated=getnewaddress',
+            '-allowdeprecated=z_getnewaddress',
+            '-allowdeprecated=z_getbalance',
+            '-allowdeprecated=z_gettotalbalance',
         ]
         return start_node(index, self.options.tmpdir, args + extra_args)
 
@@ -111,7 +116,7 @@ class ShieldCoinbaseTest (BitcoinTestFramework):
         recipients = []
         recipients.append({"address": node0_zaddr, "amount": Decimal('2')})
         recipients.append({"address": node0_taddr, "amount": Decimal('2')})
-        myopid = self.nodes[1].z_sendmany(node1_zaddr, recipients, 1, 0)
+        myopid = self.nodes[1].z_sendmany(node1_zaddr, recipients, 1, 0, 'AllowRevealedRecipients')
         wait_and_assert_operationid_status(self.nodes[1], myopid)
         self.sync_all()
         self.nodes[0].generate(1)

@@ -1,8 +1,9 @@
-// Copyright (c) 2021-2022 The Zcash developers
+// Copyright (c) 2021-2023 The Zcash developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or https://www.opensource.org/licenses/mit-license.php .
 
 #include "zcash/address/orchard.hpp"
+#include <primitives/issue.h>
 
 namespace libzcash {
 

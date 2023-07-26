@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2022 The Zcash developers
+// Copyright (c) 2016-2023 The Zcash developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or https://www.opensource.org/licenses/mit-license.php .
 
@@ -18,6 +18,14 @@ const unsigned char ZCASH_SAPLING_FVFP_PERSONALIZATION[blake2b::PERSONALBYTES] =
     {'Z', 'c', 'a', 's', 'h', 'S', 'a', 'p', 'l', 'i', 'n', 'g', 'F', 'V', 'F', 'P'};
 
 //! Sapling
+std::array<uint8_t, 43> SaplingPaymentAddress::GetRawBytes() const {
+    CDataStream ss(SER_NETWORK, PROTOCOL_VERSION);
+    ss << *this;
+    std::array<uint8_t, 43> rawBytes;
+    std::move(ss.begin(), ss.end(), rawBytes.begin());
+    return rawBytes;
+}
+
 uint256 SaplingPaymentAddress::GetHash() const {
     CDataStream ss(SER_NETWORK, PROTOCOL_VERSION);
     ss << *this;

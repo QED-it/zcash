@@ -1,5 +1,5 @@
 // Copyright (c) 2016 Jack Grigg
-// Copyright (c) 2016-2022 The Zcash developers
+// Copyright (c) 2016-2023 The Zcash developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or https://www.opensource.org/licenses/mit-license.php .
 
@@ -16,7 +16,7 @@ inline constexpr size_t equihash_solution_size(unsigned int N, unsigned int K) {
 typedef uint32_t eh_index;
 typedef uint8_t eh_trunc;
 
-std::vector<unsigned char> GetMinimalFromIndices(std::vector<eh_index> indices,
+std::vector<unsigned char> GetMinimalFromIndices(const std::vector<eh_index>& indices,
                                                  size_t cBitLen);
 void CompressArray(const unsigned char* in, size_t in_len,
                    unsigned char* out, size_t out_len,

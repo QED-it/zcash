@@ -1,6 +1,6 @@
 // Copyright (c) 2009-2010 Satoshi Nakamoto
 // Copyright (c) 2009-2013 The Bitcoin Core developers
-// Copyright (c) 2018-2022 The Zcash developers
+// Copyright (c) 2018-2023 The Zcash developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or https://www.opensource.org/licenses/mit-license.php .
 
@@ -132,6 +132,11 @@ public:
     int GetType() const { return nType; }
     int GetVersion() const { return nVersion; }
 
+    void write_u8(const unsigned char* pch, size_t nSize)
+    {
+        ctx.Write(pch, nSize);
+    }
+
     void write(const char *pch, size_t size) {
         ctx.Write((const unsigned char*)pch, size);
     }
@@ -169,6 +174,11 @@ public:
 
     int GetType() const { return nType; }
     int GetVersion() const { return nVersion; }
+
+    void write_u8(const unsigned char* pch, size_t size)
+    {
+        state->update({pch, size});
+    }
 
     CBLAKE2bWriter& write(const char *pch, size_t size) {
         state->update({(const unsigned char*)pch, size});

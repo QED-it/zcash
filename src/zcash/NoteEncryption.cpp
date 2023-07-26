@@ -112,18 +112,19 @@ std::optional<SaplingEncCiphertext> SaplingNoteEncryption::encrypt_to_recipient(
         throw std::logic_error("already encrypted to the recipient using this key");
     }
 
-    uint256 dhsecret;
-
+    // Construct the symmetric key
     // The new consensus rules from ZIP 216 (https://zips.z.cash/zip-0216#specification)
-    // on pk_d are enabled unconditionally, as they MAY be enforced in advance of NU5
-    // activation.
-    if (!librustzcash_sapling_ka_agree(true, pk_d.begin(), esk.begin(), dhsecret.begin())) {
+    // on pk_d were enabled unconditionally, even before we started to apply them
+    // retroactively.
+    unsigned char K[NOTEENCRYPTION_CIPHER_KEYSIZE];
+    if (!librustzcash_sapling_ka_derive_symmetric_key(
+        pk_d.begin(),
+        esk.begin(),
+        epk.begin(),
+        K))
+    {
         return std::nullopt;
     }
-
-    // Construct the symmetric key
-    unsigned char K[NOTEENCRYPTION_CIPHER_KEYSIZE];
-    KDF_Sapling(K, dhsecret, epk);
 
     // The nonce is zero because we never reuse keys
     unsigned char cipher_nonce[crypto_aead_chacha20poly1305_IETF_NPUBBYTES] = {};
@@ -132,7 +133,7 @@ std::optional<SaplingEncCiphertext> SaplingNoteEncryption::encrypt_to_recipient(
 
     crypto_aead_chacha20poly1305_ietf_encrypt(
         ciphertext.begin(), NULL,
-        message.begin(), ZC_SAPLING_ENCPLAINTEXT_SIZE,
+        message.begin(), SAPLING_ENCPLAINTEXT_SIZE,
         NULL, 0, // no "additional data"
         NULL, cipher_nonce, K
     );
@@ -148,17 +149,18 @@ std::optional<SaplingEncPlaintext> AttemptSaplingEncDecryption(
     const uint256 &epk
 )
 {
-    uint256 dhsecret;
-
-    // ZIP 216: We can enable the rules unconditionally, because ephemeralKey has always
-    // been required to not be small-order (https://zips.z.cash/zip-0216#specification).
-    if (!librustzcash_sapling_ka_agree(true, epk.begin(), ivk.begin(), dhsecret.begin())) {
+    // Construct the symmetric key.
+    // We consider ZIP 216 active all of the time because blocks prior to NU5
+    // activation (on mainnet and testnet) did not contain Sapling transactions
+    // that violated its canonicity rule.
+    unsigned char K[NOTEENCRYPTION_CIPHER_KEYSIZE];
+    if (!librustzcash_sapling_ka_derive_symmetric_key(
+        epk.begin(),
+        ivk.begin(),
+        epk.begin(), K))
+    {
         return std::nullopt;
     }
-
-    // Construct the symmetric key
-    unsigned char K[NOTEENCRYPTION_CIPHER_KEYSIZE];
-    KDF_Sapling(K, dhsecret, epk);
 
     // The nonce is zero because we never reuse keys
     unsigned char cipher_nonce[crypto_aead_chacha20poly1305_IETF_NPUBBYTES] = {};
@@ -168,7 +170,7 @@ std::optional<SaplingEncPlaintext> AttemptSaplingEncDecryption(
     if (crypto_aead_chacha20poly1305_ietf_decrypt(
         plaintext.begin(), NULL,
         NULL,
-        ciphertext.begin(), ZC_SAPLING_ENCCIPHERTEXT_SIZE,
+        ciphertext.begin(), SAPLING_ENCCIPHERTEXT_SIZE,
         NULL,
         0,
         cipher_nonce, K) != 0)
@@ -180,22 +182,25 @@ std::optional<SaplingEncPlaintext> AttemptSaplingEncDecryption(
 }
 
 std::optional<SaplingEncPlaintext> AttemptSaplingEncDecryption (
-    bool zip216Enabled,
     const SaplingEncCiphertext &ciphertext,
     const uint256 &epk,
     const uint256 &esk,
     const uint256 &pk_d
 )
 {
-    uint256 dhsecret;
-
-    if (!librustzcash_sapling_ka_agree(zip216Enabled, pk_d.begin(), esk.begin(), dhsecret.begin())) {
+    // Construct the symmetric key.
+    // We consider ZIP 216 active all of the time because blocks prior to NU5
+    // activation (on mainnet and testnet) did not contain Sapling transactions
+    // that violated its canonicity rule.
+    unsigned char K[NOTEENCRYPTION_CIPHER_KEYSIZE];
+    if (!librustzcash_sapling_ka_derive_symmetric_key(
+        pk_d.begin(),
+        esk.begin(),
+        epk.begin(),
+        K))
+    {
         return std::nullopt;
     }
-
-    // Construct the symmetric key
-    unsigned char K[NOTEENCRYPTION_CIPHER_KEYSIZE];
-    KDF_Sapling(K, dhsecret, epk);
 
     // The nonce is zero because we never reuse keys
     unsigned char cipher_nonce[crypto_aead_chacha20poly1305_IETF_NPUBBYTES] = {};
@@ -205,7 +210,7 @@ std::optional<SaplingEncPlaintext> AttemptSaplingEncDecryption (
     if (crypto_aead_chacha20poly1305_ietf_decrypt(
         plaintext.begin(), NULL,
         NULL,
-        ciphertext.begin(), ZC_SAPLING_ENCCIPHERTEXT_SIZE,
+        ciphertext.begin(), SAPLING_ENCCIPHERTEXT_SIZE,
         NULL,
         0,
         cipher_nonce, K) != 0)
@@ -239,7 +244,7 @@ SaplingOutCiphertext SaplingNoteEncryption::encrypt_to_ourselves(
 
     crypto_aead_chacha20poly1305_ietf_encrypt(
         ciphertext.begin(), NULL,
-        message.begin(), ZC_SAPLING_OUTPLAINTEXT_SIZE,
+        message.begin(), SAPLING_OUTPLAINTEXT_SIZE,
         NULL, 0, // no "additional data"
         NULL, cipher_nonce, K
     );
@@ -269,7 +274,7 @@ std::optional<SaplingOutPlaintext> AttemptSaplingOutDecryption(
     if (crypto_aead_chacha20poly1305_ietf_decrypt(
         plaintext.begin(), NULL,
         NULL,
-        ciphertext.begin(), ZC_SAPLING_OUTCIPHERTEXT_SIZE,
+        ciphertext.begin(), SAPLING_OUTCIPHERTEXT_SIZE,
         NULL,
         0,
         cipher_nonce, K) != 0)
@@ -448,9 +453,9 @@ uint252 random_uint252()
     return uint252(rand);
 }
 
-template class NoteEncryption<ZC_NOTEPLAINTEXT_SIZE>;
-template class NoteDecryption<ZC_NOTEPLAINTEXT_SIZE>;
+template class NoteEncryption<NOTEPLAINTEXT_SIZE>;
+template class NoteDecryption<NOTEPLAINTEXT_SIZE>;
 
-template class PaymentDisclosureNoteDecryption<ZC_NOTEPLAINTEXT_SIZE>;
+template class PaymentDisclosureNoteDecryption<NOTEPLAINTEXT_SIZE>;
 
 }

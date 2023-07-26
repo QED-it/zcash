@@ -1,6 +1,6 @@
 // Copyright (c) 2009-2010 Satoshi Nakamoto
 // Copyright (c) 2009-2014 The Bitcoin Core developers
-// Copyright (c) 2016-2022 The Zcash developers
+// Copyright (c) 2016-2023 The Zcash developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or https://www.opensource.org/licenses/mit-license.php .
 
@@ -13,6 +13,8 @@
 #include "protocol.h"
 
 #include <vector>
+
+#include <rust/bridge.h>
 
 struct CDNSSeedData {
     std::string name, host;
@@ -44,6 +46,16 @@ class CChainParams: public KeyConstants
 {
 public:
     const Consensus::Params& GetConsensus() const { return consensus; }
+    const rust::Box<consensus::Network> RustNetwork() const {
+        return consensus::network(
+            NetworkIDString(),
+            consensus.vUpgrades[Consensus::UPGRADE_OVERWINTER].nActivationHeight,
+            consensus.vUpgrades[Consensus::UPGRADE_SAPLING].nActivationHeight,
+            consensus.vUpgrades[Consensus::UPGRADE_BLOSSOM].nActivationHeight,
+            consensus.vUpgrades[Consensus::UPGRADE_HEARTWOOD].nActivationHeight,
+            consensus.vUpgrades[Consensus::UPGRADE_CANOPY].nActivationHeight,
+            consensus.vUpgrades[Consensus::UPGRADE_NU5].nActivationHeight);
+    }
     const CMessageHeader::MessageStartChars& MessageStart() const { return pchMessageStart; }
     const std::vector<unsigned char>& AlertKey() const { return vAlertPubKey; }
     int GetDefaultPort() const { return nDefaultPort; }
@@ -128,7 +140,7 @@ const CChainParams &Params();
 /**
  * @returns CChainParams for the given BIP70 chain name.
  */
-CChainParams& Params(const std::string& chain);
+const CChainParams& Params(const std::string& chain);
 
 /**
  * Sets the params returned by Params() to those for the given BIP70 chain name.

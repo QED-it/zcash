@@ -1,6 +1,6 @@
 // Copyright (c) 2009-2010 Satoshi Nakamoto
 // Copyright (c) 2009-2014 The Bitcoin Core developers
-// Copyright (c) 2016-2022 The Zcash developers
+// Copyright (c) 2016-2023 The Zcash developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or https://www.opensource.org/licenses/mit-license.php .
 
@@ -49,7 +49,7 @@
  *    - code = 4 (vout[1] is not spent, and 0 non-zero bytes of bitvector follow)
  *    - unspentness bitvector: as 0 non-zero bytes follow, it has length 0
  *    - vout[1]: 835800816115944e077fe7c803cfa57f29b36bf87c1d35
- *               * 8358: compact amount representation for 60000000000 (600 BTC)
+ *               * 8358: compact amount representation for 60000000000 (600 ZEC)
  *               * 00: special txout type pay-to-pubkey-hash
  *               * 816115944e077fe7c803cfa57f29b36bf87c1d35: address uint160
  *    - height = 203998
@@ -65,11 +65,11 @@
  *                2 (1, +1 because both bit 2 and bit 4 are unset) non-zero bitvector bytes follow)
  *  - unspentness bitvector: bits 2 (0x04) and 14 (0x4000) are set, so vout[2+2] and vout[14+2] are unspent
  *  - vout[4]: 86ef97d5790061b01caab50f1b8e9c50a5057eb43c2d9563a4ee
- *             * 86ef97d579: compact amount representation for 234925952 (2.35 BTC)
+ *             * 86ef97d579: compact amount representation for 234925952 (2.35 ZEC)
  *             * 00: special txout type pay-to-pubkey-hash
  *             * 61b01caab50f1b8e9c50a5057eb43c2d9563a4ee: address uint160
  *  - vout[16]: bbd123008c988f1a4a4de2161e0f50aac7f17e7f9555caa4
- *              * bbd123: compact amount representation for 110397 (0.001 BTC)
+ *              * bbd123: compact amount representation for 110397 (0.001 ZEC)
  *              * 00: special txout type pay-to-pubkey-hash
  *              * 8c988f1a4a4de2161e0f50aac7f17e7f9555caa4: address uint160
  *  - height = 120891
@@ -331,11 +331,11 @@ struct CNullifiersCacheEntry
 /// These identify the value pool, and as such, Canopy (for example)
 /// isn't here, since value created during the Canopy network upgrade
 /// is part of the Sapling pool.
-enum ShieldedType
+enum ShieldedType: uint8_t
 {
-    SPROUT,
-    SAPLING,
-    ORCHARD,
+    SPROUT = 0x01,
+    SAPLING = 0x02,
+    ORCHARD = 0x03,
 };
 
 typedef boost::unordered_map<uint256, CCoinsCacheEntry, SaltedTxidHasher> CCoinsMap;
@@ -358,47 +358,72 @@ struct CCoinsStats
     CCoinsStats() : nHeight(0), nTransactions(0), nTransactionOutputs(0), nSerializedSize(0), nTotalAmount(0) {}
 };
 
+class SubtreeCache;
 
 /** Abstract view on the open txout dataset. */
 class CCoinsView
 {
 public:
     //! Retrieve the tree (Sprout) at a particular anchored root in the chain
-    virtual bool GetSproutAnchorAt(const uint256 &rt, SproutMerkleTree &tree) const;
+    virtual bool GetSproutAnchorAt(const uint256 &rt, SproutMerkleTree &tree) const = 0;
 
     //! Retrieve the tree (Sapling) at a particular anchored root in the chain
-    virtual bool GetSaplingAnchorAt(const uint256 &rt, SaplingMerkleTree &tree) const;
+    virtual bool GetSaplingAnchorAt(const uint256 &rt, SaplingMerkleTree &tree) const = 0;
 
     //! Retrieve the tree (Orchard) at a particular anchored root in the chain
-    virtual bool GetOrchardAnchorAt(const uint256 &rt, OrchardMerkleFrontier &tree) const;
+    virtual bool GetOrchardAnchorAt(const uint256 &rt, OrchardMerkleFrontier &tree) const = 0;
 
     //! Determine whether a nullifier is spent or not
-    virtual bool GetNullifier(const uint256 &nullifier, ShieldedType type) const;
+    virtual bool GetNullifier(const uint256 &nullifier, ShieldedType type) const = 0;
 
     //! Retrieve the CCoins (unspent transaction outputs) for a given txid
-    virtual bool GetCoins(const uint256 &txid, CCoins &coins) const;
+    virtual bool GetCoins(const uint256 &txid, CCoins &coins) const = 0;
 
     //! Just check whether we have data for a given txid.
     //! This may (but cannot always) return true for fully spent transactions
-    virtual bool HaveCoins(const uint256 &txid) const;
+    virtual bool HaveCoins(const uint256 &txid) const = 0;
 
     //! Retrieve the block hash whose state this CCoinsView currently represents
-    virtual uint256 GetBestBlock() const;
+    virtual uint256 GetBestBlock() const = 0;
 
     //! Get the current "tip" or the latest anchored tree root in the chain
-    virtual uint256 GetBestAnchor(ShieldedType type) const;
+    virtual uint256 GetBestAnchor(ShieldedType type) const = 0;
 
     //! Get the current chain history length (which should be roughly chain height x2)
-    virtual HistoryIndex GetHistoryLength(uint32_t epochId) const;
+    virtual HistoryIndex GetHistoryLength(uint32_t epochId) const = 0;
 
     //! Get history node at specified index
-    virtual HistoryNode GetHistoryAt(uint32_t epochId, HistoryIndex index) const;
+    virtual HistoryNode GetHistoryAt(uint32_t epochId, HistoryIndex index) const = 0;
 
     //! Get current history root
-    virtual uint256 GetHistoryRoot(uint32_t epochId) const;
+    virtual uint256 GetHistoryRoot(uint32_t epochId) const = 0;
 
-    //! Do a bulk modification (multiple CCoins changes + BestBlock change).
-    //! The passed mapCoins can be modified.
+    //! Get the largest completed subtree data for the TRACKED_SUBTREE_HEIGHT depth subtrees known
+    //! to the node for a given protocol. std::nullopt is returned in the event there are no
+    //! complete subtrees.
+    virtual std::optional<libzcash::LatestSubtree> GetLatestSubtree(ShieldedType type) const = 0;
+
+    //! Returns the index of the (expected) current TRACKED_SUBTREE_HEIGHT depth subtree. This
+    //! is essentially just one larger than the latest complete subtree's index (or zero, if
+    //! there is no latest subtree)
+    libzcash::SubtreeIndex CurrentSubtreeIndex(ShieldedType type) const {
+        auto latestSubtree = GetLatestSubtree(type);
+        if (latestSubtree.has_value()) {
+            return latestSubtree->index + 1;
+        } else {
+            return 0;
+        }
+    }
+
+    //! Gets the cached data about the TRACKED_SUBTREE_HEIGHT subtree for the specified
+    //! protocol at the provided index, if that subtree is complete.
+    virtual std::optional<libzcash::SubtreeData> GetSubtreeData(
+            ShieldedType type,
+            libzcash::SubtreeIndex index) const = 0;
+
+    //! Do a bulk modification onto this cache. All of the provided
+    //! caches may be modified and should be cleared by the caller
+    //! after this batch write.
     virtual bool BatchWrite(CCoinsMap &mapCoins,
                             const uint256 &hashBlock,
                             const uint256 &hashSproutAnchor,
@@ -410,15 +435,105 @@ public:
                             CNullifiersMap &mapSproutNullifiers,
                             CNullifiersMap &mapSaplingNullifiers,
                             CNullifiersMap &mapOrchardNullifiers,
-                            CHistoryCacheMap &historyCacheMap);
+                            CHistoryCacheMap &historyCacheMap,
+                            SubtreeCache &cacheSaplingSubtrees,
+                            SubtreeCache &cacheOrchardSubtrees) = 0;
 
     //! Calculate statistics about the unspent transaction output set
-    virtual bool GetStats(CCoinsStats &stats) const;
+    virtual bool GetStats(CCoinsStats &stats) const = 0;
 
     //! As we use CCoinsViews polymorphically, have a virtual destructor
     virtual ~CCoinsView() {}
 };
 
+//! This class is used by `CCoinsViewCache` to internally store, for each
+//! shielded type, the roots of complete subtrees that have not yet been flushed
+//! to the backing `CCoinsView`. This allows the cache to both store new
+//! subtree roots and handle removing subtree roots from the backing view when the
+//! cache is flushed.
+class SubtreeCache {
+    public:
+
+    bool initialized = false;
+    //! We store in `parentLatestSubtree` our perspective of what the latest
+    //! subtree ought to be in the backing `CCoinsView`. If subtrees are
+    //! removed from this subtree cache but no new complete subtrees exist,
+    //! they must be removed from the backing view later when it is flushed.
+    std::optional<libzcash::LatestSubtree> parentLatestSubtree;
+    //! New subtrees slated to be written to the backing `CCoinsView`.
+    std::vector<libzcash::SubtreeData> newSubtrees;
+    ShieldedType type;
+
+    SubtreeCache(ShieldedType type) : type(type) { };
+
+    //! Initializes the subtree cache so that the `parentLatestSubtree`
+    //! stored internally is consistent with the parent view.
+    void Initialize(CCoinsView *parentView);
+
+    //! Resets this cache to its original uninitialized state.
+    void clear();
+
+    //! Gets the latest subtree for this cache, using the parent view
+    //! as a reference if needed.
+    std::optional<libzcash::LatestSubtree> GetLatestSubtree(CCoinsView *parentView);
+
+    //! Gets the subtree data for a given index, if available.
+    std::optional<libzcash::SubtreeData> GetSubtreeData(CCoinsView *parentView, libzcash::SubtreeIndex index);
+
+    //! Inserts a new subtree into the view.
+    void PushSubtree(CCoinsView *parentView, libzcash::SubtreeData subtree);
+
+    //! Removes the last subtree added to the view; this will throw an
+    //! exception if the view has no subtrees.
+    void PopSubtree(CCoinsView *parentView);
+
+    //! Writes a child map to this cache; this clears the child map.
+    void BatchWrite(CCoinsView *parentView, SubtreeCache &childMap);
+};
+
+namespace memusage {
+    static inline size_t DynamicUsage(const SubtreeCache& cache) {
+        return DynamicUsage(cache.newSubtrees);
+    }
+}
+
+class CCoinsViewDummy : public CCoinsView
+{
+public:
+    ~CCoinsViewDummy() {}
+
+    bool GetSproutAnchorAt(const uint256 &rt, SproutMerkleTree &tree) const { return false; }
+    bool GetSaplingAnchorAt(const uint256 &rt, SaplingMerkleTree &tree) const { return false; }
+    bool GetOrchardAnchorAt(const uint256 &rt, OrchardMerkleFrontier &tree) const { return false; }
+    bool GetNullifier(const uint256 &nullifier, ShieldedType type) const { return false; }
+    bool GetCoins(const uint256 &txid, CCoins &coins) const { return false; }
+    bool HaveCoins(const uint256 &txid) const { return false; }
+    uint256 GetBestBlock() const { return uint256(); }
+    uint256 GetBestAnchor(ShieldedType type) const { return uint256(); };
+    HistoryIndex GetHistoryLength(uint32_t epochId) const { return 0; }
+    HistoryNode GetHistoryAt(uint32_t epochId, HistoryIndex index) const { return HistoryNode(); }
+    uint256 GetHistoryRoot(uint32_t epochId) const { return uint256(); }
+    std::optional<libzcash::LatestSubtree> GetLatestSubtree(ShieldedType type) const { return std::nullopt; };
+    std::optional<libzcash::SubtreeData> GetSubtreeData(
+            ShieldedType type,
+            libzcash::SubtreeIndex index) const { return std::nullopt; };
+    bool BatchWrite(CCoinsMap &mapCoins,
+                    const uint256 &hashBlock,
+                    const uint256 &hashSproutAnchor,
+                    const uint256 &hashSaplingAnchor,
+                    const uint256 &hashOrchardAnchor,
+                    CAnchorsSproutMap &mapSproutAnchors,
+                    CAnchorsSaplingMap &mapSaplingAnchors,
+                    CAnchorsOrchardMap &mapOrchardAnchors,
+                    CNullifiersMap &mapSproutNullifiers,
+                    CNullifiersMap &mapSaplingNullifiers,
+                    CNullifiersMap &mapOrchardNullifiers,
+                    CHistoryCacheMap &historyCacheMap,
+                    SubtreeCache &cacheSaplingSubtrees,
+                    SubtreeCache &cacheOrchardSubtrees) { return false; }
+
+    bool GetStats(CCoinsStats &stats) const { return false; }
+};
 
 /** CCoinsView backed by another CCoinsView */
 class CCoinsViewBacked : public CCoinsView
@@ -428,6 +543,8 @@ protected:
 
 public:
     CCoinsViewBacked(CCoinsView *viewIn);
+    ~CCoinsViewBacked() {}
+
     bool GetSproutAnchorAt(const uint256 &rt, SproutMerkleTree &tree) const;
     bool GetSaplingAnchorAt(const uint256 &rt, SaplingMerkleTree &tree) const;
     bool GetOrchardAnchorAt(const uint256 &rt, OrchardMerkleFrontier &tree) const;
@@ -439,6 +556,10 @@ public:
     HistoryIndex GetHistoryLength(uint32_t epochId) const;
     HistoryNode GetHistoryAt(uint32_t epochId, HistoryIndex index) const;
     uint256 GetHistoryRoot(uint32_t epochId) const;
+    std::optional<libzcash::LatestSubtree> GetLatestSubtree(ShieldedType type) const;
+    std::optional<libzcash::SubtreeData> GetSubtreeData(
+            ShieldedType type,
+            libzcash::SubtreeIndex index) const;
     void SetBackend(CCoinsView &viewIn);
     bool BatchWrite(CCoinsMap &mapCoins,
                     const uint256 &hashBlock,
@@ -451,7 +572,9 @@ public:
                     CNullifiersMap &mapSproutNullifiers,
                     CNullifiersMap &mapSaplingNullifiers,
                     CNullifiersMap &mapOrchardNullifiers,
-                    CHistoryCacheMap &historyCacheMap);
+                    CHistoryCacheMap &historyCacheMap,
+                    SubtreeCache &cacheSaplingSubtrees,
+                    SubtreeCache &cacheOrchardSubtrees);
     bool GetStats(CCoinsStats &stats) const;
 };
 
@@ -512,6 +635,8 @@ protected:
     mutable CNullifiersMap cacheSaplingNullifiers;
     mutable CNullifiersMap cacheOrchardNullifiers;
     mutable CHistoryCacheMap historyCacheMap;
+    mutable SubtreeCache cacheSaplingSubtrees = SubtreeCache(SAPLING);
+    mutable SubtreeCache cacheOrchardSubtrees = SubtreeCache(ORCHARD);
 
     /* Cached dynamic memory usage for the inner CCoins objects. */
     mutable size_t cachedCoinsUsage;
@@ -532,6 +657,10 @@ public:
     HistoryIndex GetHistoryLength(uint32_t epochId) const;
     HistoryNode GetHistoryAt(uint32_t epochId, HistoryIndex index) const;
     uint256 GetHistoryRoot(uint32_t epochId) const;
+    std::optional<libzcash::LatestSubtree> GetLatestSubtree(ShieldedType type) const;
+    std::optional<libzcash::SubtreeData> GetSubtreeData(
+            ShieldedType type,
+            libzcash::SubtreeIndex index) const;
     void SetBestBlock(const uint256 &hashBlock);
     bool BatchWrite(CCoinsMap &mapCoins,
                     const uint256 &hashBlock,
@@ -544,7 +673,9 @@ public:
                     CNullifiersMap &mapSproutNullifiers,
                     CNullifiersMap &mapSaplingNullifiers,
                     CNullifiersMap &mapOrchardNullifiers,
-                    CHistoryCacheMap &historyCacheMap);
+                    CHistoryCacheMap &historyCacheMap,
+                    SubtreeCache &cacheSaplingSubtrees,
+                    SubtreeCache &cacheOrchardSubtrees);
 
     // Adds the tree to mapSproutAnchors, mapSaplingAnchors, or mapOrchardAnchors
     // based on the type of tree and sets the current commitment root to this root.
@@ -562,6 +693,15 @@ public:
 
     // Pop MMR node history from the end of the history tree
     void PopHistoryNode(uint32_t epochId);
+
+    // Push a new subtree for a given shielded type. Only Sapling
+    // and Orchard supported.
+    void PushSubtree(ShieldedType type, libzcash::SubtreeData subtree);
+
+    // Pop a subtree out of the database. Only Sapling and Orchard
+    // supported. Throws an exception if there isn't a subtree present
+    // in the database.
+    void PopSubtree(ShieldedType type);
 
     /**
      * Return a pointer to CCoins in the cache, or NULL if not found. This is
@@ -601,23 +741,27 @@ public:
     size_t DynamicMemoryUsage() const;
 
     /**
-     * Amount of bitcoins coming in to a transaction
-     * Note that lightweight clients may not know anything besides the hash of previous transactions,
-     * so may not be able to calculate this.
+     * Amount of coins coming in to a transaction
      *
      * @param[in] tx	transaction for which we are checking input total
-     * @return	Sum of value of all inputs (scriptSigs), (positive valueBalance or zero) and JoinSplit vpub_new
+     * @return	Sum of value of all inputs (scriptSigs), JoinSplit vpub_new, and
+     *          positive values of valueBalanceSapling, and valueBalanceOrchard.
      */
     CAmount GetValueIn(const CTransaction& tx) const;
+
+    /**
+     * Amount of coins coming in to a transaction in the transparent inputs.
+     *
+     * @param[in] tx	transaction for which we are checking input total
+     * @return	Sum of value of all inputs (scriptSigs)
+     */
+    CAmount GetTransparentValueIn(const CTransaction& tx) const;
 
     //! Check whether all prevouts of the transaction are present in the UTXO set represented by this view
     bool HaveInputs(const CTransaction& tx) const;
 
-    //! Check whether all joinsplit and sapling spend requirements (anchors/nullifiers) are satisfied
+    //! Check whether all shielded spend requirements (anchors/nullifiers) are satisfied
     tl::expected<void, UnsatisfiedShieldedReq> CheckShieldedRequirements(const CTransaction& tx) const;
-
-    //! Return priority of tx at height nHeight
-    double GetPriority(const CTransaction &tx, int nHeight) const;
 
     const CTxOut &GetOutputFor(const CTxIn& input) const;
 

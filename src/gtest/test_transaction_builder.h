@@ -1,4 +1,4 @@
-// Copyright (c) 2022-2022 The Zcash developers
+// Copyright (c) 2022-2023 The Zcash developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or https://www.opensource.org/licenses/mit-license.php .
 
@@ -45,23 +45,45 @@ public:
     }
 
     uint256 GetBestBlock() const {
-        uint256 a;
-        return a;
+        throw std::runtime_error("`GetBestBlock` unimplemented for mock TransactionBuilderCoinsViewDB");
     }
 
     uint256 GetBestAnchor(ShieldedType type) const {
-        uint256 a;
-        return a;
+        throw std::runtime_error("`GetBestAnchor` unimplemented for mock TransactionBuilderCoinsViewDB");
     }
+
+    HistoryIndex GetHistoryLength(uint32_t epochId) const { return 0; }
+    HistoryNode GetHistoryAt(uint32_t epochId, HistoryIndex index) const {
+        throw std::runtime_error("`GetHistoryAt` unimplemented for mock TransactionBuilderCoinsViewDB");
+    }
+    uint256 GetHistoryRoot(uint32_t epochId) const {
+        throw std::runtime_error("`GetHistoryRoot` unimplemented for mock TransactionBuilderCoinsViewDB");
+    }
+
+    std::optional<libzcash::LatestSubtree> GetLatestSubtree(ShieldedType type) const {
+        return std::nullopt;
+    };
+    std::optional<libzcash::SubtreeData> GetSubtreeData(
+            ShieldedType type,
+            libzcash::SubtreeIndex index) const
+    {
+        return std::nullopt;
+    };
 
     bool BatchWrite(CCoinsMap &mapCoins,
                     const uint256 &hashBlock,
                     const uint256 &hashSproutAnchor,
                     const uint256 &hashSaplingAnchor,
+                    const uint256 &hashOrchardAnchor,
                     CAnchorsSproutMap &mapSproutAnchors,
                     CAnchorsSaplingMap &mapSaplingAnchors,
+                    CAnchorsOrchardMap &mapOrchardAnchors,
                     CNullifiersMap &mapSproutNullifiers,
-                    CNullifiersMap saplingNullifiersMap) {
+                    CNullifiersMap &mapSaplingNullifiers,
+                    CNullifiersMap &mapOrchardNullifiers,
+                    CHistoryCacheMap &historyCacheMap,
+                    SubtreeCache &cacheSaplingSubtrees,
+                    SubtreeCache &cacheOrchardSubtrees) {
         return false;
     }
 

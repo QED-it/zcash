@@ -30,7 +30,8 @@ SERIAL_SCRIPTS = [
     # These tests involve enough shielded spends (consuming all CPU
     # cores) that we can't run them in parallel.
     'mergetoaddress_sapling.py',
-    'mergetoaddress_sprout.py',
+    'mergetoaddress_ua_nu5.py',
+    'mergetoaddress_ua_sapling.py',
     'wallet_shieldingcoinbase.py',
 ]
 
@@ -39,12 +40,10 @@ BASE_SCRIPTS= [
     # Longest test should go first, to favor running tests in parallel
     # vv Tests less than 5m vv
     'wallet.py',
-    'wallet_shieldcoinbase_sprout.py',
     'sprout_sapling_migration.py',
     'remove_sprout_shielding.py',
-    'zcjoinsplitdoublespend.py',
+    'mempool_packages.py',
     # vv Tests less than 2m vv
-    'zcjoinsplit.py',
     'mergetoaddress_mixednotes.py',
     'wallet_shieldcoinbase_sapling.py',
     'wallet_shieldcoinbase_ua_sapling.py',
@@ -63,6 +62,7 @@ BASE_SCRIPTS= [
     'wallet_persistence.py',
     'wallet_listnotes.py',
     'wallet_listunspent.py',
+    'wallet_golden_5_6_0.py',
     # vv Tests less than 60s vv
     'orchard_reorg.py',
     'fundrawtransaction.py',
@@ -82,6 +82,7 @@ BASE_SCRIPTS= [
     'wallet_orchard_change.py',
     'wallet_orchard_init.py',
     'wallet_orchard_persistence.py',
+    'wallet_orchard_reindex.py',
     'wallet_nullifiers.py',
     'wallet_sapling.py',
     'wallet_sendmany_any_taddr.py',
@@ -146,6 +147,7 @@ BASE_SCRIPTS= [
     'wallet_zero_value.py',
     'threeofthreerestore.py',
     'show_help.py',
+    'errors.py',
 ]
 
 ZMQ_SCRIPTS = [
@@ -157,8 +159,6 @@ EXTENDED_SCRIPTS = [
     # These tests are not run by the travis build process.
     # Longest test should go first, to favor running tests in parallel
     'pruning.py',
-    # vv Tests less than 20m vv
-    'smartfees.py',
     # vv Tests less than 5m vv
     # vv Tests less than 2m vv
     'getblocktemplate_longpoll.py',
@@ -188,6 +188,7 @@ def main():
     Help text and arguments for individual test script:''',
                                      formatter_class=argparse.RawTextHelpFormatter)
     parser.add_argument('--coverage', action='store_true', help='generate a basic coverage report for the RPC interface')
+    parser.add_argument('--deterministic', '-d', action='store_true', help='make the output a bit closer to deterministic in order to compare runs.')
     parser.add_argument('--exclude', '-x', help='specify a comma-seperated-list of scripts to exclude. Do not include the .py extension in the name.')
     parser.add_argument('--extended', action='store_true', help='run the extended test suite in addition to the basic tests')
     parser.add_argument('--force', '-f', action='store_true', help='run tests even on platforms where they are disabled by default (e.g. windows).')
@@ -289,9 +290,19 @@ def main():
         tests_to_run = split_list[args.rpcgroup]
     else:
         tests_to_run = test_list
-    run_tests(tests_to_run, config["environment"]["SRCDIR"], config["environment"]["BUILDDIR"], config["environment"]["EXEEXT"], args.jobs, args.coverage, passon_args)
+    all_passed = run_tests(
+        RPCTestHandler,
+        tests_to_run,
+        config["environment"]["SRCDIR"],
+        config["environment"]["BUILDDIR"],
+        config["environment"]["EXEEXT"],
+        args.jobs,
+        args.coverage,
+        args.deterministic,
+        passon_args)
+    sys.exit(not all_passed)
 
-def run_tests(test_list, src_dir, build_dir, exeext, jobs=1, enable_coverage=False, args=[]):
+def run_tests(test_handler, test_list, src_dir, build_dir, exeext, jobs=1, enable_coverage=False, deterministic=False, args=[]):
     BOLD = ("","")
     if os.name == 'posix':
         # primitive formatting on supported
@@ -319,29 +330,57 @@ def run_tests(test_list, src_dir, build_dir, exeext, jobs=1, enable_coverage=Fal
         subprocess.check_output([tests_dir + 'create_cache.py'] + flags)
 
     #Run Tests
-    all_passed = True
     time_sum = 0
     time0 = time.time()
 
-    job_queue = RPCTestHandler(jobs, tests_dir, test_list, flags)
+    job_queue = test_handler(jobs, tests_dir, test_list, flags)
 
     max_len_name = len(max(test_list, key=len))
-    results = BOLD[1] + "%s | %s | %s\n\n" % ("TEST".ljust(max_len_name), "PASSED", "DURATION") + BOLD[0]
-    for _ in range(len(test_list)):
-        (name, stdout, stderr, passed, duration) = job_queue.get_next()
-        all_passed = all_passed and passed
-        time_sum += duration
+    total_count = 0
+    passed_count = 0
+    results = []
+    try:
+        for _ in range(len(test_list)):
+            (name, stdout, stderr, passed, duration) = job_queue.get_next(deterministic)
+            time_sum += duration
 
-        print('\n' + BOLD[1] + name + BOLD[0] + ":")
-        print('' if passed else stdout + '\n', end='')
-        print('' if stderr == '' else 'stderr:\n' + stderr + '\n', end='')
-        print("Pass: %s%s%s, Duration: %s s\n" % (BOLD[1], passed, BOLD[0], duration))
+            print('\n' + BOLD[1] + name + BOLD[0] + ":")
+            print('' if passed else stdout + '\n', end='')
+            print('' if stderr == '' else 'stderr:\n' + stderr + '\n', end='')
+            print("Pass: %s%s%s" % (BOLD[1], passed, BOLD[0]), end='')
+            if deterministic:
+                print("\n", end='')
+            else:
+                print(", Duration: %s s" % (duration,))
+            total_count += 1
+            if passed:
+                passed_count += 1
 
-        results += "%s | %s | %s s\n" % (name.ljust(max_len_name), str(passed).ljust(6), duration)
+            new_result = "%s | %s" % (name.ljust(max_len_name), str(passed).ljust(6))
+            if not deterministic:
+                new_result += (" | %s s" % (duration,))
+            results.append(new_result)
+    except (InterruptedError, KeyboardInterrupt):
+        print('\nThe following tests were running when interrupted:')
+        for j in job_queue.jobs:
+            print("•", j[0])
+        print('\n', end='')
 
-    results += BOLD[1] + "\n%s | %s | %s s (accumulated)" % ("ALL".ljust(max_len_name), str(all_passed).ljust(6), time_sum) + BOLD[0]
-    print(results)
-    print("\nRuntime: %s s" % (int(time.time() - time0)))
+    all_passed = passed_count == total_count
+
+    if all_passed:
+        success_rate = "True"
+    else:
+        success_rate = "%d/%d" % (passed_count, total_count)
+    header = "%s | PASSED" % ("TEST".ljust(max_len_name),)
+    footer = "%s | %s" % ("ALL".ljust(max_len_name), str(success_rate).ljust(6))
+    if not deterministic:
+        header += " | DURATION"
+        footer += " | %s s (accumulated)\nRuntime: %s s" % (time_sum, int(time.time() - time0))
+    print(
+        BOLD[1] + header + BOLD[0] + "\n\n"
+        + "\n".join(sorted(results)) + "\n"
+        + BOLD[1] + footer + BOLD[0])
 
     if coverage:
         coverage.report_rpc_coverage()
@@ -349,7 +388,7 @@ def run_tests(test_list, src_dir, build_dir, exeext, jobs=1, enable_coverage=Fal
         print("Cleaning up coverage data")
         coverage.cleanup()
 
-    sys.exit(not all_passed)
+    return all_passed
 
 class RPCTestHandler:
     """
@@ -369,7 +408,14 @@ class RPCTestHandler:
         self.portseed_offset = int(time.time() * 1000) % 625
         self.jobs = []
 
-    def get_next(self):
+    def start_test(self, args, stdout, stderr):
+        return subprocess.Popen(
+            args,
+            universal_newlines=True,
+            stdout=stdout,
+            stderr=stderr)
+
+    def get_next(self, deterministic):
         while self.num_running < self.num_jobs and self.test_list:
             # Add tests
             self.num_running += 1
@@ -379,10 +425,9 @@ class RPCTestHandler:
             log_stderr = tempfile.SpooledTemporaryFile(max_size=2**16)
             self.jobs.append((t,
                               time.time(),
-                              subprocess.Popen((self.tests_dir + t).split() + self.flags + port_seed,
-                                               universal_newlines=True,
-                                               stdout=log_stdout,
-                                               stderr=log_stderr),
+                              self.start_test((self.tests_dir + t).split() + self.flags + port_seed,
+                                               log_stdout,
+                                               log_stderr),
                               log_stdout,
                               log_stderr))
             # Run serial scripts on their own. We always run these first,
@@ -404,7 +449,8 @@ class RPCTestHandler:
                     self.num_running -= 1
                     self.jobs.remove(j)
                     return name, stdout, stderr, passed, int(time.time() - time0)
-            print('.', end='', flush=True)
+            if not deterministic:
+                print('.', end='', flush=True)
 
 
 class RPCCoverage(object):

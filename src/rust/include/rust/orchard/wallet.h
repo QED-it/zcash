@@ -1,12 +1,12 @@
-// Copyright (c) 2021-2022 The Zcash developers
+// Copyright (c) 2021-2023 The Zcash developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or https://www.opensource.org/licenses/mit-license.php .
 
 #ifndef ZCASH_RUST_INCLUDE_RUST_ORCHARD_WALLET_H
 #define ZCASH_RUST_INCLUDE_RUST_ORCHARD_WALLET_H
 
-#include "rust/orchard/incremental_merkle_tree.h"
 #include "rust/orchard/keys.h"
+#include "rust/orchard/issuance.h"
 #include "rust/builder.h"
 
 #ifdef __cplusplus
@@ -18,6 +18,10 @@ extern "C" {
  */
 struct OrchardWalletPtr;
 typedef struct OrchardWalletPtr OrchardWalletPtr;
+
+/// Pointer to an Orchard incremental merkle tree frontier
+struct OrchardMerkleFrontierPtr;
+typedef struct OrchardMerkleFrontierPtr OrchardMerkleFrontierPtr;
 
 /**
  * Constructs a new empty Orchard wallet and return a pointer to it.
@@ -39,7 +43,7 @@ void orchard_wallet_free(OrchardWalletPtr* wallet);
  * in place with the expectation that they will be overwritten and/or updated in
  * the rescan process.
  */
-bool orchard_wallet_reset(OrchardWalletPtr* wallet);
+void orchard_wallet_reset(OrchardWalletPtr* wallet);
 
 /**
  * Checkpoint the note commitment tree. This returns `false` and leaves the note
@@ -130,6 +134,7 @@ bool orchard_wallet_add_notes_from_bundle(
         OrchardWalletPtr* wallet,
         const unsigned char txid[32],
         const OrchardBundlePtr* bundle,
+        const IssueBundlePtr* issueBundle,
         void* callbackReceiver,
         push_action_ivk_callback_t push_cb,
         push_spend_action_idx_callback_t spend_cb
@@ -167,14 +172,24 @@ bool orchard_wallet_append_bundle_commitments(
         const uint32_t block_height,
         const size_t block_tx_idx,
         const unsigned char txid[32],
-        const OrchardBundlePtr* bundle
+        const OrchardBundlePtr* bundle,
+        const IssueBundlePtr* issue_bundle
         );
 
 /**
- * Returns the root of the wallet's note commitment tree.
+ * Obtains the root of the wallet's Orchard note commitment tree at the given
+ * checkpoint depth, copying it to `root_ret` which must point to a 32-byte
+ * array. As a consequence of how checkpoints are created by the `zcashd`
+ * embedded wallet, a `checkpoint_depth` of `0` corresponds to the tree state
+ * as of the block most recently appended to the chain, a depth of `1`
+ * corresponds to the end of the previous block, and so forth.
+ *
+ * Returns `true` if it is possible to compute a valid note commitment tree
+ * root at the given depth, otherwise `false`.
  */
-void orchard_wallet_commitment_tree_root(
+bool orchard_wallet_commitment_tree_root(
         const OrchardWalletPtr* wallet,
+        const size_t checkpoint_depth,
         unsigned char* root_ret);
 
 /**
@@ -200,6 +215,15 @@ void orchard_wallet_add_spending_key(
 void orchard_wallet_add_full_viewing_key(
         OrchardWalletPtr* wallet,
         const OrchardFullViewingKeyPtr* fvk);
+
+/**
+ * Add the specified issuance authorizing key to the wallet's key store.
+ */
+void orchard_wallet_add_issuance_authorizing_key(
+        OrchardWalletPtr* wallet,
+        const uint32_t accountId,
+        const IssuanceAuthorizingKeyPtr* isk
+);
 
 /**
  * Add the specified raw address to the wallet's key store, associated with the incoming
@@ -233,6 +257,17 @@ OrchardIncomingViewingKeyPtr* orchard_wallet_get_ivk_for_address(
         const OrchardRawAddressPtr* addr);
 
 /**
+ * Returns a pointer to the issuance authorizing key corresponding to the specified
+ * account id, if it is known to the wallet, or `nullptr` otherwise.
+ *
+ * Memory is allocated by Rust and must be manually freed using
+ * `issuance_authorizing_key_free`.
+ */
+IssuanceAuthorizingKeyPtr* orchard_wallet_get_issuance_authorizing_key(
+        const OrchardWalletPtr* wallet,
+        uint32_t accountId);
+
+/**
  * A C struct used to transfer note metadata information across the Rust FFI boundary.
  * This must have the same in-memory representation as the `FFINoteMetadata` type in
  * orchard_ffi/wallet.rs.
@@ -242,6 +277,7 @@ struct RawOrchardNoteMetadata {
     uint32_t actionIdx;
     OrchardRawAddressPtr* addr;
     CAmount noteValue;
+    unsigned char asset[32];
     unsigned char memo[512];
 };
 
@@ -262,8 +298,10 @@ typedef void (*push_note_callback_t)(void* resultVector, const RawOrchardNoteMet
 void orchard_wallet_get_filtered_notes(
         const OrchardWalletPtr* wallet,
         const OrchardIncomingViewingKeyPtr* ivk,
+        const unsigned char* asset_bytes,
         bool ignoreMined,
         bool requireSpendingKey,
+        bool allAssets,
         void* resultVector,
         push_note_callback_t push_cb
         );
@@ -279,6 +317,7 @@ struct RawOrchardActionSpend {
     uint32_t outpointActionIdx;
     OrchardRawAddressPtr* receivedAt;
     CAmount noteValue;
+    unsigned char asset[32];
 };
 
 /**
@@ -290,6 +329,7 @@ struct RawOrchardActionOutput {
     uint32_t outputActionIdx;
     OrchardRawAddressPtr* recipient;
     CAmount noteValue;
+    unsigned char asset[32];
     unsigned char memo[512];
     bool isOutgoing;
 };
@@ -351,19 +391,21 @@ void orchard_wallet_get_potential_spends_from_nullifier(
         );
 
 /**
- * Fetches the information needed to spend the wallet note at the given outpoint,
- * relative to the current root known to the wallet of the Orchard commitment
- * tree.
+ * Fetches the information needed to spend the wallet note at the given
+ * outpoint, as of the state of the note commitment tree at the given
+ * checkpoint depth. As a consequence of how checkpoints are created by the
+ * `zcashd` embedded wallet, a `checkpoint_depth` of `0` corresponds to the
+ * tree state as of the block most recently appended to the chain, a depth of
+ * `1` corresponds to the end of the previous block, and so forth.
  *
- * Returns `null` if the outpoint is not known to the wallet, or the Orchard
- * bundle containing the note has not been passed to
- * `orchard_wallet_append_bundle_commitments`.
+ * Returns `null` if the outpoint is not known to the wallet, or the checkpoint
+ * depth exceeds the maximum number of checkpoints retained by the wallet.
  */
 OrchardSpendInfoPtr* orchard_wallet_get_spend_info(
         const OrchardWalletPtr* wallet,
         const unsigned char txid[32],
         uint32_t action_idx,
-        const unsigned char as_of_root[32]);
+        size_t checkpoint_depth);
 
 /**
  * Run the garbage collection operation on the wallet's note commitment

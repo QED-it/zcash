@@ -1,6 +1,6 @@
 // Copyright (c) 2009-2010 Satoshi Nakamoto
 // Copyright (c) 2009-2014 The Bitcoin Core developers
-// Copyright (c) 2021-2022 The Zcash developers
+// Copyright (c) 2021-2023 The Zcash developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or https://www.opensource.org/licenses/mit-license.php .
 
@@ -13,63 +13,12 @@
 #include "version.h"
 
 namespace {
-
-/** A class that deserializes a single CTransaction one time. */
-class TxInputStream
-{
-public:
-    TxInputStream(int nTypeIn, int nVersionIn, const unsigned char *txTo, size_t txToLen) :
-    m_type(nTypeIn),
-    m_version(nVersionIn),
-    m_data(txTo),
-    m_remaining(txToLen)
-    {}
-
-    void read(char* pch, size_t nSize)
-    {
-        if (nSize > m_remaining)
-            throw std::ios_base::failure(std::string(__func__) + ": end of data");
-
-        if (pch == NULL)
-            throw std::ios_base::failure(std::string(__func__) + ": bad destination buffer");
-
-        if (m_data == NULL)
-            throw std::ios_base::failure(std::string(__func__) + ": bad source buffer");
-
-        memcpy(pch, m_data, nSize);
-        m_remaining -= nSize;
-        m_data += nSize;
-    }
-
-    template<typename T>
-    TxInputStream& operator>>(T& obj)
-    {
-        ::Unserialize(*this, obj);
-        return *this;
-    }
-
-    int GetVersion() const { return m_version; }
-    int GetType() const { return m_type; }
-private:
-    const int m_type;
-    const int m_version;
-    const unsigned char* m_data;
-    size_t m_remaining;
-};
-
 inline int set_error(zcash_script_error* ret, zcash_script_error serror)
 {
     if (ret)
         *ret = serror;
     return 0;
 }
-
-struct ECCryptoClosure
-{
-    ECCVerifyHandle handle;
-};
-
-ECCryptoClosure instance_of_eccryptoclosure;
 
 // Copy of GetLegacySigOpCount from main.cpp commit c4b2ef7c4.
 // Replace with the copy from src/consensus/tx_verify.{cpp,h} after backporting that refactor.
@@ -104,7 +53,8 @@ void* zcash_script_new_precomputed_tx(
     zcash_script_error* err)
 {
     try {
-        TxInputStream stream(SER_NETWORK, PROTOCOL_VERSION, txTo, txToLen);
+        const char* txToEnd = (const char *)(txTo + txToLen);
+        RustDataStream stream((const char *)txTo, txToEnd, SER_NETWORK, PROTOCOL_VERSION);
         CTransaction tx;
         stream >> tx;
         if (GetSerializeSize(tx, SER_NETWORK, PROTOCOL_VERSION) != txToLen) {
@@ -137,7 +87,8 @@ void* zcash_script_new_precomputed_tx_v5(
 {
     CTransaction tx;
     try {
-        TxInputStream stream(SER_NETWORK, PROTOCOL_VERSION, txTo, txToLen);
+        const char* txToEnd = (const char *)(txTo + txToLen);
+        RustDataStream stream((const char *)txTo, txToEnd, SER_NETWORK, PROTOCOL_VERSION);
         stream >> tx;
         if (GetSerializeSize(tx, SER_NETWORK, PROTOCOL_VERSION) != txToLen) {
             set_error(err, zcash_script_ERR_TX_SIZE_MISMATCH);
@@ -202,7 +153,8 @@ int zcash_script_verify(
     zcash_script_error* err)
 {
     try {
-        TxInputStream stream(SER_NETWORK, PROTOCOL_VERSION, txTo, txToLen);
+        const char* txToEnd = (const char *)(txTo + txToLen);
+        RustDataStream stream((const char *)txTo, txToEnd, SER_NETWORK, PROTOCOL_VERSION);
         CTransaction tx;
         stream >> tx;
         if (nIn >= tx.vin.size())
@@ -242,7 +194,8 @@ int zcash_script_verify_v5(
 {
     CTransaction tx;
     try {
-        TxInputStream stream(SER_NETWORK, PROTOCOL_VERSION, txTo, txToLen);
+        const char* txToEnd = (const char *)(txTo + txToLen);
+        RustDataStream stream((const char *)txTo, txToEnd, SER_NETWORK, PROTOCOL_VERSION);
         stream >> tx;
         if (nIn >= tx.vin.size())
             return set_error(err, zcash_script_ERR_TX_INDEX);
@@ -305,7 +258,8 @@ unsigned int zcash_script_legacy_sigop_count(
     zcash_script_error* err)
 {
     try {
-        TxInputStream stream(SER_NETWORK, PROTOCOL_VERSION, txTo, txToLen);
+        const char* txToEnd = (const char *)(txTo + txToLen);
+        RustDataStream stream((const char *)txTo, txToEnd, SER_NETWORK, PROTOCOL_VERSION);
         CTransaction tx;
         stream >> tx;
         if (GetSerializeSize(tx, SER_NETWORK, PROTOCOL_VERSION) != txToLen) {

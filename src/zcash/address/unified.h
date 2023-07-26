@@ -1,4 +1,4 @@
-// Copyright (c) 2021-2022 The Zcash developers
+// Copyright (c) 2021-2023 The Zcash developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or https://www.opensource.org/licenses/mit-license.php .
 
@@ -41,6 +41,7 @@ enum class OutputPool {
 enum class UnifiedAddressGenerationError {
     ShieldedReceiverNotFound,
     ReceiverTypeNotAvailable,
+    ReceiverTypeNotSupported,
     NoAddressForDiversifier,
     DiversifierSpaceExhausted,
     InvalidTransparentChildIndex
@@ -288,4 +289,3 @@ public:
 } //namespace libzcash
 
 #endif // ZCASH_ZCASH_ADDRESS_UNIFIED_H
-

@@ -1,10 +1,11 @@
-// Copyright (c) 2018-2022 The Zcash developers
+// Copyright (c) 2018-2023 The Zcash developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or https://www.opensource.org/licenses/mit-license.php .
 
 #ifndef ZCASH_TRANSACTION_BUILDER_H
 #define ZCASH_TRANSACTION_BUILDER_H
 
+#include "chainparams.h"
 #include "coins.h"
 #include "consensus/params.h"
 #include "keystore.h"
@@ -16,23 +17,26 @@
 #include "zcash/Address.hpp"
 #include "zcash/IncrementalMerkleTree.hpp"
 #include "zcash/JoinSplit.hpp"
+#include "zcash/memo.h"
 #include "zcash/Note.hpp"
 #include "zcash/NoteEncryption.hpp"
+#include "Asset.h"
 
 #include <optional>
 
+#include <rust/bridge.h>
 #include <rust/builder.h>
-#include <rust/sapling.h>
-
-#define NO_MEMO {{0xF6}}
+#include <rust/ed25519.h>
 
 class OrchardWallet;
 namespace orchard { class UnauthorizedBundle; }
 
-uint256 ProduceZip244SignatureHash(
+uint256 ProduceShieldedSignatureHash(
+    uint32_t consensusBranchId,
     const CTransaction& tx,
     const std::vector<CTxOut>& allPrevOutputs,
-    const orchard::UnauthorizedBundle& orchardBundle);
+    const sapling::UnauthorizedBundle& saplingBundle,
+    const std::optional<orchard::UnauthorizedBundle>& orchardBundle);
 
 namespace orchard {
 
@@ -102,6 +106,9 @@ public:
         return *this;
     }
 
+    // TODO temporary measure to ensure single-asset bundles
+    std::optional<Asset> primaryAsset;
+
     /// Adds a note to be spent in this bundle.
     ///
     /// Returns `false` if the given Merkle path does not have the required anchor
@@ -113,7 +120,8 @@ public:
         const std::optional<uint256>& ovk,
         const libzcash::OrchardRawAddress& to,
         CAmount value,
-        const std::optional<std::array<unsigned char, ZC_MEMO_SIZE>>& memo);
+        const std::optional<libzcash::Memo>& memo,
+        Asset asset);
 
     /// Returns `true` if any spends or outputs have been added to this builder. This can
     /// be used to avoid calling `Build()` and creating a dummy Orchard bundle.
@@ -145,12 +153,14 @@ private:
     friend class Builder;
     // The parentheses here are necessary to avoid the following compilation error:
     //     error: C++ requires a type specifier for all declarations
-    //             friend uint256 ::ProduceZip244SignatureHash(
+    //             friend uint256 ::ProduceShieldedSignatureHash(
     //             ~~~~~~           ^
-    friend uint256 (::ProduceZip244SignatureHash(
+    friend uint256 (::ProduceShieldedSignatureHash(
+        uint32_t consensusBranchId,
         const CTransaction& tx,
         const std::vector<CTxOut>& allPrevOutputs,
-        const UnauthorizedBundle& orchardBundle));
+        const sapling::UnauthorizedBundle& saplingBundle,
+        const std::optional<orchard::UnauthorizedBundle>& orchardBundle));
 
 public:
     // UnauthorizedBundle should never be copied
@@ -179,35 +189,8 @@ public:
 
 } // namespace orchard
 
-struct SpendDescriptionInfo {
-    libzcash::SaplingExpandedSpendingKey expsk;
-    libzcash::SaplingNote note;
-    uint256 alpha;
-    uint256 anchor;
-    SaplingWitness witness;
-
-    SpendDescriptionInfo(
-        libzcash::SaplingExpandedSpendingKey expsk,
-        libzcash::SaplingNote note,
-        uint256 anchor,
-        SaplingWitness witness);
-};
-
-struct OutputDescriptionInfo {
-    uint256 ovk;
-    libzcash::SaplingNote note;
-    std::array<unsigned char, ZC_MEMO_SIZE> memo;
-
-    OutputDescriptionInfo(
-        uint256 ovk,
-        libzcash::SaplingNote note,
-        std::array<unsigned char, ZC_MEMO_SIZE> memo) : ovk(ovk), note(note), memo(memo) {}
-
-    std::optional<OutputDescription> Build(rust::Box<sapling::Prover>& ctx);
-};
-
 struct JSDescriptionInfo {
-    Ed25519VerificationKey joinSplitPubKey;
+    ed25519::VerificationKey joinSplitPubKey;
     uint256 anchor;
     // We store references to these so they are correctly randomised for the caller.
     std::array<libzcash::JSInput, ZC_NUM_JS_INPUTS>& inputs;
@@ -216,7 +199,7 @@ struct JSDescriptionInfo {
     CAmount vpub_new;
 
     JSDescriptionInfo(
-        Ed25519VerificationKey joinSplitPubKey,
+        ed25519::VerificationKey joinSplitPubKey,
         uint256 anchor,
         std::array<libzcash::JSInput, ZC_NUM_JS_INPUTS>& inputs,
         std::array<libzcash::JSOutput, ZC_NUM_JS_OUTPUTS>& outputs,
@@ -260,15 +243,18 @@ private:
     const CCoinsViewCache* coinsView;
     CCriticalSection* cs_coinsView;
     CMutableTransaction mtx;
-    CAmount fee = 10000;
+    CAmount fee = LEGACY_DEFAULT_FEE;
     std::optional<uint256> orchardAnchor;
     std::optional<orchard::Builder> orchardBuilder;
+    std::optional<IssueBundle> issueBundle;
     CAmount valueBalanceOrchard = 0;
+    rust::Box<sapling::Builder> saplingBuilder;
+    CAmount valueBalanceSapling = 0;
 
     std::vector<libzcash::OrchardSpendingKey> orchardSpendingKeys;
+    std::optional<IssuanceAuthorizingKey> issueAuthorizingKey;
     std::optional<libzcash::OrchardRawAddress> firstOrchardSpendAddr;
-    std::vector<SpendDescriptionInfo> spends;
-    std::vector<OutputDescriptionInfo> outputs;
+    std::optional<std::pair<uint256, libzcash::SaplingPaymentAddress>> firstSaplingSpendAddr;
     std::vector<libzcash::JSInput> jsInputs;
     std::vector<libzcash::JSOutput> jsOutputs;
     std::vector<CTxOut> tIns;
@@ -279,7 +265,6 @@ private:
     std::optional<CTxDestination> tChangeAddr;
 
 public:
-    TransactionBuilder() {}
     /**
      * If an Orchard anchor is provided, the resulting builder will always attempt
      * to construct a V5 transaction unless NU5 is not yet active. If an Orchard
@@ -287,7 +272,7 @@ public:
      * value of the -preferredtxversion configuration flag.
      */
     TransactionBuilder(
-        const Consensus::Params& consensusParams,
+        const CChainParams& params,
         int nHeight,
         std::optional<uint256> orchardAnchor,
         const CKeyStore* keyStore = nullptr,
@@ -307,12 +292,18 @@ public:
         fee(std::move(builder.fee)),
         orchardAnchor(std::move(builder.orchardAnchor)),
         orchardBuilder(std::move(builder.orchardBuilder)),
+        issueBundle(std::move(builder.issueBundle)),
+        issueAuthorizingKey(std::move(builder.issueAuthorizingKey)),
         valueBalanceOrchard(std::move(builder.valueBalanceOrchard)),
-        spends(std::move(builder.spends)),
-        outputs(std::move(builder.outputs)),
+        saplingBuilder(std::move(builder.saplingBuilder)),
+        valueBalanceSapling(std::move(builder.valueBalanceSapling)),
+        orchardSpendingKeys(std::move(orchardSpendingKeys)),
+        firstOrchardSpendAddr(std::move(firstOrchardSpendAddr)),
+        firstSaplingSpendAddr(std::move(firstSaplingSpendAddr)),
         jsInputs(std::move(builder.jsInputs)),
         jsOutputs(std::move(builder.jsOutputs)),
         tIns(std::move(builder.tIns)),
+        orchardChangeAddr(std::move(builder.orchardChangeAddr)),
         saplingChangeAddr(std::move(builder.saplingChangeAddr)),
         sproutChangeAddr(std::move(builder.sproutChangeAddr)),
         tChangeAddr(std::move(builder.tChangeAddr)) {}
@@ -327,12 +318,18 @@ public:
             mtx = std::move(builder.mtx);
             fee = std::move(builder.fee);
             orchardBuilder = std::move(builder.orchardBuilder);
+            issueBundle = std::move(builder.issueBundle);
+            issueAuthorizingKey = std::move(builder.issueAuthorizingKey);
             valueBalanceOrchard = std::move(builder.valueBalanceOrchard);
-            spends = std::move(builder.spends);
-            outputs = std::move(builder.outputs);
+            saplingBuilder = std::move(builder.saplingBuilder);
+            valueBalanceSapling = std::move(builder.valueBalanceSapling);
+            orchardSpendingKeys = std::move(builder.orchardSpendingKeys),
+            firstOrchardSpendAddr = std::move(builder.firstOrchardSpendAddr),
+            firstSaplingSpendAddr = std::move(builder.firstSaplingSpendAddr),
             jsInputs = std::move(builder.jsInputs);
             jsOutputs = std::move(builder.jsOutputs);
             tIns = std::move(builder.tIns);
+            orchardChangeAddr = std::move(builder.orchardChangeAddr);
             saplingChangeAddr = std::move(builder.saplingChangeAddr);
             sproutChangeAddr = std::move(builder.sproutChangeAddr);
             tChangeAddr = std::move(builder.tChangeAddr);
@@ -356,21 +353,21 @@ public:
         const std::optional<uint256>& ovk,
         const libzcash::OrchardRawAddress& to,
         CAmount value,
-        const std::optional<std::array<unsigned char, ZC_MEMO_SIZE>>& memo);
+        const std::optional<libzcash::Memo>& memo,
+        Asset asset);
 
     // Throws if the anchor does not match the anchor used by
     // previously-added Sapling spends.
     void AddSaplingSpend(
-        libzcash::SaplingExpandedSpendingKey expsk,
+        libzcash::SaplingExtendedSpendingKey extsk,
         libzcash::SaplingNote note,
-        uint256 anchor,
         SaplingWitness witness);
 
     void AddSaplingOutput(
         uint256 ovk,
-        libzcash::SaplingPaymentAddress to,
+        const libzcash::SaplingPaymentAddress& to,
         CAmount value,
-        std::array<unsigned char, ZC_MEMO_SIZE> memo = NO_MEMO);
+        const std::optional<libzcash::Memo>& memo);
 
     // Throws if the anchor does not match the anchor used by
     // previously-added Sprout inputs.
@@ -380,9 +377,9 @@ public:
         SproutWitness witness);
 
     void AddSproutOutput(
-        libzcash::SproutPaymentAddress to,
+        const libzcash::SproutPaymentAddress& to,
         CAmount value,
-        std::array<unsigned char, ZC_MEMO_SIZE> memo = NO_MEMO);
+        const std::optional<libzcash::Memo>& memo);
 
     // Assumes that the value correctly corresponds to the provided UTXO.
     void AddTransparentInput(COutPoint utxo, CScript scriptPubKey, CAmount value);

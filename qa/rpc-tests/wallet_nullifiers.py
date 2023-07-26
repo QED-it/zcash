@@ -6,15 +6,23 @@
 from test_framework.test_framework import BitcoinTestFramework
 from test_framework.util import assert_equal, assert_true, bitcoind_processes, \
     connect_nodes_bi, start_node, start_nodes, wait_and_assert_operationid_status, \
-    get_coinbase_address, DEFAULT_FEE
+    get_coinbase_address, LEGACY_DEFAULT_FEE
+from test_framework.zip317 import conventional_fee
 
 from decimal import Decimal
 
 class WalletNullifiersTest (BitcoinTestFramework):
 
     def setup_nodes(self):
-        return start_nodes(self.num_nodes, self.options.tmpdir,
-                           extra_args=[['-experimentalfeatures', '-developerencryptwallet']] * self.num_nodes)
+        return start_nodes(self.num_nodes, self.options.tmpdir, extra_args=[[
+            '-experimentalfeatures',
+            '-developerencryptwallet',
+            '-allowdeprecated=getnewaddress',
+            '-allowdeprecated=z_getnewaddress',
+            '-allowdeprecated=z_getbalance',
+            '-allowdeprecated=z_gettotalbalance',
+            '-allowdeprecated=z_listaddresses',
+        ]] * self.num_nodes)
 
     def run_test (self):
         # add zaddr to node 0
@@ -24,9 +32,12 @@ class WalletNullifiersTest (BitcoinTestFramework):
         # Tests using the default cached chain have one address per coinbase output
         mytaddr = get_coinbase_address(self.nodes[0])
         recipients = []
-        recipients.append({"address": myzaddr0, "amount": Decimal('10.0') - DEFAULT_FEE}) # utxo amount less fee
+        recipients.append({"address": myzaddr0, "amount": Decimal('10.0') - LEGACY_DEFAULT_FEE}) # utxo amount less fee
 
-        wait_and_assert_operationid_status(self.nodes[0], self.nodes[0].z_sendmany(mytaddr, recipients), timeout=120)
+        wait_and_assert_operationid_status(
+            self.nodes[0],
+            self.nodes[0].z_sendmany(mytaddr, recipients, 1, LEGACY_DEFAULT_FEE, 'AllowRevealedSenders'),
+            timeout=120)
 
         self.sync_all()
         self.nodes[0].generate(1)
@@ -44,7 +55,10 @@ class WalletNullifiersTest (BitcoinTestFramework):
         bitcoind_processes[1].wait()
 
         # restart node 1
-        self.nodes[1] = start_node(1, self.options.tmpdir)
+        self.nodes[1] = start_node(1, self.options.tmpdir, [
+            '-allowdeprecated=getnewaddress',
+            '-allowdeprecated=z_getbalance',
+        ])
         connect_nodes_bi(self.nodes, 0, 1)
         connect_nodes_bi(self.nodes, 1, 2)
         self.sync_all()
@@ -79,7 +93,7 @@ class WalletNullifiersTest (BitcoinTestFramework):
 
         # check zaddr balance
         zsendmany2notevalue = Decimal('2.0')
-        zsendmanyfee = DEFAULT_FEE
+        zsendmanyfee = conventional_fee(2)
         zaddrremaining = zsendmanynotevalue - zsendmany2notevalue - zsendmanyfee
         assert_equal(self.nodes[3].z_getbalance(myzaddr3), zsendmany2notevalue)
         assert_equal(self.nodes[2].z_getbalance(myzaddr), zaddrremaining)
@@ -93,7 +107,10 @@ class WalletNullifiersTest (BitcoinTestFramework):
         recipients = []
         recipients.append({"address":mytaddr1, "amount":1.0})
 
-        wait_and_assert_operationid_status(self.nodes[1], self.nodes[1].z_sendmany(myzaddr, recipients, 1), timeout=120)
+        wait_and_assert_operationid_status(
+            self.nodes[1],
+            self.nodes[1].z_sendmany(myzaddr, recipients, 1, LEGACY_DEFAULT_FEE, 'AllowRevealedRecipients'),
+            timeout=120)
 
         self.sync_all()
         self.nodes[1].generate(1)
@@ -101,7 +118,7 @@ class WalletNullifiersTest (BitcoinTestFramework):
 
         # check zaddr balance
         zsendmany3notevalue = Decimal('1.0')
-        zaddrremaining2 = zaddrremaining - zsendmany3notevalue - zsendmanyfee
+        zaddrremaining2 = zaddrremaining - zsendmany3notevalue - LEGACY_DEFAULT_FEE
         assert_equal(self.nodes[1].z_getbalance(myzaddr), zaddrremaining2)
         assert_equal(self.nodes[2].z_getbalance(myzaddr), zaddrremaining2)
 
@@ -120,7 +137,7 @@ class WalletNullifiersTest (BitcoinTestFramework):
         importvk_result = self.nodes[3].z_importviewingkey(myzvkey, 'whenkeyisnew', 1)
 
         # Check results of z_importviewingkey
-        assert_equal(importvk_result["type"], "sapling")
+        assert_equal(importvk_result["address_type"], "sapling")
         assert_equal(importvk_result["address"], myzaddr)
 
         # Check the address has been imported

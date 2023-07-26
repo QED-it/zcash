@@ -15,10 +15,8 @@ be removed from tier 1. These dates are subject to change.
 
 | target                  | OS           | End of Support |
 | ----------------------- | ------------ | -------------- |
-| `x86_64-pc-linux-gnu`   | CentOS 8     | TBD            |
-|                         | Debian 10    | June 2024      |
+| `x86_64-pc-linux-gnu`   | Debian 10    | June 2024      |
 |                         | Debian 11    | June 2026      |
-|                         | Ubuntu 18.04 | April 2023     |
 |                         | Ubuntu 20.04 | April 2025     |
 
 ## Tier 2
@@ -45,6 +43,7 @@ available.
 | target                  | OS           | notes |
 | ----------------------- | ------------ | ----- |
 | `x86_64-pc-linux-gnu`   | Arch         |
+|                         | Ubuntu 22.04 |
 | `x86_64-unknown-freebsd`| FreeBSD      |
 | `x86_64-w64-mingw32`    | Windows      | 64-bit MinGW |
 | `x86_64-apple-darwin16` | macOS 10.14+ |

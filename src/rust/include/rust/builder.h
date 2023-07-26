@@ -1,4 +1,4 @@
-// Copyright (c) 2022-2022 The Zcash developers
+// Copyright (c) 2022-2023 The Zcash developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or https://www.opensource.org/licenses/mit-license.php .
 
@@ -63,6 +63,7 @@ bool orchard_builder_add_recipient(
     const unsigned char* ovk,
     const OrchardRawAddressPtr* recipient,
     uint64_t value,
+    const unsigned char* asset,
     const unsigned char* memo);
 
 /// Builds a bundle containing the given spent notes and recipients.
@@ -85,18 +86,6 @@ OrchardBundlePtr* orchard_unauthorized_bundle_prove_and_sign(
     const OrchardSpendingKeyPtr** keys,
     size_t keys_len,
     const unsigned char* sighash);
-
-/// Calculates a ZIP 244 shielded signature digest for the given under-construction
-/// transaction.
-///
-/// Returns `false` if any of the parameters are invalid; in this case, `sighash_ret`
-/// will be unaltered.
-///
-/// `preTx` is always freed by this method.
-bool zcash_builder_zip244_shielded_signature_digest(
-    PrecomputedTxParts* preTx,
-    const OrchardUnauthorizedBundlePtr* bundle,
-    unsigned char* sighash_ret);
 
 #ifdef __cplusplus
 }

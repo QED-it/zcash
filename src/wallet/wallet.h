@@ -1,6 +1,6 @@
 // Copyright (c) 2009-2010 Satoshi Nakamoto
 // Copyright (c) 2009-2014 The Bitcoin Core developers
-// Copyright (c) 2016-2022 The Zcash developers
+// Copyright (c) 2016-2023 The Zcash developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or https://www.opensource.org/licenses/mit-license.php .
 
@@ -31,6 +31,7 @@
 #include "zcash/Address.hpp"
 #include "zcash/Note.hpp"
 #include "base58.h"
+#include "Asset.h"
 
 #include <algorithm>
 #include <map>
@@ -42,7 +43,7 @@
 #include <utility>
 #include <vector>
 
-#include <rust/wallet_scanner.h>
+#include <rust/bridge.h>
 
 #include <boost/shared_ptr.hpp>
 
@@ -52,9 +53,7 @@ extern CWallet* pwalletMain;
  * Settings
  */
 extern CFeeRate payTxFee;
-extern unsigned int nTxConfirmTarget;
 extern bool bSpendZeroConfChange;
-extern bool fSendFreeTransactions;
 extern bool fPayAtLeastCustomFee;
 extern unsigned int nAnchorConfirmations;
 // The maximum number of Orchard actions permitted within a single transaction.
@@ -64,18 +63,10 @@ extern unsigned int nOrchardActionLimit;
 static const unsigned int DEFAULT_KEYPOOL_SIZE = 100;
 //! -paytxfee default
 static const CAmount DEFAULT_TRANSACTION_FEE = 0;
-//! -mintxfee default
-static const CAmount DEFAULT_TRANSACTION_MINFEE = 1000;
 //! minimum change amount
 static const CAmount MIN_CHANGE = CENT;
 //! Default for -spendzeroconfchange
 static const bool DEFAULT_SPEND_ZEROCONF_CHANGE = true;
-//! Default for -sendfreetransactions
-static const bool DEFAULT_SEND_FREE_TRANSACTIONS = false;
-//! -txconfirmtarget default
-static const unsigned int DEFAULT_TX_CONFIRM_TARGET = 2;
-//! Largest (in bytes) free transaction we're willing to create
-static const unsigned int MAX_FREE_TRANSACTION_CREATE_SIZE = 1000;
 static const bool DEFAULT_WALLETBROADCAST = true;
 //! Size of witness cache
 //  Should be large enough that we can expect not to reorg beyond our cache
@@ -112,6 +103,11 @@ enum WalletFeature
     FEATURE_LATEST = 60000
 };
 
+struct Balances
+{
+    CAmount balance;
+    CAmount unconfirmedBalance;
+};
 
 /** A key pool entry */
 class CKeyPool
@@ -156,6 +152,17 @@ struct CRecipient
     CScript scriptPubKey;
     CAmount nAmount;
     bool fSubtractFeeFromAmount;
+};
+
+/**
+ * TODO merge with CRecipient?
+ */
+struct CIssueRecipient
+{
+    libzcash::OrchardRawAddress address;
+    CAmount nAmount;
+    Asset asset;
+    bool finalize;
 };
 
 class RecipientMapping {
@@ -381,7 +388,7 @@ struct SproutNoteEntry
     JSOutPoint jsop;
     libzcash::SproutPaymentAddress address;
     libzcash::SproutNote note;
-    std::array<unsigned char, ZC_MEMO_SIZE> memo;
+    std::optional<libzcash::Memo> memo;
     int confirmations;
 };
 
@@ -391,7 +398,7 @@ struct SaplingNoteEntry
     SaplingOutPoint op;
     libzcash::SaplingPaymentAddress address;
     libzcash::SaplingNote note;
-    std::array<unsigned char, ZC_MEMO_SIZE> memo;
+    std::optional<libzcash::Memo> memo;
     int confirmations;
 };
 
@@ -660,19 +667,34 @@ public:
 
     std::pair<libzcash::SproutNotePlaintext, libzcash::SproutPaymentAddress> DecryptSproutNote(
         JSOutPoint jsop) const;
+    /**
+     * Decrypt the specified Sapling output of this wallet transaction.
+     *
+     * Returns `std::nullopt` if we don't know how to decrypt this output
+     * (because it could not be decrypted during wallet scanning).
+     *
+     * Decryption is always performed as if the ZIP 212 grace window is active
+     * (accepting both v1 and v2 note plaintexts), because we know that any
+     * decryptable output will have had its plaintext version checked when it
+     * first entered the wallet.
+     */
     std::optional<std::pair<
         libzcash::SaplingNotePlaintext,
-        libzcash::SaplingPaymentAddress>> DecryptSaplingNote(const Consensus::Params& params, int height, SaplingOutPoint op) const;
+        libzcash::SaplingPaymentAddress>> DecryptSaplingNote(const CChainParams& params, SaplingOutPoint op) const;
+    /**
+     * Try to recover the specified Sapling output of this wallet transaction
+     * using one of the given outgoing viewing keys.
+     *
+     * Returns `std::nullopt` if none of the `ovks` can decrypt this output.
+     *
+     * Decryption is always performed as if the ZIP 212 grace window is active
+     * (accepting both v1 and v2 note plaintexts), because the v2 plaintext
+     * format protects against an attack on the recipient, not the sender.
+     */
     std::optional<std::pair<
         libzcash::SaplingNotePlaintext,
-        libzcash::SaplingPaymentAddress>> DecryptSaplingNoteWithoutLeadByteCheck(SaplingOutPoint op) const;
-    std::optional<std::pair<
-        libzcash::SaplingNotePlaintext,
-        libzcash::SaplingPaymentAddress>> RecoverSaplingNote(const Consensus::Params& params, int height,
+        libzcash::SaplingPaymentAddress>> RecoverSaplingNote(const CChainParams& params,
             SaplingOutPoint op, std::set<uint256>& ovks) const;
-    std::optional<std::pair<
-        libzcash::SaplingNotePlaintext,
-        libzcash::SaplingPaymentAddress>> RecoverSaplingNoteWithoutLeadByteCheck(SaplingOutPoint op, std::set<uint256>& ovks) const;
     OrchardActions RecoverOrchardActions(const std::vector<uint256>& ovks) const;
 
     //! filter decides which addresses will count towards the debit
@@ -691,7 +713,6 @@ public:
     bool IsTrusted(const std::optional<int>& asOfHeight) const;
 
     int64_t GetTxTime() const;
-    int GetRequestCount() const;
 
     bool RelayWalletTransaction();
 
@@ -746,15 +767,28 @@ class COutput
 public:
     const CWalletTx *tx;
     int i;
+    std::optional<CTxDestination> destination;
     int nDepth;
     bool fSpendable;
     bool fIsCoinbase;
 
-    COutput(const CWalletTx *txIn, int iIn, int nDepthIn, bool fSpendableIn, bool fIsCoinbaseIn = false) :
-            tx(txIn), i(iIn), nDepth(nDepthIn), fSpendable(fSpendableIn), fIsCoinbase(fIsCoinbaseIn){ }
+    COutput(const CWalletTx *txIn, int iIn, std::optional<CTxDestination> destination, int nDepthIn, bool fSpendableIn, bool fIsCoinbaseIn = false) :
+        tx(txIn), i(iIn), destination(destination), nDepth(nDepthIn), fSpendable(fSpendableIn), fIsCoinbase(fIsCoinbaseIn){ }
 
     CAmount Value() const { return tx->vout[i].nValue; }
     std::string ToString() const;
+};
+
+/**
+ * Indicates which addresses can be used when selecting notes to spend from a unified account.
+ */
+enum UnifiedAccountSpendingPolicy {
+    /// Can only send from non-transparent receivers in the account.
+    ShieldedOnly,
+    /// Can send from a single transparent address in the account.
+    ShieldedWithSingleTransparentAddress,
+    /// Can send from any combination of receivers in the account.
+    AnyAddresses,
 };
 
 /**
@@ -821,6 +855,11 @@ public:
      * is not allowed by `AllowLinkingAccountAddresses`.
      */
     bool IsCompatibleWith(PrivacyPolicy policy) const;
+
+    /**
+     * This lets us know which combinations of notes we can select from a unified account.
+     */
+    UnifiedAccountSpendingPolicy PermittedAccountSpendingPolicy() const;
 };
 
 /**
@@ -890,13 +929,27 @@ typedef std::variant<
     libzcash::UnifiedFullViewingKey,
     AccountZTXOPattern> ZTXOPattern;
 
+/**
+ * For transactions, either `Disallow` or `Require` must be used, but `Allow` is generally used when
+ * calculating balances.
+ */
+enum class TransparentCoinbasePolicy {
+    Disallow, //!< Do not select transparent coinbase
+    Allow,    //!< Make transparent coinbase available to the selector
+    Require   //!< Only select transparent coinbase
+};
+
 class ZTXOSelector {
 private:
     ZTXOPattern pattern;
     bool requireSpendingKeys;
+    TransparentCoinbasePolicy transparentCoinbasePolicy;
 
-    ZTXOSelector(ZTXOPattern patternIn, bool requireSpendingKeysIn):
-        pattern(patternIn), requireSpendingKeys(requireSpendingKeysIn) {}
+    ZTXOSelector(ZTXOPattern patternIn, bool requireSpendingKeysIn, TransparentCoinbasePolicy transparentCoinbasePolicy):
+        pattern(patternIn), requireSpendingKeys(requireSpendingKeysIn), transparentCoinbasePolicy(transparentCoinbasePolicy) {
+        // We can’t require transparent coinbase unless we’re selecting transparent funds.
+        assert(SelectsTransparent() || transparentCoinbasePolicy != TransparentCoinbasePolicy::Require);
+}
 
     friend class CWallet;
 public:
@@ -908,8 +961,11 @@ public:
         return requireSpendingKeys;
     }
 
+    TransparentCoinbasePolicy TransparentCoinbasePolicy() const {
+        return transparentCoinbasePolicy;
+    }
+
     bool SelectsTransparent() const;
-    bool SelectsTransparentCoinbase() const;
     bool SelectsSprout() const;
     bool SelectsSapling() const;
     bool SelectsOrchard() const;
@@ -933,6 +989,11 @@ public:
     std::vector<OrchardNoteMetadata> orchardNoteMetadata;
 
     /**
+     * Retain the first `maxUtxoCount` utxos, and discard the rest.
+     */
+    void LimitTransparentUtxos(size_t maxUtxoCount);
+
+    /**
      * Selectively discard notes that are not required to obtain the desired
      * amount. Returns `false` if the available inputs do not add up to the
      * desired amount.
@@ -953,14 +1014,14 @@ public:
      */
     CAmount Total() const {
         CAmount result = 0;
-        result += GetTransparentBalance();
-        result += GetSproutBalance();
-        result += GetSaplingBalance();
-        result += GetOrchardBalance();
+        result += GetTransparentTotal();
+        result += GetSproutTotal();
+        result += GetSaplingTotal();
+        result += GetOrchardTotal();
         return result;
     }
 
-    CAmount GetTransparentBalance() const {
+    CAmount GetTransparentTotal() const {
         CAmount result = 0;
         for (const auto& t : utxos) {
             result += t.Value();
@@ -968,7 +1029,7 @@ public:
         return result;
     }
 
-    CAmount GetSproutBalance() const {
+    CAmount GetSproutTotal() const {
         CAmount result = 0;
         for (const auto& t : sproutNoteEntries) {
             result += t.note.value();
@@ -976,7 +1037,7 @@ public:
         return result;
     }
 
-    CAmount GetSaplingBalance() const {
+    CAmount GetSaplingTotal() const {
         CAmount result = 0;
         for (const auto& t : saplingNoteEntries) {
             result += t.note.value();
@@ -984,7 +1045,7 @@ public:
         return result;
     }
 
-    CAmount GetOrchardBalance() const {
+    CAmount GetOrchardTotal() const {
         CAmount result = 0;
         for (const auto& t : orchardNoteMetadata) {
             result += t.GetNoteValue();
@@ -1148,8 +1209,6 @@ public:
     // BatchScanner APIs
     //
 
-    size_t RecursiveDynamicUsage();
-
     void AddTransaction(
         const CTransaction &tx,
         const std::vector<unsigned char> &txBytes,
@@ -1162,6 +1221,12 @@ public:
         const CTransaction &tx,
         const CBlock *pblock,
         const int nHeight);
+};
+
+enum class AccountChangeAddressFailure {
+    DisjointReceivers,
+    TransparentChangeNotPermitted,
+    NoSuchAccount,
 };
 
 /**
@@ -1468,7 +1533,7 @@ public:
      */
     std::map<uint256, JSOutPoint> mapSproutNullifiersToNotes;
 
-    std::map<uint256, SaplingOutPoint> mapSaplingNullifiersToNotes;
+    std::map<libzcash::nullifier_t, SaplingOutPoint> mapSaplingNullifiersToNotes;
 
     std::map<uint256, CWalletTx> mapWallet;
 
@@ -1478,7 +1543,6 @@ public:
     TxItems wtxOrdered;
 
     int64_t nOrderPosNext;
-    std::map<uint256, int> mapRequestCount;
 
     std::map<CTxDestination, CAddressBookData> mapAddressBook;
 
@@ -1530,6 +1594,7 @@ public:
     std::optional<ZTXOSelector> ZTXOSelectorForAccount(
             libzcash::AccountId account,
             bool requireSpendingKey,
+            TransparentCoinbasePolicy transparentCoinbasePolicy,
             std::set<libzcash::ReceiverType> receiverTypes={}) const;
 
     /**
@@ -1541,7 +1606,11 @@ public:
     std::optional<ZTXOSelector> ZTXOSelectorForAddress(
             const libzcash::PaymentAddress& addr,
             bool requireSpendingKey,
-            bool allowAddressLinkability) const;
+            TransparentCoinbasePolicy transparentCoinbasePolicy,
+            /// This determines if and how we treat a UA `addr` as a proxy for an account. It should
+            /// be `std::nullopt` when it’s not desirable to use the UA as a proxy (e.g., getting a
+            /// balance for a specific UA).
+            std::optional<UnifiedAccountSpendingPolicy> spendingPolicy) const;
 
     /**
      * Returns the ZTXO selector for the specified viewing key, if that key
@@ -1551,13 +1620,14 @@ public:
      */
     std::optional<ZTXOSelector> ZTXOSelectorForViewingKey(
             const libzcash::ViewingKey& vk,
-            bool requireSpendingKey) const;
+            bool requireSpendingKey,
+            TransparentCoinbasePolicy transparentCoinbasePolicy) const;
 
     /**
      * Returns the ZTXO selector that will select UTXOs sent to legacy
      * transparent addresses managed by this wallet.
      */
-    static ZTXOSelector LegacyTransparentZTXOSelector(bool requireSpendingKey);
+    static ZTXOSelector LegacyTransparentZTXOSelector(bool requireSpendingKey, TransparentCoinbasePolicy transparentCoinbasePolicy);
 
     /**
      * Look up the account for a given selector. This resolves the account ID
@@ -1581,13 +1651,19 @@ public:
      * Returns `std::nullopt` if the account does not have an internal spending
      * key matching the requested `OutputPool`.
      */
-    std::optional<libzcash::RecipientAddress> GenerateChangeAddressForAccount(
+    tl::expected<libzcash::RecipientAddress, AccountChangeAddressFailure>
+    GenerateChangeAddressForAccount(
             libzcash::AccountId accountId,
             std::set<libzcash::OutputPool> changeOptions);
 
     SpendableInputs FindSpendableInputs(
             ZTXOSelector paymentSource,
-            bool allowTransparentCoinbase,
+            uint32_t minDepth,
+            const std::optional<int>& asOfHeight) const;
+
+    SpendableInputs FindSpendableAssets(
+            const Asset asset,
+            ZTXOSelector selector,
             uint32_t minDepth,
             const std::optional<int>& asOfHeight) const;
 
@@ -1732,6 +1808,8 @@ public:
 
     bool AddOrchardZKey(const libzcash::OrchardSpendingKey &sk);
     bool AddOrchardFullViewingKey(const libzcash::OrchardFullViewingKey &fvk);
+    bool AddIssuanceAuthorizingKey(const int accountId, const IssuanceAuthorizingKey &isk) const;
+
     /**
      * Adds an address/ivk mapping to the in-memory wallet. Returns `false` if
      * the mapping could not be persisted, or the IVK does not correspond to an
@@ -1859,7 +1937,7 @@ public:
          std::vector<uint256> commitments,
          std::vector<std::optional<SproutWitness>>& witnesses,
          uint256 &final_anchor);
-    int ScanForWalletTransactions(
+    std::optional<int> ScanForWalletTransactions(
         CBlockIndex* pindexStart,
         bool fUpdate,
         bool isInitScan);
@@ -1888,6 +1966,19 @@ public:
      */
     bool CreateTransaction(const std::vector<CRecipient>& vecSend, CWalletTx& wtxNew, CReserveKey& reservekey, CAmount& nFeeRet, int& nChangePosRet,
                            std::string& strFailReason, const CCoinControl *coinControl = NULL, bool sign = true);
+
+    /**
+     * Create a new transaction paying the recipients with a set of coins
+     * selected by SelectCoins(); Also create the change output, when needed
+     * Additionally, issue assets defined in 'vecIssue'
+     */
+    bool CreateTransactionWithIssueBundle(const vector<CRecipient>& vecSend, const vector<CIssueRecipient>& vecIssue, CWalletTx& wtxNew, CReserveKey& reservekey, IssuanceAuthorizingKey& isk, CAmount& nFeeRet,
+                                                   int& nChangePosRet, std::string& strFailReason, const CCoinControl* coinControl = NULL, bool sign = true);
+
+    /**
+     * Create a new transaction issuing the assets
+     */
+    bool CreateIssueTransaction(const vector<CIssueRecipient>& vecIssue, IssuanceAuthorizingKey isk, CWalletTx& wtxNew, std::string& strFailReason);
 
     /**
      * Save a set of (txid, RecipientAddress, std::optional<UnifiedAddress>) mappings to the wallet.
@@ -1919,17 +2010,17 @@ public:
 
     bool CommitTransaction(CWalletTx& wtxNew, std::optional<std::reference_wrapper<CReserveKey>> reservekey, CValidationState& state);
 
-    static CFeeRate minTxFee;
-    /**
-     * Estimate the minimum fee considering user set parameters
-     * and the required fee
+    /** Adjust the requested fee by bounding it below to the minimum relay fee required
+     * for a transaction of the given size and bounding it above to the maximum fee
+     * configured using the `-maxtxfee` configuration option.
      */
-    static CAmount GetMinimumFee(unsigned int nTxBytes, unsigned int nConfirmTarget, const CTxMemPool& pool);
+    static CAmount ConstrainFee(CAmount requestedFee, unsigned int nTxBytes);
+
     /**
-     * Return the minimum required fee taking into account the
-     * floating relay fee and user set minimum transaction fee
+     * Decide on the minimum fee considering user set parameters
+     * and the required fee.
      */
-    static CAmount GetRequiredFee(unsigned int nTxBytes);
+    static CAmount GetMinimumFee(const CTransaction& tx, unsigned int nTxBytes);
 
     /**
      * The set of default receiver types used when the wallet generates
@@ -1958,11 +2049,11 @@ public:
         uint8_t n) const;
     mapSproutNoteData_t FindMySproutNotes(const CTransaction& tx) const;
     std::pair<mapSaplingNoteData_t, SaplingIncomingViewingKeyMap> FindMySaplingNotes(
-        const Consensus::Params& consensus,
+        const CChainParams& params,
         const CTransaction& tx,
         int height) const;
     bool IsSproutNullifierFromMe(const uint256& nullifier) const;
-    bool IsSaplingNullifierFromMe(const uint256& nullifier) const;
+    bool IsSaplingNullifierFromMe(const libzcash::nullifier_t& nullifier) const;
 
     bool GetSproutNoteWitnesses(
          const std::vector<JSOutPoint>& notes,
@@ -1974,9 +2065,20 @@ public:
          unsigned int confirmations,
          std::vector<std::optional<SaplingWitness>>& witnesses,
          uint256 &final_anchor) const;
+    /**
+     * Return the witness and other information required to spend a given
+     * Orchard note. `anchorConfirmations` must be a value in the range
+     * `1..=100`; it is not possible to spend shielded notes with 0
+     * confirmations.
+     *
+     * This method checks the root of the wallet's note commitment tree having
+     * the specified `anchorConfirmations` to ensure that it corresponds to the
+     * specified anchor and will panic if this check fails.
+     */
     std::vector<std::pair<libzcash::OrchardSpendingKey, orchard::SpendInfo>> GetOrchardSpendInfo(
         const std::vector<OrchardNoteMetadata>& orchardNoteMetadata,
-        uint256 anchor) const;
+        unsigned int confirmations,
+        const uint256& anchor) const;
 
     isminetype IsMine(const CTxIn& txin) const;
     CAmount GetDebit(const CTxIn& txin, const isminefilter& filter) const;
@@ -2017,10 +2119,10 @@ public:
             const libzcash::SproutPaymentAddress& address,
             const JSOutPoint & entry);
 
-    std::set<std::pair<libzcash::SaplingPaymentAddress, uint256>> GetSaplingNullifiers(
+    std::set<std::pair<libzcash::SaplingPaymentAddress, libzcash::nullifier_t>> GetSaplingNullifiers(
             const std::set<libzcash::SaplingPaymentAddress>& addresses);
     bool IsNoteSaplingChange(
-            const std::set<std::pair<libzcash::SaplingPaymentAddress, uint256>> & nullifierSet,
+            const std::set<std::pair<libzcash::SaplingPaymentAddress, libzcash::nullifier_t>> & nullifierSet,
             const libzcash::SaplingPaymentAddress& address,
             const SaplingOutPoint & entry);
 
@@ -2033,22 +2135,7 @@ public:
 
     void UpdatedTransaction(const uint256 &hashTx);
 
-    void Inventory(const uint256 &hash)
-    {
-        {
-            LOCK(cs_wallet);
-            std::map<uint256, int>::iterator mi = mapRequestCount.find(hash);
-            if (mi != mapRequestCount.end())
-                (*mi).second++;
-        }
-    }
-
     void GetAddressForMining(std::optional<MinerAddress> &minerAddress);
-    void ResetRequestCount(const uint256 &hash)
-    {
-        LOCK(cs_wallet);
-        mapRequestCount[hash] = 0;
-    };
 
     unsigned int GetKeyPoolSize()
     {
@@ -2149,6 +2236,8 @@ public:
 
     bool HaveOrchardSpendingKeyForAddress(const libzcash::OrchardRawAddress &addr) const;
 
+    IssuanceAuthorizingKey GetIssuanceAuthorizingKey(const int accountId) const;
+
     /* Find notes filtered by payment addresses, min depth, max depth, if they are spent,
        if a spending key is required, and if they are locked */
     void GetFilteredNotes(std::vector<SproutNoteEntry>& sproutEntriesRet,
@@ -2160,7 +2249,27 @@ public:
                           int maxDepth=INT_MAX,
                           bool ignoreSpent=true,
                           bool requireSpendingKey=true,
-                          bool ignoreLocked=true) const;
+                          bool ignoreLocked=true,
+                          const std::optional<Asset> asset = Asset::Native()) const;
+
+    /**
+     * Similar to GetFilteredNotes but only for Orchard notes
+     */
+    void GetFilteredOrchardNotes(
+            std::vector<OrchardNoteMetadata>& orchardNotesRet,
+            std::vector<OrchardNoteMetadata>& orchardUnconfirmedNotesRet,
+            const std::optional<NoteFilter>& noteFilter,
+            const std::optional<int>& asOfHeight,
+            int minDepth,
+            int maxDepth=INT_MAX,
+            bool ignoreSpent=true,
+            bool requireSpendingKey=true,
+            const std::optional<Asset> asset = Asset::Native()) const;
+
+    /**
+     * Returns confirmed and unconfirmed balances per asset
+     */
+    map<std::string, Balances> getAssetBalances(std::optional<libzcash::PaymentAddress> address= std::nullopt, const std::optional<int>& asOfHeight= std::nullopt, bool ignoreUnspendable= true) const;
 
     /* Returns the wallets help message */
     static std::string GetWalletHelpString(bool showDebug);

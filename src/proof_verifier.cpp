@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2022 The Zcash developers
+// Copyright (c) 2016-2023 The Zcash developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or https://www.opensource.org/licenses/mit-license.php .
 
@@ -13,13 +13,13 @@
 class SproutProofVerifier
 {
     ProofVerifier& verifier;
-    const Ed25519VerificationKey& joinSplitPubKey;
+    const ed25519::VerificationKey& joinSplitPubKey;
     const JSDescription& jsdesc;
 
 public:
     SproutProofVerifier(
         ProofVerifier& verifier,
-        const Ed25519VerificationKey& joinSplitPubKey,
+        const ed25519::VerificationKey& joinSplitPubKey,
         const JSDescription& jsdesc
         ) : jsdesc(jsdesc), verifier(verifier), joinSplitPubKey(joinSplitPubKey) {}
 
@@ -60,7 +60,7 @@ ProofVerifier ProofVerifier::Disabled() {
 
 bool ProofVerifier::VerifySprout(
     const JSDescription& jsdesc,
-    const Ed25519VerificationKey& joinSplitPubKey
+    const ed25519::VerificationKey& joinSplitPubKey
 ) {
     if (!perform_verification) {
         return true;

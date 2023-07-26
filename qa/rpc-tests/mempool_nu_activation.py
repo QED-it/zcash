@@ -29,7 +29,15 @@ class MempoolUpgradeActivationTest(BitcoinTestFramework):
         self.cache_behavior = 'clean'
 
     def setup_network(self):
-        args = ["-checkmempool", "-debug=mempool", "-blockmaxsize=4000",
+        args = [
+            '-minrelaytxfee=0',
+            '-checkmempool',
+            '-debug=mempool',
+            '-blockmaxsize=4000',
+            '-allowdeprecated=getnewaddress',
+            '-allowdeprecated=legacy_privacy',
+            '-allowdeprecated=z_getnewaddress',
+            '-allowdeprecated=z_getbalance',
             nuparams(BLOSSOM_BRANCH_ID, 200),
             nuparams(HEARTWOOD_BRANCH_ID, 210),
             nuparams(CANOPY_BRANCH_ID, 220),

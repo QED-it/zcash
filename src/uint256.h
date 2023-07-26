@@ -1,6 +1,6 @@
 // Copyright (c) 2009-2010 Satoshi Nakamoto
 // Copyright (c) 2009-2014 The Bitcoin Core developers
-// Copyright (c) 2016-2022 The Zcash developers
+// Copyright (c) 2016-2023 The Zcash developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or https://www.opensource.org/licenses/mit-license.php .
 
@@ -135,6 +135,13 @@ public:
     {
         uint256 buf;
         std::memcpy(buf.begin(), bytes.data(), 32);
+        return buf;
+    }
+
+    std::array<uint8_t, 32> ToRawBytes() const
+    {
+        std::array<uint8_t, 32> buf;
+        std::memcpy(buf.data(), begin(), 32);
         return buf;
     }
 

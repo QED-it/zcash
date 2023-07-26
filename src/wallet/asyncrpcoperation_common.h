@@ -1,4 +1,4 @@
-// Copyright (c) 2019-2022 The Zcash developers
+// Copyright (c) 2019-2023 The Zcash developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or https://www.opensource.org/licenses/mit-license.php .
 
@@ -11,6 +11,7 @@
 #include "rpc/protocol.h"
 #include "univalue.h"
 #include "wallet.h"
+#include "wallet/wallet_tx_builder.h"
 
 #include <optional>
 
@@ -62,5 +63,10 @@ UniValue SendTransaction(
  * Returns a pair of (the parsed transaction, and the result of sending)
  */
 std::pair<CTransaction, UniValue> SignSendRawTransaction(UniValue obj, std::optional<std::reference_wrapper<CReserveKey>> reservekey, bool testmode);
+
+void ThrowInputSelectionError(
+        const InputSelectionError& err,
+        const ZTXOSelector& selector,
+        const TransactionStrategy& strategy);
 
 #endif // ZCASH_WALLET_ASYNCRPCOPERATION_COMMON_H

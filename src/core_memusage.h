@@ -1,5 +1,5 @@
 // Copyright (c) 2015 The Bitcoin Core developers
-// Copyright (c) 2017-2022 The Zcash developers
+// Copyright (c) 2017-2023 The Zcash developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or https://www.opensource.org/licenses/mit-license.php .
 
@@ -35,9 +35,9 @@ static inline size_t RecursiveDynamicUsage(const CTransaction& tx) {
         mem += RecursiveDynamicUsage(*it);
     }
     mem += memusage::DynamicUsage(tx.vJoinSplit);
-    mem += memusage::DynamicUsage(tx.vShieldedSpend);
-    mem += memusage::DynamicUsage(tx.vShieldedOutput);
+    mem += tx.GetSaplingBundle().RecursiveDynamicUsage();
     mem += tx.GetOrchardBundle().RecursiveDynamicUsage();
+    mem += tx.GetIssueBundle().RecursiveDynamicUsage();
     return mem;
 }
 
@@ -50,9 +50,9 @@ static inline size_t RecursiveDynamicUsage(const CMutableTransaction& tx) {
         mem += RecursiveDynamicUsage(*it);
     }
     mem += memusage::DynamicUsage(tx.vJoinSplit);
-    mem += memusage::DynamicUsage(tx.vShieldedSpend);
-    mem += memusage::DynamicUsage(tx.vShieldedOutput);
+    mem += tx.saplingBundle.RecursiveDynamicUsage();
     mem += tx.orchardBundle.RecursiveDynamicUsage();
+    mem += tx.issueBundle.RecursiveDynamicUsage();
     return mem;
 }
 

@@ -1,6 +1,6 @@
 // Copyright (c) 2009-2010 Satoshi Nakamoto
 // Copyright (c) 2009-2014 The Bitcoin Core developers
-// Copyright (c) 2017-2022 The Zcash developers
+// Copyright (c) 2017-2023 The Zcash developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or https://www.opensource.org/licenses/mit-license.php .
 
@@ -22,8 +22,8 @@ extern const std::string MINOR_CURRENCY_UNIT;
 
 /** No amount larger than this (in zatoshi) is valid.
  *
- * Note that this constant is *not* the total money supply, which in Bitcoin
- * currently happens to be less than 21,000,000 BTC for various reasons, but
+ * Note that this constant is *not* the total money supply, which in Zcash
+ * currently happens to be less than 21,000,000 ZEC for various reasons, but
  * rather a sanity check. As this sanity check is used by consensus-critical
  * validation code, the exact value of the MAX_MONEY constant is consensus
  * critical; in unusual circumstances like a(nother) overflow bug that allowed
@@ -31,6 +31,9 @@ extern const std::string MINOR_CURRENCY_UNIT;
  * */
 static const CAmount MAX_MONEY = 21000000 * COIN;
 inline bool MoneyRange(const CAmount& nValue) { return (nValue >= 0 && nValue <= MAX_MONEY); }
+
+/** The legacy default fee that was defined in ZIP 313. */
+static const CAmount LEGACY_DEFAULT_FEE = 1000;
 
 /** Type-safe wrapper class to for fee rates
  * (how much to pay based on transaction size)

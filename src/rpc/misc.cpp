@@ -1,10 +1,11 @@
 // Copyright (c) 2010 Satoshi Nakamoto
 // Copyright (c) 2009-2014 The Bitcoin Core developers
-// Copyright (c) 2019-2022 The Zcash developers
+// Copyright (c) 2019-2023 The Zcash developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or https://www.opensource.org/licenses/mit-license.php .
 
 #include "clientversion.h"
+#include "deprecation.h"
 #include "init.h"
 #include "key_io.h"
 #include "experimental_features.h"
@@ -66,8 +67,8 @@ UniValue getinfo(const UniValue& params, bool fHelp)
             "  \"keypoololdest\": xxxxxx,    (numeric, optional) the timestamp (seconds since GMT epoch) of the oldest pre-generated key in the key pool, if wallet functionality is enabled\n"
             "  \"keypoolsize\": xxxx,        (numeric, optional) how many new keys are pre-generated\n"
             "  \"unlocked_until\": ttt,      (numeric, optional) the timestamp in seconds since epoch (midnight Jan 1 1970 GMT) that the wallet is unlocked for transfers, or 0 if the wallet is locked, if wallet functionality is available and the wallet is encrypted\n"
-            "  \"paytxfee\": x.xxxx,         (numeric) the transaction fee set in " + CURRENCY_UNIT + "/kB\n"
-            "  \"relayfee\": x.xxxx,         (numeric) minimum relay fee for non-free transactions in " + CURRENCY_UNIT + "/kB\n"
+            "  \"paytxfee\": x.xxxx,         (numeric) the transaction fee rate set in " + CURRENCY_UNIT + " per 1000 bytes\n"
+            "  \"relayfee\": x.xxxx,         (numeric) minimum relay fee rate for transactions in " + CURRENCY_UNIT + " per 1000 bytes\n"
             "  \"errors\": \"...\"           (string) message describing the latest or highest-priority error\n"
             "  \"errorstimestamp\": \"...\"  (string) timestamp associated with the latest or highest-priority error\n"
             "}\n"
@@ -220,10 +221,17 @@ UniValue validateaddress(const UniValue& params, bool fHelp)
 
 class DescribePaymentAddressVisitor
 {
+    void pushAddressType(UniValue& obj, std::string address_type) const {
+        obj.pushKV("address_type", address_type);
+        if (fEnableAddrTypeField) {
+            obj.pushKV("type", address_type); //deprecated
+        }
+    }
+
 public:
     UniValue operator()(const CKeyID &addr) const {
         UniValue obj(UniValue::VOBJ);
-        obj.pushKV("type", "p2pkh");
+        pushAddressType(obj, "p2pkh");
 #ifdef ENABLE_WALLET
         if (pwalletMain) {
             obj.pushKV("ismine", pwalletMain->HaveKey(addr));
@@ -234,7 +242,7 @@ public:
 
     UniValue operator()(const CScriptID &addr) const {
         UniValue obj(UniValue::VOBJ);
-        obj.pushKV("type", "p2sh");
+        pushAddressType(obj, "p2sh");
 #ifdef ENABLE_WALLET
         if (pwalletMain) {
             obj.pushKV("ismine", pwalletMain->HaveCScript(addr));
@@ -245,7 +253,7 @@ public:
 
     UniValue operator()(const libzcash::SproutPaymentAddress &zaddr) const {
         UniValue obj(UniValue::VOBJ);
-        obj.pushKV("type", "sprout");
+        pushAddressType(obj, "sprout");
         obj.pushKV("payingkey", zaddr.a_pk.GetHex());
         obj.pushKV("transmissionkey", zaddr.pk_enc.GetHex());
 #ifdef ENABLE_WALLET
@@ -258,7 +266,7 @@ public:
 
     UniValue operator()(const libzcash::SaplingPaymentAddress &zaddr) const {
         UniValue obj(UniValue::VOBJ);
-        obj.pushKV("type", "sapling");
+        pushAddressType(obj, "sapling");
         obj.pushKV("diversifier", HexStr(zaddr.d));
         obj.pushKV("diversifiedtransmissionkey", zaddr.pk_d.GetHex());
 #ifdef ENABLE_WALLET
@@ -271,7 +279,7 @@ public:
 
     UniValue operator()(const libzcash::UnifiedAddress &uaddr) const {
         UniValue obj(UniValue::VOBJ);
-        obj.pushKV("type", "unified");
+        pushAddressType(obj, "unified");
         // TODO: More information.
         return obj;
     }
@@ -289,7 +297,8 @@ UniValue z_validateaddress(const UniValue& params, bool fHelp)
             "{\n"
             "  \"isvalid\" : true|false,        (boolean) If the address is valid or not. If not, this is the only property returned.\n"
             "  \"address\" : \"addr\",          (string) The address validated\n"
-            "  \"type\" : \"xxxx\",             (string) \"p2pkh\", \"p2sh\", \"sprout\" or \"sapling\"\n"
+            "  \"address_type\" : \"xxxx\",     (string) \"p2pkh\", \"p2sh\", \"sprout\" or \"sapling\"\n"
+            "  \"type\" : \"xxxx\",             (string) \"p2pkh\", \"p2sh\", \"sprout\" or \"sapling\" (DEPRECATED, legacy attribute)\n"
             "  \"ismine\" : true|false,         (boolean) If the address is yours or not\n"
             "  \"payingkey\" : \"hex\",         (string) [sprout] The hex value of the paying key, a_pk\n"
             "  \"transmissionkey\" : \"hex\",   (string) [sprout] The hex value of the transmission key, pk_enc\n"
@@ -652,7 +661,7 @@ UniValue getaddressmempool(const UniValue& params, bool fHelp)
             "    \"address\"  (string) The base58check encoded address\n"
             "    \"txid\"  (string) The related txid\n"
             "    \"index\"  (number) The related input or output index\n"
-            "    \"satoshis\"  (number) The difference of zatoshis\n"
+            "    \"satoshis\"  (number) The difference of " + MINOR_CURRENCY_UNIT + "\n"
             "    \"timestamp\"  (number) The time the transaction entered the mempool (seconds)\n"
             "    \"prevtxid\"  (string) The previous txid (if spending)\n"
             "    \"prevout\"  (string) The previous transaction output index (if spending)\n"
@@ -734,7 +743,7 @@ UniValue getaddressutxos(const UniValue& params, bool fHelp)
             "    \"height\"  (number) The block height\n"
             "    \"outputIndex\"  (number) The output index\n"
             "    \"script\"  (string) The script hex encoded\n"
-            "    \"satoshis\"  (number) The number of zatoshis of the output\n"
+            "    \"satoshis\"  (number) The number of " + MINOR_CURRENCY_UNIT + " of the output\n"
             "  }, ...\n"
             "]\n\n"
             "(or, if chainInfo is true):\n\n"
@@ -747,7 +756,7 @@ UniValue getaddressutxos(const UniValue& params, bool fHelp)
             "        \"height\"      (number)  The block height\n"
             "        \"outputIndex\" (number)  The output index\n"
             "        \"script\"      (string)  The script hex encoded\n"
-            "        \"satoshis\"    (number)  The number of zatoshis of the output\n"
+            "        \"satoshis\"    (number)  The number of " + MINOR_CURRENCY_UNIT + " of the output\n"
             "      }, ...\n"
             "    ],\n"
             "  \"hash\"              (string)  The block hash\n"
@@ -890,7 +899,7 @@ UniValue getaddressdeltas(const UniValue& params, bool fHelp)
             "\nResult:\n"
             "[\n"
             "  {\n"
-            "    \"satoshis\"  (number) The difference of zatoshis\n"
+            "    \"satoshis\"  (number) The difference of " + MINOR_CURRENCY_UNIT + "\n"
             "    \"txid\"      (string) The related txid\n"
             "    \"index\"     (number) The related input or output index\n"
             "    \"height\"    (number) The block height\n"
@@ -902,7 +911,7 @@ UniValue getaddressdeltas(const UniValue& params, bool fHelp)
             "  \"deltas\":\n"
             "    [\n"
             "      {\n"
-            "        \"satoshis\"    (number) The difference of zatoshis\n"
+            "        \"satoshis\"    (number) The difference of " + MINOR_CURRENCY_UNIT + "\n"
             "        \"txid\"        (string) The related txid\n"
             "        \"index\"       (number) The related input or output index\n"
             "        \"height\"      (number) The block height\n"
@@ -1013,8 +1022,8 @@ UniValue getaddressbalance(const UniValue& params, bool fHelp)
             "\"address\"  (string) The base58check encoded address\n"
             "\nResult:\n"
             "{\n"
-            "  \"balance\"  (string) The current balance in zatoshis\n"
-            "  \"received\"  (string) The total number of zatoshis received (including change)\n"
+            "  \"balance\"  (string) The current balance in " + MINOR_CURRENCY_UNIT + "\n"
+            "  \"received\"  (string) The total number of " + MINOR_CURRENCY_UNIT + " received (including change)\n"
             "}\n"
             "\nExamples:\n"
             + HelpExampleCli("getaddressbalance", "'{\"addresses\": [\"tmYXBYJj1K7vhejSec5osXK2QsGa5MTisUQ\"]}'")

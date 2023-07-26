@@ -22,8 +22,13 @@ from decimal import Decimal
 # Test wallet accounts behaviour
 class WalletAccountsTest(BitcoinTestFramework):
     def setup_nodes(self):
-        return start_nodes(self.num_nodes, self.options.tmpdir, [[
+        return start_nodes(self.num_nodes, self.options.tmpdir, extra_args=[[
+            '-minrelaytxfee=0',
             nuparams(NU5_BRANCH_ID, 210),
+            '-allowdeprecated=z_getnewaddress',
+            '-allowdeprecated=z_getbalance',
+            '-allowdeprecated=z_gettotalbalance',
+            '-allowdeprecated=z_listaddresses',
         ]] * self.num_nodes)
 
     def check_receiver_types(self, ua, expected):
@@ -143,7 +148,7 @@ class WalletAccountsTest(BitcoinTestFramework):
         # The wallet should detect the new note as belonging to the UA.
         tx_details = self.nodes[0].z_viewtransaction(txid)
         assert_equal(len(tx_details['outputs']), 1)
-        assert_equal(tx_details['outputs'][0]['type'], 'sapling')
+        assert_equal(tx_details['outputs'][0]['pool'], 'sapling')
         assert_equal(tx_details['outputs'][0]['address'], ua0)
 
         # The new balance should not be visible with the default minconf, but should be
@@ -169,7 +174,7 @@ class WalletAccountsTest(BitcoinTestFramework):
         # The wallet should detect the spent note as belonging to the UA.
         tx_details = self.nodes[0].z_viewtransaction(txid)
         assert_equal(len(tx_details['spends']), 1)
-        assert_equal(tx_details['spends'][0]['type'], 'sapling')
+        assert_equal(tx_details['spends'][0]['pool'], 'sapling')
         assert_equal(tx_details['spends'][0]['address'], ua0)
 
         # The balances of the account should reflect whether zero-conf transactions are
@@ -195,7 +200,7 @@ class WalletAccountsTest(BitcoinTestFramework):
         # The wallet should detect the new note as belonging to the UA.
         tx_details = self.nodes[0].z_viewtransaction(txid)
         assert_equal(len(tx_details['outputs']), 1)
-        assert_equal(tx_details['outputs'][0]['type'], 'orchard')
+        assert_equal(tx_details['outputs'][0]['pool'], 'orchard')
         assert_equal(tx_details['outputs'][0]['address'], ua0)
 
         # The new balance should not be visible with the default minconf, but should be
@@ -225,16 +230,16 @@ class WalletAccountsTest(BitcoinTestFramework):
         # The wallet should detect the spent note as belonging to the UA.
         tx_details = self.nodes[0].z_viewtransaction(txid)
         assert_equal(len(tx_details['spends']), 1)
-        assert_equal(tx_details['spends'][0]['type'], 'orchard')
+        assert_equal(tx_details['spends'][0]['pool'], 'orchard')
         assert_equal(tx_details['spends'][0]['address'], ua0)
 
         assert_equal(len(tx_details['outputs']), 2)
         outputs = sorted(tx_details['outputs'], key=lambda x: x['valueZat'])
-        assert_equal(outputs[0]['type'], 'orchard')
+        assert_equal(outputs[0]['pool'], 'orchard')
         assert_equal(outputs[0]['address'], node1orchard)
         assert_equal(outputs[0]['valueZat'], 100000000)
         # outputs[1] is change
-        assert_equal(outputs[1]['type'], 'orchard')
+        assert_equal(outputs[1]['pool'], 'orchard')
         assert_true('address' not in outputs[1]) #
 
         # The balances of the account should reflect whether zero-conf transactions are

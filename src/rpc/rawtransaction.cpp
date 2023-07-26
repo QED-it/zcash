@@ -1,6 +1,6 @@
 // Copyright (c) 2010 Satoshi Nakamoto
 // Copyright (c) 2009-2015 The Bitcoin Core developers
-// Copyright (c) 2019-2022 The Zcash developers
+// Copyright (c) 2019-2023 The Zcash developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or https://www.opensource.org/licenses/mit-license.php .
 
@@ -32,7 +32,7 @@
 #include <boost/assign/list_of.hpp>
 
 #include <univalue.h>
-#include <rust/orchard_bundle.h>
+#include <rust/bridge.h>
 
 using namespace std;
 
@@ -122,31 +122,31 @@ UniValue TxJoinSplitToJSON(const CTransaction& tx) {
     return vJoinSplit;
 }
 
-UniValue TxShieldedSpendsToJSON(const CTransaction& tx) {
+UniValue TxShieldedSpendsToJSON(const rust::Vec<sapling::Spend>& saplingSpends) {
     UniValue vdesc(UniValue::VARR);
-    for (const SpendDescription& spendDesc : tx.vShieldedSpend) {
+    for (const auto& spendDesc : saplingSpends) {
         UniValue obj(UniValue::VOBJ);
-        obj.pushKV("cv", spendDesc.cv.GetHex());
-        obj.pushKV("anchor", spendDesc.anchor.GetHex());
-        obj.pushKV("nullifier", spendDesc.nullifier.GetHex());
-        obj.pushKV("rk", spendDesc.rk.GetHex());
-        obj.pushKV("proof", HexStr(spendDesc.zkproof.begin(), spendDesc.zkproof.end()));
-        obj.pushKV("spendAuthSig", HexStr(spendDesc.spendAuthSig.begin(), spendDesc.spendAuthSig.end()));
+        obj.pushKV("cv", uint256::FromRawBytes(spendDesc.cv()).GetHex());
+        obj.pushKV("anchor", uint256::FromRawBytes(spendDesc.anchor()).GetHex());
+        obj.pushKV("nullifier", uint256::FromRawBytes(spendDesc.nullifier()).GetHex());
+        obj.pushKV("rk", uint256::FromRawBytes(spendDesc.rk()).GetHex());
+        obj.pushKV("proof", HexStr(spendDesc.zkproof()));
+        obj.pushKV("spendAuthSig", HexStr(spendDesc.spend_auth_sig()));
         vdesc.push_back(obj);
     }
     return vdesc;
 }
 
-UniValue TxShieldedOutputsToJSON(const CTransaction& tx) {
+UniValue TxShieldedOutputsToJSON(const rust::Vec<sapling::Output>& saplingOutputs) {
     UniValue vdesc(UniValue::VARR);
-    for (const OutputDescription& outputDesc : tx.vShieldedOutput) {
+    for (const auto& outputDesc : saplingOutputs) {
         UniValue obj(UniValue::VOBJ);
-        obj.pushKV("cv", outputDesc.cv.GetHex());
-        obj.pushKV("cmu", outputDesc.cmu.GetHex());
-        obj.pushKV("ephemeralKey", outputDesc.ephemeralKey.GetHex());
-        obj.pushKV("encCiphertext", HexStr(outputDesc.encCiphertext.begin(), outputDesc.encCiphertext.end()));
-        obj.pushKV("outCiphertext", HexStr(outputDesc.outCiphertext.begin(), outputDesc.outCiphertext.end()));
-        obj.pushKV("proof", HexStr(outputDesc.zkproof.begin(), outputDesc.zkproof.end()));
+        obj.pushKV("cv", uint256::FromRawBytes(outputDesc.cv()).GetHex());
+        obj.pushKV("cmu", uint256::FromRawBytes(outputDesc.cmu()).GetHex());
+        obj.pushKV("ephemeralKey", uint256::FromRawBytes(outputDesc.ephemeral_key()).GetHex());
+        obj.pushKV("encCiphertext", HexStr(outputDesc.enc_ciphertext()));
+        obj.pushKV("outCiphertext", HexStr(outputDesc.out_ciphertext()));
+        obj.pushKV("proof", HexStr(outputDesc.zkproof()));
         vdesc.push_back(obj);
     }
     return vdesc;
@@ -181,7 +181,7 @@ UniValue TxActionsToJSON(const rust::Vec<orchard_bundle::Action>& actions)
 // See https://zips.z.cash/zip-0225
 UniValue TxOrchardBundleToJSON(const CTransaction& tx, UniValue& entry)
 {
-    auto bundle = tx.GetOrchardBundle().GetDetails();
+    const auto& bundle = tx.GetOrchardBundle().GetDetails();
 
     UniValue obj(UniValue::VOBJ);
     auto actions = bundle->actions();
@@ -288,14 +288,16 @@ void TxToJSON(const CTransaction& tx, const uint256 hashBlock, UniValue& entry)
 
     if (tx.fOverwintered) {
         if (tx.nVersion >= SAPLING_TX_VERSION) {
+            const auto& bundle = tx.GetSaplingBundle().GetDetails();
             entry.pushKV("valueBalance", ValueFromAmount(tx.GetValueBalanceSapling()));
             entry.pushKV("valueBalanceZat", tx.GetValueBalanceSapling());
-            UniValue vspenddesc = TxShieldedSpendsToJSON(tx);
+            UniValue vspenddesc = TxShieldedSpendsToJSON(bundle.spends());
             entry.pushKV("vShieldedSpend", vspenddesc);
-            UniValue voutputdesc = TxShieldedOutputsToJSON(tx);
+            UniValue voutputdesc = TxShieldedOutputsToJSON(bundle.outputs());
             entry.pushKV("vShieldedOutput", voutputdesc);
             if (!(vspenddesc.empty() && voutputdesc.empty())) {
-                entry.pushKV("bindingSig", HexStr(tx.bindingSig.begin(), tx.bindingSig.end()));
+                auto bindingSig = bundle.binding_sig();
+                entry.pushKV("bindingSig", HexStr(bindingSig.begin(), bindingSig.end()));
             }
         }
         if (tx.nVersion >= ZIP225_TX_VERSION) {
@@ -309,12 +311,12 @@ void TxToJSON(const CTransaction& tx, const uint256 hashBlock, UniValue& entry)
         // it is byte-flipped in the RPC output.
         uint256 joinSplitPubKey;
         std::copy(
-            tx.joinSplitPubKey.bytes,
-            tx.joinSplitPubKey.bytes + ED25519_VERIFICATION_KEY_LEN,
+            tx.joinSplitPubKey.bytes.begin(),
+            tx.joinSplitPubKey.bytes.end(),
             joinSplitPubKey.begin());
         entry.pushKV("joinSplitPubKey", joinSplitPubKey.GetHex());
         entry.pushKV("joinSplitSig",
-            HexStr(tx.joinSplitSig.bytes, tx.joinSplitSig.bytes + ED25519_SIGNATURE_LEN));
+            HexStr(tx.joinSplitSig.bytes.begin(), tx.joinSplitSig.bytes.end()));
     }
 
     if (!hashBlock.IsNull()) {
@@ -1036,7 +1038,7 @@ UniValue signrawtransaction(const UniValue& params, bool fHelp)
     CMutableTransaction mergedTx(txVariants[0]);
 
     // Fetch previous transactions (inputs):
-    CCoinsView viewDummy;
+    CCoinsViewDummy viewDummy;
     CCoinsViewCache view(&viewDummy);
     {
         LOCK(mempool.cs);
@@ -1285,7 +1287,7 @@ UniValue sendrawtransaction(const UniValue& params, bool fHelp)
         // push to local node and sync with wallets
         CValidationState state;
         bool fMissingInputs;
-        if (!AcceptToMemoryPool(chainparams, mempool, state, tx, false, &fMissingInputs, !fOverrideFees)) {
+        if (!AcceptToMemoryPool(chainparams, mempool, state, tx, true, &fMissingInputs, !fOverrideFees)) {
             if (state.IsInvalid()) {
                 throw JSONRPCError(RPC_TRANSACTION_REJECTED, strprintf("%i: %s", state.GetRejectCode(), state.GetRejectReason()));
             } else {

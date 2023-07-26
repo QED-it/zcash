@@ -10,7 +10,7 @@
 #
 
 from test_framework.test_framework import BitcoinTestFramework
-from test_framework.util import assert_equal, start_node, DEFAULT_FEE
+from test_framework.util import assert_equal, start_node, LEGACY_DEFAULT_FEE
 
 from decimal import Decimal
 
@@ -24,7 +24,12 @@ class MempoolCoinbaseTest(BitcoinTestFramework):
 
     def setup_network(self):
         # Just need one node for this test
-        args = ["-checkmempool", "-debug=mempool"]
+        args = [
+            '-minrelaytxfee=0',
+            '-checkmempool',
+            '-debug=mempool',
+            '-allowdeprecated=getnewaddress',
+        ]
         self.nodes = []
         self.nodes.append(start_node(0, self.options.tmpdir, args))
         self.is_network_split = False
@@ -57,7 +62,7 @@ class MempoolCoinbaseTest(BitcoinTestFramework):
         blocks = []
         blocks.extend(self.nodes[0].generate(1))
 
-        spends2_raw = [ self.create_tx(txid, node0_address, Decimal('10.0') - DEFAULT_FEE) for txid in spends1_id ]
+        spends2_raw = [ self.create_tx(txid, node0_address, Decimal('10.0') - LEGACY_DEFAULT_FEE) for txid in spends1_id ]
         spends2_id = [ self.nodes[0].sendrawtransaction(tx) for tx in spends2_raw ]
 
         blocks.extend(self.nodes[0].generate(1))

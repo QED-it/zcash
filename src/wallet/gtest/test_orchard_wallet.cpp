@@ -2,13 +2,13 @@
 #include <gtest/gtest.h>
 
 #include "consensus/validation.h"
+#include "gtest/utils.h"
 #include "random.h"
 #include "transaction_builder.h"
 #include "util/test.h"
 #include "wallet/orchard.h"
 #include "zcash/Address.hpp"
-
-#include "gtest/test_transaction_builder.h"
+#include "Asset.h"
 
 #include <optional>
 
@@ -29,15 +29,14 @@ CTransaction FakeOrchardTx(const OrchardSpendingKey& sk, libzcash::diversifier_i
     auto fvk = sk.ToFullViewingKey();
     auto ivk = fvk.ToIncomingViewingKey();
     auto recipient = ivk.Address(j);
-
-    TransactionBuilderCoinsViewDB fakeDB;
-    auto orchardAnchor = fakeDB.GetBestAnchor(ShieldedType::ORCHARD);
+    auto orchardAnchor = uint256();
 
     // Create a shielding transaction from transparent to Orchard
-    // 0.0005 t-ZEC in, 0.0004 z-ZEC out, default fee
-    auto builder = TransactionBuilder(Params().GetConsensus(), 1, orchardAnchor, &keystore);
+    // 0.0005 t-ZEC in, 0.0004 z-ZEC out, 0.0001 fee
+    auto builder = TransactionBuilder(Params(), 1, orchardAnchor, &keystore);
+    builder.SetFee(10000);
     builder.AddTransparentInput(COutPoint(uint256S("1234"), 0), scriptPubKey, 50000);
-    builder.AddOrchardOutput(std::nullopt, recipient, 40000, std::nullopt);
+    builder.AddOrchardOutput(std::nullopt, recipient, 40000, std::nullopt, Asset::Native());
 
     auto maybeTx = builder.Build();
     EXPECT_TRUE(maybeTx.IsTx());
@@ -80,6 +79,8 @@ TEST(OrchardWalletTests, TxInvolvesMyNotes) {
 // This test is here instead of test_transaction_builder.cpp because it depends
 // on OrchardWallet, which only exists if the wallet is compiled in.
 TEST(TransactionBuilder, OrchardToOrchard) {
+    LoadProofParameters();
+
     auto consensusParams = RegtestActivateNU5();
     OrchardWallet wallet;
 
@@ -110,7 +111,7 @@ TEST(TransactionBuilder, OrchardToOrchard) {
 
     // If we attempt to get spend info now, it will fail because the note hasn't
     // been witnessed in the Orchard commitment tree.
-    EXPECT_THROW(wallet.GetSpendInfo(notes, wallet.GetLatestAnchor()), std::logic_error);
+    EXPECT_THROW(wallet.GetSpendInfo(notes, 1, wallet.GetLatestAnchor()), std::logic_error);
 
     // Append the bundle to the wallet's commitment tree.
     CBlock fakeBlock;
@@ -119,7 +120,7 @@ TEST(TransactionBuilder, OrchardToOrchard) {
     ASSERT_TRUE(wallet.AppendNoteCommitments(2, fakeBlock));
 
     // Now we can get spend info for the note.
-    auto spendInfo = wallet.GetSpendInfo(notes, wallet.GetLatestAnchor());
+    auto spendInfo = wallet.GetSpendInfo(notes, 1, wallet.GetLatestAnchor());
     EXPECT_EQ(spendInfo[0].second.Value(), 40000);
 
     // Get the root of the commitment tree.
@@ -128,10 +129,10 @@ TEST(TransactionBuilder, OrchardToOrchard) {
     auto orchardAnchor = tree.root();
 
     // Create an Orchard-only transaction
-    // 0.0004 z-ZEC in, 0.00025 z-ZEC out, default fee, 0.00005 z-ZEC change
-    auto builder = TransactionBuilder(consensusParams, 2, orchardAnchor);
+    // 0.0004 z-ZEC in, 0.00025 z-ZEC out, default fee, 0.00014 z-ZEC change
+    auto builder = TransactionBuilder(Params(), 2, orchardAnchor);
     EXPECT_TRUE(builder.AddOrchardSpend(sk, std::move(spendInfo[0].second)));
-    builder.AddOrchardOutput(std::nullopt, recipient, 25000, std::nullopt);
+    builder.AddOrchardOutput(std::nullopt, recipient, 25000, std::nullopt, Asset::Native());
     auto maybeTx = builder.Build();
     EXPECT_TRUE(maybeTx.IsTx());
     if (maybeTx.IsError()) {
@@ -143,10 +144,10 @@ TEST(TransactionBuilder, OrchardToOrchard) {
     EXPECT_EQ(tx.vin.size(), 0);
     EXPECT_EQ(tx.vout.size(), 0);
     EXPECT_EQ(tx.vJoinSplit.size(), 0);
-    EXPECT_EQ(tx.vShieldedSpend.size(), 0);
-    EXPECT_EQ(tx.vShieldedOutput.size(), 0);
+    EXPECT_EQ(tx.GetSaplingSpendsCount(), 0);
+    EXPECT_EQ(tx.GetSaplingOutputsCount(), 0);
     EXPECT_TRUE(tx.GetOrchardBundle().IsPresent());
-    EXPECT_EQ(tx.GetOrchardBundle().GetValueBalance(), 10000);
+    EXPECT_EQ(tx.GetOrchardBundle().GetValueBalance(), 1000);
 
     CValidationState state;
     EXPECT_TRUE(ContextualCheckTransaction(tx, state, Params(), 3, true));

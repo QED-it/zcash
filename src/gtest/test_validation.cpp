@@ -32,12 +32,17 @@ public:
     ValidationFakeCoinsViewDB() {}
     ValidationFakeCoinsViewDB(uint256 blockHash, uint256 txid, CTxOut txOut, int nHeight) :
         coin(std::make_pair(std::make_pair(blockHash, txid), std::make_pair(txOut, nHeight))) {}
+    ~ValidationFakeCoinsViewDB() {}
 
     bool GetSproutAnchorAt(const uint256 &rt, SproutMerkleTree &tree) const {
         return false;
     }
 
     bool GetSaplingAnchorAt(const uint256 &rt, SaplingMerkleTree &tree) const {
+        return false;
+    }
+
+    bool GetOrchardAnchorAt(const uint256 &rt, OrchardMerkleFrontier &tree) const {
         return false;
     }
 
@@ -80,14 +85,42 @@ public:
         return a;
     }
 
+    HistoryIndex GetHistoryLength(uint32_t branchId) const {
+        return 0;
+    }
+
+    HistoryNode GetHistoryAt(uint32_t branchId, HistoryIndex index) const {
+        return HistoryNode();
+    }
+
+    uint256 GetHistoryRoot(uint32_t epochId) const {
+        return uint256();
+    }
+
+    std::optional<libzcash::LatestSubtree> GetLatestSubtree(ShieldedType type) const {
+        return std::nullopt;
+    };
+    std::optional<libzcash::SubtreeData> GetSubtreeData(
+            ShieldedType type,
+            libzcash::SubtreeIndex index) const
+    {
+        return std::nullopt;
+    };
+
     bool BatchWrite(CCoinsMap &mapCoins,
                     const uint256 &hashBlock,
                     const uint256 &hashSproutAnchor,
                     const uint256 &hashSaplingAnchor,
+                    const uint256 &hashOrchardAnchor,
                     CAnchorsSproutMap &mapSproutAnchors,
                     CAnchorsSaplingMap &mapSaplingAnchors,
+                    CAnchorsOrchardMap &mapOrchardAnchors,
                     CNullifiersMap &mapSproutNullifiers,
-                    CNullifiersMap saplingNullifiersMap) {
+                    CNullifiersMap &mapSaplingNullifiers,
+                    CNullifiersMap &mapOrchardNullifiers,
+                    CHistoryCacheMap &historyCacheMap,
+                    SubtreeCache &cacheSaplingSubtrees,
+                    SubtreeCache &cacheOrchardSubtrees) {
         return false;
     }
 
@@ -141,7 +174,8 @@ TEST(Validation, ContextualCheckInputsDetectsOldBranchId) {
     UpdateNetworkUpgradeParameters(Consensus::UPGRADE_OVERWINTER, 10);
     UpdateNetworkUpgradeParameters(Consensus::UPGRADE_SAPLING, 20);
     UpdateNetworkUpgradeParameters(Consensus::UPGRADE_BLOSSOM, 30);
-    const Consensus::Params& consensusParams = Params(CBaseChainParams::REGTEST).GetConsensus();
+    const CChainParams& params = Params(CBaseChainParams::REGTEST);
+    const Consensus::Params& consensusParams = params.GetConsensus();
 
     auto overwinterBranchId = NetworkUpgradeInfo[Consensus::UPGRADE_OVERWINTER].nBranchId;
     auto saplingBranchId = NetworkUpgradeInfo[Consensus::UPGRADE_SAPLING].nBranchId;
@@ -162,7 +196,7 @@ TEST(Validation, ContextualCheckInputsDetectsOldBranchId) {
     chainActive.SetTip(&fakeIndex);
 
     // Fake a view containing a single coin.
-    CAmount coinValue(50000);
+    CAmount coinValue(5000);
     COutPoint utxo;
     utxo.hash = uint256S("4242424242424242424242424242424242424242424242424242424242424242");
     utxo.n = 0;
@@ -174,9 +208,9 @@ TEST(Validation, ContextualCheckInputsDetectsOldBranchId) {
 
     // Create a transparent transaction that spends the coin, targeting
     // a height during the Overwinter epoch.
-    auto builder = TransactionBuilder(consensusParams, 15, std::nullopt, &keystore);
+    auto builder = TransactionBuilder(params, 15, std::nullopt, &keystore);
     builder.AddTransparentInput(utxo, scriptPubKey, coinValue);
-    builder.AddTransparentOutput(destination, 40000);
+    builder.AddTransparentOutput(destination, 4000);
     auto tx = builder.Build().GetTxOrThrow();
     ASSERT_FALSE(tx.IsCoinBase());
 

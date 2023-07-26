@@ -5,12 +5,15 @@
 
 from test_framework.test_framework import BitcoinTestFramework
 from test_framework.util import (
+    LEGACY_DEFAULT_FEE,
     assert_equal,
+    assert_raises_message,
     connect_nodes_bi,
     start_nodes,
     sync_blocks,
     wait_and_assert_operationid_status,
 )
+from test_framework.zip317 import ZIP_317_FEE
 
 TX_EXPIRY_DELTA = 10
 TX_EXPIRING_SOON_THRESHOLD = 3
@@ -18,10 +21,14 @@ TX_EXPIRING_SOON_THRESHOLD = 3
 # Test ANY_TADDR special string in z_sendmany
 class WalletSendManyAnyTaddr(BitcoinTestFramework):
     def setup_nodes(self):
-        return start_nodes(self.num_nodes, self.options.tmpdir,
-            [[
-                "-txexpirydelta=%d" % TX_EXPIRY_DELTA,
-            ]] * self.num_nodes)
+        return start_nodes(self.num_nodes, self.options.tmpdir, extra_args=[[
+            '-minrelaytxfee=0',
+            '-txexpirydelta=%d' % TX_EXPIRY_DELTA,
+            '-allowdeprecated=getnewaddress',
+            '-allowdeprecated=z_getnewaddress',
+            '-allowdeprecated=z_getbalance',
+            '-debug=mempool',
+        ]] * self.num_nodes)
 
     def run_test(self):
         # Sanity-check the test harness
@@ -38,7 +45,7 @@ class WalletSendManyAnyTaddr(BitcoinTestFramework):
         # Prepare some non-coinbase UTXOs
         wait_and_assert_operationid_status(
             self.nodes[3],
-            self.nodes[3].z_shieldcoinbase("*", node3zaddr, 0)['opid'],
+            self.nodes[3].z_shieldcoinbase("*", node3zaddr, 0, None, None, 'AllowLinkingAccountAddresses')['opid'],
         )
         self.sync_all()
         self.nodes[0].generate(1)
@@ -53,7 +60,9 @@ class WalletSendManyAnyTaddr(BitcoinTestFramework):
                     {'address': node3taddr1, 'amount': 60},
                     {'address': node3taddr2, 'amount': 75},
                 ],
-                1
+                1,
+                LEGACY_DEFAULT_FEE,
+                'AllowRevealedRecipients',
             ),
         )
         self.sync_all()
@@ -68,7 +77,10 @@ class WalletSendManyAnyTaddr(BitcoinTestFramework):
         # We should be able to spend multiple UTXOs at once
         wait_and_assert_operationid_status(
             self.nodes[3],
-            self.nodes[3].z_sendmany('ANY_TADDR', [{'address': recipient, 'amount': 100}], 1),
+            self.nodes[3].z_sendmany(
+                'ANY_TADDR',
+                [{'address': recipient, 'amount': 100}],
+                1, LEGACY_DEFAULT_FEE, 'NoPrivacy'),
         )
 
         self.sync_all()
@@ -85,7 +97,10 @@ class WalletSendManyAnyTaddr(BitcoinTestFramework):
         # Send from a change t-address.
         wait_and_assert_operationid_status(
             self.nodes[3],
-            self.nodes[3].z_sendmany('ANY_TADDR', [{'address': recipient, 'amount': 20}], 1),
+            self.nodes[3].z_sendmany(
+                'ANY_TADDR',
+                [{'address': recipient, 'amount': 20}],
+                1, LEGACY_DEFAULT_FEE, 'AllowFullyTransparent'),
         )
 
         self.sync_all()
@@ -96,8 +111,11 @@ class WalletSendManyAnyTaddr(BitcoinTestFramework):
         assert_equal(self.nodes[1].z_getbalance(recipient), 120)
 
         # Check that ANY_TADDR note selection doesn't attempt a double-spend
-        myopid = self.nodes[3].z_sendmany('ANY_TADDR', [{'address': recipient, 'amount': 20}], 1)
-        wait_and_assert_operationid_status(self.nodes[3], myopid, "failed", "Insufficient funds: have 14.99998, need 20.00001; note that coinbase outputs will not be selected if you specify ANY_TADDR or if any transparent recipients are included.")
+        myopid = self.nodes[3].z_sendmany(
+            'ANY_TADDR',
+            [{'address': recipient, 'amount': 20}],
+            1, LEGACY_DEFAULT_FEE, 'AllowLinkingAccountAddresses')
+        wait_and_assert_operationid_status(self.nodes[3], myopid, "failed", "Insufficient funds: have 14.99998, need 20.00001; note that coinbase outputs will not be selected if you specify ANY_TADDR, any transparent recipients are included, or if the `privacyPolicy` parameter is not set to `AllowRevealedSenders` or weaker.")
 
         # Create an expired transaction on node 3.
         self.split_network()
@@ -115,15 +133,26 @@ class WalletSendManyAnyTaddr(BitcoinTestFramework):
         # Ensure that node 2 has no transparent funds.
         self.nodes[2].generate(100) # To ensure node 2's pending coinbase is spendable
         self.sync_all()
+        assert_raises_message(AssertionError, "tx unpaid action limit exceeded",
+            wait_and_assert_operationid_status,
+            self.nodes[2],
+            self.nodes[2].z_shieldcoinbase("*", node2zaddr, 0, None, None, 'AllowLinkingAccountAddresses')['opid'],
+        )
         wait_and_assert_operationid_status(
             self.nodes[2],
-            self.nodes[2].z_shieldcoinbase("*", node2zaddr, 0)['opid'],
+            self.nodes[2].z_shieldcoinbase("*", node2zaddr, ZIP_317_FEE, None, None, 'AllowLinkingAccountAddresses')['opid'],
         )
         self.sync_all()
         assert_equal(0, self.nodes[2].getbalance())
 
         # Check that ANY_TADDR doesn't select an expired output.
-        wait_and_assert_operationid_status(self.nodes[2], self.nodes[2].z_sendmany('ANY_TADDR', [{'address': recipient, 'amount': 13}]), "failed", "Insufficient funds: have 0.00, need 13.00001; note that coinbase outputs will not be selected if you specify ANY_TADDR or if any transparent recipients are included.")
+        wait_and_assert_operationid_status(
+            self.nodes[2],
+            self.nodes[2].z_sendmany(
+                'ANY_TADDR',
+                [{'address': recipient, 'amount': 13}],
+                1, LEGACY_DEFAULT_FEE, 'AllowRevealedSenders'),
+            "failed", "Insufficient funds: have 0.00, need 13.00001; note that coinbase outputs will not be selected if you specify ANY_TADDR, any transparent recipients are included, or if the `privacyPolicy` parameter is not set to `AllowRevealedSenders` or weaker. (This transaction may require selecting transparent coins that were sent to multiple addresses, which is not enabled by default because it would create a public link between those addresses. THIS MAY AFFECT YOUR PRIVACY. Resubmit with the `privacyPolicy` parameter set to `AllowLinkingAccountAddresses` or weaker if you wish to allow this transaction to proceed anyway.)")
 
 if __name__ == '__main__':
     WalletSendManyAnyTaddr().main()

@@ -1,6 +1,6 @@
 // Copyright (c) 2009-2010 Satoshi Nakamoto
 // Copyright (c) 2009-2013 The Bitcoin Core developers
-// Copyright (c) 2016-2022 The Zcash developers
+// Copyright (c) 2016-2023 The Zcash developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or https://www.opensource.org/licenses/mit-license.php .
 
@@ -336,7 +336,7 @@ class CSerializeRecipientAddress {
 
         template<typename Stream>
         void Serialize(Stream& s) const {
-            std::visit(match {
+            examine(recipient, match {
                 [&](const CKeyID& keyId) {
                     ReceiverTypeSer(libzcash::ReceiverType::P2PKH).Serialize(s);
                     s << keyId;
@@ -353,7 +353,7 @@ class CSerializeRecipientAddress {
                     ReceiverTypeSer(libzcash::ReceiverType::Orchard).Serialize(s);
                     s << orchardAddr;
                 }
-            }, recipient);
+            });
         }
 
         template<typename Stream>

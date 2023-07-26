@@ -7,14 +7,75 @@
 
 #include "uint256.h"
 #include "serialize.h"
+#include "streams_rust.h"
 
 #include "Zcash.h"
 #include "zcash/util.h"
 
 #include <primitives/orchard.h>
-#include <rust/orchard/incremental_merkle_tree.h>
+#include <primitives/issue.h>
+#include <rust/bridge.h>
 
 namespace libzcash {
+
+typedef uint64_t SubtreeIndex;
+typedef std::array<uint8_t, 32> SubtreeRoot;
+static const uint8_t TRACKED_SUBTREE_HEIGHT = 16;
+
+class LatestSubtree {
+    public:
+
+    //! Version of this structure for extensibility purposes
+    uint8_t leadbyte = 0x00;
+    //! The index of the latest complete subtree
+    SubtreeIndex index;
+    //! The latest complete subtree root at level TRACKED_SUBTREE_HEIGHT
+    SubtreeRoot root;
+    //! The height of the block that contains the note commitment that is
+    //! the rightmost leaf of the most recently completed subtree.
+    int nHeight;
+
+    LatestSubtree() : nHeight(0) { }
+
+    LatestSubtree(SubtreeIndex index, SubtreeRoot root, int nHeight)
+        : index(index), root(root), nHeight(nHeight) { }
+
+    ADD_SERIALIZE_METHODS;
+
+    template <typename Stream, typename Operation>
+    inline void SerializationOp(Stream& s, Operation ser_action) {
+        READWRITE(leadbyte);
+        READWRITE(index);
+        READWRITE(root);
+        READWRITE(nHeight);
+    }
+};
+
+class SubtreeData {
+    public:
+
+    //! Version of this structure for extensibility purposes
+    uint8_t leadbyte = 0x00;
+    //! The root of the subtree at level TRACKED_SUBTREE_HEIGHT
+    SubtreeRoot root;
+    //! The height of the block that contains the note commitment
+    //! that completed this subtree.
+    int nHeight;
+
+    SubtreeData() : nHeight(0) { }
+
+    SubtreeData(SubtreeRoot root, int nHeight)
+        : root(root), nHeight(nHeight) { }
+
+    ADD_SERIALIZE_METHODS;
+
+    template <typename Stream, typename Operation>
+    inline void SerializationOp(Stream& s, Operation ser_action) {
+        READWRITE(leadbyte);
+        READWRITE(root);
+        READWRITE(nHeight);
+    }
+};
 
 class MerklePath {
 public:
@@ -95,7 +156,22 @@ public:
                parents.size() * 32; // parents
     }
 
+    //! Returns the number of (filled) leaves present in this tree, or
+    //! in other words, the 0-indexed position that the next leaf
+    //! added to the tree will occupy.
     size_t size() const;
+
+    //! Returns the current 2^TRACKED_SUBTREE_HEIGHT subtree index
+    //! that this tree is currently on. Specifically, a leaf appended
+    //! at this point will be located in the 2^TRACKED_SUBTREE_HEIGHT
+    //! subtree with the index returned by this function.
+    SubtreeIndex current_subtree_index() const;
+
+    //! If the last leaf appended to this tree completed a
+    //! 2^TRACKED_SUBTREE_HEIGHT subtree, this function will return
+    //! the 2^TRACKED_SUBTREE_HEIGHT root of that subtree. Otherwise,
+    //! this will return nullopt.
+    std::optional<Hash> complete_subtree_root() const;
 
     void append(Hash obj);
     Hash root() const {
@@ -265,19 +341,18 @@ class OrchardMerkleFrontierLegacySer;
 class OrchardMerkleFrontier
 {
 private:
-    /// An incremental Sinsemilla tree; this pointer may never be null.
-    /// Memory is allocated by Rust.
-    std::unique_ptr<OrchardMerkleFrontierPtr, decltype(&orchard_merkle_frontier_free)> inner;
+    /// An incremental Sinsemilla tree. Memory is allocated by Rust.
+    rust::Box<merkle_frontier::Orchard> inner;
 
     friend class OrchardWallet;
     friend class OrchardMerkleFrontierLegacySer;
 public:
-    OrchardMerkleFrontier() : inner(orchard_merkle_frontier_empty(), orchard_merkle_frontier_free) {}
+    OrchardMerkleFrontier() : inner(merkle_frontier::new_orchard()) {}
 
     OrchardMerkleFrontier(OrchardMerkleFrontier&& frontier) : inner(std::move(frontier.inner)) {}
 
     OrchardMerkleFrontier(const OrchardMerkleFrontier& frontier) :
-        inner(orchard_merkle_frontier_clone(frontier.inner.get()), orchard_merkle_frontier_free) {}
+        inner(frontier.inner->box_clone()) {}
 
     OrchardMerkleFrontier& operator=(OrchardMerkleFrontier&& frontier)
     {
@@ -289,52 +364,55 @@ public:
     OrchardMerkleFrontier& operator=(const OrchardMerkleFrontier& frontier)
     {
         if (this != &frontier) {
-            inner.reset(orchard_merkle_frontier_clone(frontier.inner.get()));
+            inner = frontier.inner->box_clone();
         }
         return *this;
     }
 
     template<typename Stream>
     void Serialize(Stream& s) const {
-        RustStream rs(s);
-        if (!orchard_merkle_frontier_serialize(inner.get(), &rs, RustStream<Stream>::write_callback)) {
-            throw std::ios_base::failure("Failed to serialize v5 Orchard tree");
+        try {
+            inner->serialize(*ToRustStream(s));
+        } catch (const std::exception& e) {
+            throw std::ios_base::failure(e.what());
         }
     }
 
     template<typename Stream>
     void Unserialize(Stream& s) {
-        RustStream rs(s);
-        OrchardMerkleFrontierPtr* tree = orchard_merkle_frontier_parse(
-                &rs, RustStream<Stream>::read_callback);
-        if (tree == nullptr) {
-            throw std::ios_base::failure("Failed to parse v5 Orchard tree");
+        try {
+            inner = merkle_frontier::parse_orchard(*ToRustStream(s));
+        } catch (const std::exception& e) {
+            throw std::ios_base::failure(e.what());
         }
-        inner.reset(tree);
     }
 
     size_t DynamicMemoryUsage() const {
-        return orchard_merkle_frontier_dynamic_mem_usage(inner.get());
+        return inner->dynamic_memory_usage();
     }
 
-    bool AppendBundle(const OrchardBundle& bundle) {
-       return orchard_merkle_frontier_append_bundle(inner.get(), bundle.inner.get());
+    merkle_frontier::OrchardAppendResult AppendBundle(const OrchardBundle& bundle) {
+        return inner->append_bundle(*bundle.GetDetails());
+    }
+
+    merkle_frontier::OrchardAppendResult AppendIssueBundle(const IssueBundle& bundle) {
+        return inner->append_issue_bundle(*bundle.GetDetails());
     }
 
     const uint256 root() const {
-        uint256 value;
-        orchard_merkle_frontier_root(inner.get(), value.begin());
-        return value;
+        return uint256::FromRawBytes(inner->root());
     }
 
     static uint256 empty_root() {
-        uint256 value;
-        orchard_merkle_tree_empty_root(value.begin());
-        return value;
+        return uint256::FromRawBytes(merkle_frontier::orchard_empty_root());
     }
 
     size_t size() const {
-        return orchard_merkle_frontier_num_leaves(inner.get());
+        return inner->size();
+    }
+
+    libzcash::SubtreeIndex current_subtree_index() const {
+        return (inner->size() >> libzcash::TRACKED_SUBTREE_HEIGHT);
     }
 };
 
@@ -346,9 +424,10 @@ public:
 
     template<typename Stream>
     void Serialize(Stream& s) const {
-        RustStream rs(s);
-        if (!orchard_merkle_frontier_serialize_legacy(frontier.inner.get(), &rs, RustStream<Stream>::write_callback)) {
-            throw std::ios_base::failure("Failed to serialize Orchard merkle frontier in legacy format.");
+        try {
+            frontier.inner->serialize_legacy(*ToRustStream(s));
+        } catch (const std::exception& e) {
+            throw std::ios_base::failure(e.what());
         }
     }
 };

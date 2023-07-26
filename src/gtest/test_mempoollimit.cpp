@@ -1,4 +1,4 @@
-// Copyright (c) 2019-2022 The Zcash developers
+// Copyright (c) 2019-2023 The Zcash developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or https://www.opensource.org/licenses/mit-license.php .
 
@@ -11,6 +11,8 @@
 #include "util/time.h"
 #include "util/test.h"
 #include "transaction_builder.h"
+#include "zip317.h"
+#include "core_memusage.h"
 
 
 const uint256 TX_ID1 = ArithToUint256(1);
@@ -80,36 +82,31 @@ TEST(MempoolLimitTests, RecentlyEvictedDropOneAtATime)
     EXPECT_FALSE(recentlyEvicted.contains(TX_ID3));
 }
 
-TEST(MempoolLimitTests, WeightedTxTreeCheckSizeAfterDropping)
+TEST(MempoolLimitTests, MempoolLimitTxSetCheckSizeAfterDropping)
 {
     std::set<uint256> testedDropping;
     // Run the test until we have tested dropping each of the elements
     int trialNum = 0;
     while (testedDropping.size() < 3) {
-        WeightedTxTree tree(MIN_TX_COST * 2);
-        EXPECT_EQ(0, tree.getTotalWeight().cost);
-        EXPECT_EQ(0, tree.getTotalWeight().evictionWeight);
-        tree.add(WeightedTxInfo(TX_ID1, TxWeight(MIN_TX_COST, MIN_TX_COST)));
-        EXPECT_EQ(4000, tree.getTotalWeight().cost);
-        EXPECT_EQ(4000, tree.getTotalWeight().evictionWeight);
-        tree.add(WeightedTxInfo(TX_ID2, TxWeight(MIN_TX_COST, MIN_TX_COST)));
-        EXPECT_EQ(8000, tree.getTotalWeight().cost);
-        EXPECT_EQ(8000, tree.getTotalWeight().evictionWeight);
-        EXPECT_FALSE(tree.maybeDropRandom().has_value());
-        tree.add(WeightedTxInfo(TX_ID3, TxWeight(MIN_TX_COST, MIN_TX_COST + LOW_FEE_PENALTY)));
-        EXPECT_EQ(12000, tree.getTotalWeight().cost);
-        EXPECT_EQ(12000 + LOW_FEE_PENALTY, tree.getTotalWeight().evictionWeight);
-        std::optional<uint256> drop = tree.maybeDropRandom();
+        MempoolLimitTxSet limitSet(MIN_TX_COST * 2);
+        EXPECT_EQ(0, limitSet.getTotalWeight());
+        limitSet.add(TX_ID1, MIN_TX_COST, MIN_TX_COST);
+        EXPECT_EQ(10000, limitSet.getTotalWeight());
+        limitSet.add(TX_ID2, MIN_TX_COST, MIN_TX_COST);
+        EXPECT_EQ(20000, limitSet.getTotalWeight());
+        EXPECT_FALSE(limitSet.maybeDropRandom().has_value());
+        limitSet.add(TX_ID3, MIN_TX_COST, MIN_TX_COST + LOW_FEE_PENALTY);
+        EXPECT_EQ(30000 + LOW_FEE_PENALTY, limitSet.getTotalWeight());
+        std::optional<uint256> drop = limitSet.maybeDropRandom();
         ASSERT_TRUE(drop.has_value());
         uint256 txid = drop.value();
         testedDropping.insert(txid);
         // Do not continue to test if a particular trial fails
-        ASSERT_EQ(8000, tree.getTotalWeight().cost);
-        ASSERT_EQ(txid == TX_ID3 ? 8000 : 8000 + LOW_FEE_PENALTY, tree.getTotalWeight().evictionWeight);
+        ASSERT_EQ(txid == TX_ID3 ? 20000 : 20000 + LOW_FEE_PENALTY, limitSet.getTotalWeight());
     }
 }
 
-TEST(MempoolLimitTests, WeightedTxInfoFromTx)
+TEST(MempoolLimitTests, MempoolCostAndEvictionWeight)
 {
     LoadProofParameters();
 
@@ -117,49 +114,70 @@ TEST(MempoolLimitTests, WeightedTxInfoFromTx)
     // test_transaction_builder.cpp/TEST(TransactionBuilder, SetFee)
     auto consensusParams = RegtestActivateSapling();
 
-    auto sk = libzcash::SaplingSpendingKey::random();
-    auto testNote = GetTestSaplingNote(sk.default_address(), 50000);
+    auto sk = GetTestMasterSaplingSpendingKey();
+    auto extfvk = sk.ToXFVK();
+    auto fvk = extfvk.fvk;
+    auto pa = extfvk.DefaultAddress();
+
+    CAmount funds = 66000;
+    auto testNote = GetTestSaplingNote(pa, funds);
 
     // Default fee
     {
-        auto builder = TransactionBuilder(consensusParams, 1, std::nullopt);
-        builder.AddSaplingSpend(sk.expanded_spending_key(), testNote.note, testNote.tree.root(), testNote.tree.witness());
-        builder.AddSaplingOutput(sk.full_viewing_key().ovk, sk.default_address(), 25000, {});
+        auto builder = TransactionBuilder(Params(), 1, std::nullopt);
+        builder.AddSaplingSpend(sk, testNote.note, testNote.tree.witness());
+        builder.AddSaplingOutput(fvk.ovk, pa, 25000, {});
 
-        WeightedTxInfo info = WeightedTxInfo::from(builder.Build().GetTxOrThrow(), DEFAULT_FEE);
-        EXPECT_EQ(MIN_TX_COST, info.txWeight.cost);
-        EXPECT_EQ(MIN_TX_COST, info.txWeight.evictionWeight);
+        auto [cost, evictionWeight] = MempoolCostAndEvictionWeight(builder.Build().GetTxOrThrow(), MINIMUM_FEE);
+        EXPECT_EQ(MIN_TX_COST, cost);
+        EXPECT_EQ(MIN_TX_COST, evictionWeight);
     }
 
     // Lower than standard fee
     {
-        auto builder = TransactionBuilder(consensusParams, 1, std::nullopt);
-        builder.AddSaplingSpend(sk.expanded_spending_key(), testNote.note, testNote.tree.root(), testNote.tree.witness());
-        builder.AddSaplingOutput(sk.full_viewing_key().ovk, sk.default_address(), 25000, {});
-        static_assert(DEFAULT_FEE == 1000);
-        builder.SetFee(DEFAULT_FEE-1);
+        auto builder = TransactionBuilder(Params(), 1, std::nullopt);
+        builder.AddSaplingSpend(sk, testNote.note, testNote.tree.witness());
+        builder.AddSaplingOutput(fvk.ovk, pa, 25000, {});
+        static_assert(MINIMUM_FEE == 0); // TODO re-enable fees
+        builder.SetFee(MINIMUM_FEE-1);
 
-        WeightedTxInfo info = WeightedTxInfo::from(builder.Build().GetTxOrThrow(), DEFAULT_FEE-1);
-        EXPECT_EQ(MIN_TX_COST, info.txWeight.cost);
-        EXPECT_EQ(MIN_TX_COST + LOW_FEE_PENALTY, info.txWeight.evictionWeight);
+        auto [cost, evictionWeight] = MempoolCostAndEvictionWeight(builder.Build().GetTxOrThrow(), MINIMUM_FEE-1);
+        EXPECT_EQ(MIN_TX_COST, cost);
+        EXPECT_EQ(MIN_TX_COST + LOW_FEE_PENALTY, evictionWeight);
     }
 
     // Larger Tx
     {
-        auto builder = TransactionBuilder(consensusParams, 1, std::nullopt);
-        builder.AddSaplingSpend(sk.expanded_spending_key(), testNote.note, testNote.tree.root(), testNote.tree.witness());
-        builder.AddSaplingOutput(sk.full_viewing_key().ovk, sk.default_address(), 5000, {});
-        builder.AddSaplingOutput(sk.full_viewing_key().ovk, sk.default_address(), 5000, {});
-        builder.AddSaplingOutput(sk.full_viewing_key().ovk, sk.default_address(), 5000, {});
-        builder.AddSaplingOutput(sk.full_viewing_key().ovk, sk.default_address(), 5000, {});
+        auto builder = TransactionBuilder(Params(), 1, std::nullopt);
+        builder.AddSaplingSpend(sk, testNote.note, testNote.tree.witness());
+        for (int i = 0; i < 10; i++) {
+            builder.AddSaplingOutput(fvk.ovk, pa, 1000, {});
+        }
 
         auto result = builder.Build();
         if (result.IsError()) {
             std::cerr << result.GetError() << std::endl;
         }
-        WeightedTxInfo info = WeightedTxInfo::from(result.GetTxOrThrow(), DEFAULT_FEE);
-        EXPECT_EQ(5168, info.txWeight.cost);
-        EXPECT_EQ(5168, info.txWeight.evictionWeight);
+        // max(1 input, 10 outputs + 1 change output) => 11 logical actions.
+        CAmount zip317_fee = CalculateConventionalFee(11);
+        ASSERT_GT(funds, 1000*10 + zip317_fee);
+        const CTransaction tx {result.GetTxOrThrow()};
+        EXPECT_EQ(11, tx.GetLogicalActionCount());
+
+        // For the test to be valid, we want the memory usage of this transaction to be more than MIN_TX_COST.
+        // Avoid hard-coding the usage because it might be platform-dependent.
+        ASSERT_GT(GetSerializeSize(tx, SER_NETWORK, PROTOCOL_VERSION), MIN_TX_COST);
+        size_t tx_usage = RecursiveDynamicUsage(tx);
+        EXPECT_GT(tx_usage, MIN_TX_COST);
+
+        auto [cost, evictionWeight] = MempoolCostAndEvictionWeight(tx, zip317_fee);
+        EXPECT_EQ(tx_usage, cost);
+        EXPECT_EQ(tx_usage, evictionWeight);
+
+        // If we pay less than the conventional fee for 11 actions, we should incur a low fee penalty.
+        auto [cost2, evictionWeight2] = MempoolCostAndEvictionWeight(tx, zip317_fee-1);
+        EXPECT_EQ(tx_usage, cost2);
+        EXPECT_EQ(tx_usage + LOW_FEE_PENALTY, evictionWeight2);
     }
 
     RegtestDeactivateSapling();

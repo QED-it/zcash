@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2022 The Zcash developers
+// Copyright (c) 2016-2023 The Zcash developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or https://www.opensource.org/licenses/mit-license.php .
 
@@ -8,7 +8,7 @@
 #include <primitives/transaction.h>
 #include <uint256.h>
 
-#include <rust/ed25519/types.h>
+#include <rust/ed25519.h>
 
 class ProofVerifier {
 private:
@@ -35,7 +35,7 @@ public:
     // Verifies that the JoinSplit proof is correct.
     bool VerifySprout(
         const JSDescription& jsdesc,
-        const Ed25519VerificationKey& joinSplitPubKey
+        const ed25519::VerificationKey& joinSplitPubKey
     );
 };
 

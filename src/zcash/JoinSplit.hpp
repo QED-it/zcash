@@ -13,7 +13,7 @@
 
 #include <array>
 
-#include <rust/ed25519/types.h>
+#include <rust/ed25519.h>
 
 namespace libzcash {
 
@@ -37,7 +37,7 @@ class JSOutput {
 public:
     SproutPaymentAddress addr;
     uint64_t value;
-    std::array<unsigned char, ZC_MEMO_SIZE> memo = {{0xF6}};  // 0xF6 is invalid UTF8 as per spec, rest of array is 0x00
+    std::optional<Memo> memo;
 
     JSOutput();
     JSOutput(SproutPaymentAddress addr, uint64_t value) : addr(addr), value(value) { }
@@ -50,7 +50,7 @@ class JoinSplit {
 public:
     static uint256 h_sig(const uint256& randomSeed,
                          const std::array<uint256, NumInputs>& nullifiers,
-                         const Ed25519VerificationKey& joinSplitPubKey
+                         const ed25519::VerificationKey& joinSplitPubKey
                         );
 
     // Compute nullifiers, macs, note commitments & encryptions, and SNARK proof
@@ -60,7 +60,7 @@ public:
         std::array<SproutNote, NumOutputs>& out_notes,
         std::array<ZCNoteEncryption::Ciphertext, NumOutputs>& out_ciphertexts,
         uint256& out_ephemeralKey,
-        const Ed25519VerificationKey& joinSplitPubKey,
+        const ed25519::VerificationKey& joinSplitPubKey,
         uint256& out_randomSeed,
         std::array<uint256, NumInputs>& out_hmacs,
         std::array<uint256, NumInputs>& out_nullifiers,

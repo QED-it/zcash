@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2022 The Zcash developers
+// Copyright (c) 2017-2023 The Zcash developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or https://www.opensource.org/licenses/mit-license.php .
 
@@ -16,7 +16,7 @@ std::string PaymentDisclosureInfo::ToString() const {
 }
 
 std::string PaymentDisclosure::ToString() const {
-    std::string s = HexStr(payloadSig.bytes, payloadSig.bytes + ED25519_SIGNATURE_LEN);
+    std::string s = HexStr(payloadSig.bytes.begin(), payloadSig.bytes.end());
     return strprintf("PaymentDisclosure(payload=%s, payloadSig=%s)", payload.ToString(), s);
 }
 
@@ -27,7 +27,7 @@ std::string PaymentDisclosurePayload::ToString() const {
 }
 
 PaymentDisclosure::PaymentDisclosure(
-    const Ed25519VerificationKey& joinSplitPubKey,
+    const ed25519::VerificationKey& joinSplitPubKey,
     const PaymentDisclosureKey& key,
     const PaymentDisclosureInfo& info,
     const std::string& message)
@@ -47,23 +47,20 @@ PaymentDisclosure::PaymentDisclosure(
     LogPrint("paymentdisclosure", "Payment Disclosure: signing raw payload = %s\n", dataToBeSigned.ToString());
 
     // Compute payload signature member variable
-    if (!ed25519_sign(
-        &info.joinSplitPrivKey,
-        dataToBeSigned.begin(), 32,
-        &payloadSig))
-    {
-        throw std::runtime_error("ed25519_sign failed");
-    }
+    ed25519::sign(
+        info.joinSplitPrivKey,
+        {dataToBeSigned.begin(), 32},
+        payloadSig);
 
     // Sanity check
-    if (!ed25519_verify(
-        &joinSplitPubKey,
-        &payloadSig,
-        dataToBeSigned.begin(), 32))
+    if (!ed25519::verify(
+        joinSplitPubKey,
+        payloadSig,
+        {dataToBeSigned.begin(), 32}))
     {
         throw std::runtime_error("ed25519_verify failed");
     }
 
-    std::string sigString = HexStr(payloadSig.bytes, payloadSig.bytes + ED25519_SIGNATURE_LEN);
+    std::string sigString = HexStr(payloadSig.bytes.begin(), payloadSig.bytes.end());
     LogPrint("paymentdisclosure", "Payment Disclosure: signature = %s\n", sigString);
 }

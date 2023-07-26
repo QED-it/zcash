@@ -1,5 +1,5 @@
 // Copyright (c) 2014-2016 The Bitcoin Core developers
-// Copyright (c) 2016-2022 The Zcash developers
+// Copyright (c) 2016-2023 The Zcash developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or https://www.opensource.org/licenses/mit-license.php .
 
@@ -468,7 +468,7 @@ std::optional<libzcash::PaymentAddress> KeyIO::DecodePaymentAddress(const std::s
     }
 
     // Finally, try parsing as transparent
-    return std::visit(match {
+    return examine(DecodeDestination(str), match {
         [](const CKeyID& keyIdIn) {
             std::optional<libzcash::PaymentAddress> keyId = keyIdIn;
             return keyId;
@@ -481,7 +481,7 @@ std::optional<libzcash::PaymentAddress> KeyIO::DecodePaymentAddress(const std::s
             std::optional<libzcash::PaymentAddress> result = std::nullopt;
             return result;
         }
-    }, DecodeDestination(str));
+    });
 }
 
 bool KeyIO::IsValidPaymentAddressString(const std::string& str) const

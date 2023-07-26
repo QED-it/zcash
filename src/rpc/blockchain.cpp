@@ -1,6 +1,6 @@
 // Copyright (c) 2010 Satoshi Nakamoto
 // Copyright (c) 2009-2014 The Bitcoin Core developers
-// Copyright (c) 2019-2022 The Zcash developers
+// Copyright (c) 2019-2023 The Zcash developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or https://www.opensource.org/licenses/mit-license.php .
 
@@ -84,12 +84,14 @@ double GetNetworkDifficulty(const CBlockIndex* blockindex)
 }
 
 static UniValue ValuePoolDesc(
-    const std::string &name,
+    const std::optional<std::string> name,
     const std::optional<CAmount> chainValue,
     const std::optional<CAmount> valueDelta)
 {
     UniValue rv(UniValue::VOBJ);
-    rv.pushKV("id", name);
+    if (name.has_value()) {
+        rv.pushKV("id", name.value());
+    }
     rv.pushKV("monitored", (bool)chainValue);
     if (chainValue) {
         rv.pushKV("chainValue", ValueFromAmount(*chainValue));
@@ -265,12 +267,33 @@ UniValue blockToJSON(const CBlock& block, const CBlockIndex* blockindex, bool tx
     result.pushKV("difficulty", GetDifficulty(blockindex));
     result.pushKV("chainwork", blockindex->nChainWork.GetHex());
     result.pushKV("anchor", blockindex->hashFinalSproutRoot.GetHex());
-
+    result.pushKV("chainSupply", ValuePoolDesc(std::nullopt, blockindex->nChainTotalSupply, blockindex->nChainSupplyDelta));
     UniValue valuePools(UniValue::VARR);
+    valuePools.push_back(ValuePoolDesc("transparent", blockindex->nChainTransparentValue, blockindex->nTransparentValue));
     valuePools.push_back(ValuePoolDesc("sprout", blockindex->nChainSproutValue, blockindex->nSproutValue));
     valuePools.push_back(ValuePoolDesc("sapling", blockindex->nChainSaplingValue, blockindex->nSaplingValue));
     valuePools.push_back(ValuePoolDesc("orchard", blockindex->nChainOrchardValue, blockindex->nOrchardValue));
     result.pushKV("valuePools", valuePools);
+
+    {
+        UniValue trees(UniValue::VOBJ);
+
+        SaplingMerkleTree saplingTree;
+        if (pcoinsTip != nullptr && pcoinsTip->GetSaplingAnchorAt(blockindex->hashFinalSaplingRoot, saplingTree)) {
+            UniValue sapling(UniValue::VOBJ);
+            sapling.pushKV("size", (uint64_t)saplingTree.size());
+            trees.pushKV("sapling", sapling);
+        }
+
+        OrchardMerkleFrontier orchardTree;
+        if (pcoinsTip != nullptr && pcoinsTip->GetOrchardAnchorAt(blockindex->hashFinalOrchardRoot, orchardTree)) {
+            UniValue orchard(UniValue::VOBJ);
+            orchard.pushKV("size", (uint64_t)orchardTree.size());
+            trees.pushKV("orchard", orchard);
+        }
+
+        result.pushKV("trees", trees);
+    }
 
     if (blockindex->pprev)
         result.pushKV("previousblockhash", blockindex->pprev->GetBlockHash().GetHex());
@@ -346,8 +369,9 @@ UniValue mempoolToJSON(bool fVerbose = false)
             info.pushKV("modifiedfee", ValueFromAmount(e.GetModifiedFee()));
             info.pushKV("time", e.GetTime());
             info.pushKV("height", (int)e.GetHeight());
-            info.pushKV("startingpriority", e.GetPriority(e.GetHeight()));
-            info.pushKV("currentpriority", e.GetPriority(chainActive.Height()));
+            info.pushKV("descendantcount", e.GetCountWithDescendants());
+            info.pushKV("descendantsize", e.GetSizeWithDescendants());
+            info.pushKV("descendantfees", e.GetModFeesWithDescendants());
             const CTransaction& tx = e.GetTx();
             set<string> setDepends;
             for (const CTxIn& txin : tx.vin)
@@ -401,8 +425,9 @@ UniValue getrawmempool(const UniValue& params, bool fHelp)
             "    \"modifiedfee\" : n,      (numeric) transaction fee with fee deltas used for mining priority\n"
             "    \"time\" : n,             (numeric) local time transaction entered pool in seconds since 1 Jan 1970 GMT\n"
             "    \"height\" : n,           (numeric) block height when transaction entered pool\n"
-            "    \"startingpriority\" : n, (numeric) priority when transaction entered pool\n"
-            "    \"currentpriority\" : n,  (numeric) transaction priority now\n"
+            "    \"descendantcount\" : n,  (numeric) number of in-mempool descendant transactions (including this one)\n"
+            "    \"descendantsize\" : n,   (numeric) size of in-mempool descendants (including this one)\n"
+            "    \"descendantfees\" : n,   (numeric) modified fees (see \"modifiedfee\" above) of in-mempool descendants (including this one)\n"
             "    \"depends\" : [           (array) unconfirmed transactions used as inputs for this transaction\n"
             "        \"transactionid\",    (string) parent transaction id\n"
             "       ... ]\n"
@@ -736,6 +761,31 @@ UniValue getblock(const UniValue& params, bool fHelp)
             "  \"nonce\" : n,           (numeric) The nonce\n"
             "  \"bits\" : \"1d00ffff\",   (string) The bits\n"
             "  \"difficulty\" : x.xxx,  (numeric) The difficulty\n"
+            "  \"chainSupply\": {          (object) information about the total supply\n"
+            "      \"monitored\": xx,           (boolean) true if the total supply is being monitored\n"
+            "      \"chainValue\": xxxxxx,      (numeric, optional) total chain supply after this block, in " + CURRENCY_UNIT + "\n"
+            "      \"chainValueZat\": xxxxxx,   (numeric, optional) total chain supply after this block, in " + MINOR_CURRENCY_UNIT + "\n"
+            "      \"valueDelta\": xxxxxx,      (numeric, optional) change to the chain supply produced by this block, in " + CURRENCY_UNIT + "\n"
+            "      \"valueDeltaZat\": xxxxxx,   (numeric, optional) change to the chain supply produced by this block, in " + MINOR_CURRENCY_UNIT + "\n"
+            "  },\n"
+            "  \"valuePools\": [            (array) information about each value pool\n"
+            "      {\n"
+            "          \"id\": \"xxxx\",            (string) name of the pool\n"
+            "          \"monitored\": xx,           (boolean) true if the pool is being monitored\n"
+            "          \"chainValue\": xxxxxx,      (numeric, optional) total amount in the pool, in " + CURRENCY_UNIT + "\n"
+            "          \"chainValueZat\": xxxxxx,   (numeric, optional) total amount in the pool, in " + MINOR_CURRENCY_UNIT + "\n"
+            "          \"valueDelta\": xxxxxx,      (numeric, optional) change to the amount in the pool produced by this block, in " + CURRENCY_UNIT + "\n"
+            "          \"valueDeltaZat\": xxxxxx,   (numeric, optional) change to the amount in the pool produced by this block, in " + MINOR_CURRENCY_UNIT + "\n"
+            "      }, ...\n"
+            "  ],\n"
+            "  \"trees\": {                 (object) information about the note commitment trees\n"
+            "      \"sapling\": {             (object, optional)\n"
+            "          \"size\": n,             (numeric) the total number of Sapling note commitments as of the end of this block\n"
+            "      },\n"
+            "      \"orchard\": {             (object, optional)\n"
+            "          \"size\": n,             (numeric) the total number of Orchard note commitments as of the end of this block\n"
+            "      },\n"
+            "  },\n"
             "  \"previousblockhash\" : \"hash\",  (string) The hash of the previous block\n"
             "  \"nextblockhash\" : \"hash\"       (string) The hash of the next block\n"
             "}\n"
@@ -1030,6 +1080,19 @@ UniValue getblockchaininfo(const UniValue& params, bool fHelp)
             "  \"chainwork\": \"xxxx\"     (string) total amount of work in active chain, in hexadecimal\n"
             "  \"size_on_disk\": xxxxxx,       (numeric) the estimated size of the block and undo files on disk\n"
             "  \"commitments\": xxxxxx,    (numeric) the current number of note commitments in the commitment tree\n"
+            "  \"chainSupply\": {          (object) information about the total supply\n"
+            "      \"monitored\": xx,           (boolean) true if the total supply is being monitored\n"
+            "      \"chainValue\": xxxxxx,      (numeric, optional) total chain supply after this block, in " + CURRENCY_UNIT + "\n"
+            "      \"chainValueZat\": xxxxxx,   (numeric, optional) total chain supply after this block, in " + MINOR_CURRENCY_UNIT + "\n"
+            "  }\n"
+            "  \"valuePools\": [            (array) information about each value pool\n"
+            "      {\n"
+            "          \"id\": \"xxxx\",            (string) name of the pool\n"
+            "          \"monitored\": xx,           (boolean) true if the pool is being monitored\n"
+            "          \"chainValue\": xxxxxx,      (numeric, optional) total amount in the pool, in " + CURRENCY_UNIT + "\n"
+            "          \"chainValueZat\": xxxxxx,   (numeric, optional) total amount in the pool, in " + MINOR_CURRENCY_UNIT + "\n"
+            "      }, ...\n"
+            "  ]\n"
             "  \"softforks\": [            (array) status of softforks in progress\n"
             "     {\n"
             "        \"id\": \"xxxx\",        (string) name of softfork\n"
@@ -1085,7 +1148,9 @@ UniValue getblockchaininfo(const UniValue& params, bool fHelp)
     obj.pushKV("commitments",           static_cast<uint64_t>(tree.size()));
 
     CBlockIndex* tip = chainActive.Tip();
+    obj.pushKV("chainSupply", ValuePoolDesc(std::nullopt, tip->nChainTotalSupply, std::nullopt));
     UniValue valuePools(UniValue::VARR);
+    valuePools.push_back(ValuePoolDesc("transparent", tip->nChainTransparentValue, std::nullopt));
     valuePools.push_back(ValuePoolDesc("sprout", tip->nChainSproutValue, std::nullopt));
     valuePools.push_back(ValuePoolDesc("sapling", tip->nChainSaplingValue, std::nullopt));
     valuePools.push_back(ValuePoolDesc("orchard", tip->nChainOrchardValue, std::nullopt));
@@ -1386,6 +1451,80 @@ UniValue z_gettreestate(const UniValue& params, bool fHelp)
     return res;
 }
 
+UniValue z_getsubtreesbyindex(const UniValue& params, bool fHelp)
+{
+    if (fHelp || params.size() < 2 || params.size() > 3) {
+        auto strHeight = strprintf("%d", libzcash::TRACKED_SUBTREE_HEIGHT);
+        throw runtime_error(
+            "z_getsubtreesbyindex \"pool\" start_index ( limit )\n"
+            "Returns roots of subtrees of the the given pool's note commitment tree. Each value returned\n"
+            "in the `subtrees` field is the Merkle root of a subtree containing 2^"+strHeight+" leaves.\n"
+            "\nArguments:\n"
+            "1. \"pool\"        (string, required) The pool from which subtrees should be returned. Either \"sapling\" or \"orchard\".\n"
+            "2. start_index   (numeric, required) The index of the first 2^"+strHeight+"-leaf subtree to return.\n"
+            "2. limit         (numeric, optional) The maximum number of subtree values to return.\n"
+            "\nResult:\n"
+            "{\n"
+            "  \"pool\" : \"sapling|orchard\", (string) The shielded pool to which the subtrees belong\n"
+            "  \"start_index\": n,      (numeric) The index of the first subtree\n"
+            "  \"subtrees\": [          (array) A sequential list of complete subtrees\n"
+            "    {\n"
+            "      \"root\": \"hash\",    (string) Merkle root of the 2^"+strHeight+"-leaf subtree\n"
+            "      \"end_height\": n,   (numeric) height of the block containing the note that completed this subtree\n"
+            "    }, ...\n"
+            "  ]\n"
+            "}\n"
+            "\nExamples:\n"
+            + HelpExampleCli("z_getsubtreesbyindex", "\"sapling\", 0")
+            + HelpExampleRpc("z_getsubtreesbyindex", "\"orchard\", 3, 7")
+        );
+    }
+
+    auto strPool = params[0].get_str();
+    ShieldedType pool;
+    if (strPool == "sapling") {
+        pool = SAPLING;
+    } else if (strPool == "orchard") {
+        pool = ORCHARD;
+    } else {
+        throw JSONRPCError(RPC_INVALID_PARAMETER, "Requested pool must be \"sapling\" or \"orchard\"");
+    }
+
+    libzcash::SubtreeIndex startIndex = params[1].get_int();
+    std::optional<uint64_t> limit = std::nullopt;
+    if (params.size() > 2) {
+        limit = params[2].get_int();
+    }
+
+    LOCK(cs_main);
+
+    UniValue subtrees(UniValue::VARR);
+    uint64_t count = 0;
+    for (libzcash::SubtreeIndex index = startIndex; ; index++) {
+        if (limit.has_value() && count >= limit.value()) {
+            break;
+        }
+
+        auto subtreeData = pcoinsTip->GetSubtreeData(pool, index);
+        if (!subtreeData.has_value()) {
+            break;
+        }
+
+        UniValue subtree(UniValue::VOBJ);
+        subtree.pushKV("root", HexStr(subtreeData->root));
+        subtree.pushKV("end_height", subtreeData->nHeight);
+        subtrees.push_back(subtree);
+        count++;
+    }
+
+    UniValue res(UniValue::VOBJ);
+    res.pushKV("pool", strPool);
+    res.pushKV("start_index", startIndex);
+    res.pushKV("subtrees", subtrees);
+
+    return res;
+}
+
 UniValue mempoolInfoToJSON()
 {
     UniValue ret(UniValue::VOBJ);
@@ -1508,6 +1647,7 @@ static const CRPCCommand commands[] =
     { "blockchain",         "getblockheader",         &getblockheader,         true  },
     { "blockchain",         "getchaintips",           &getchaintips,           true  },
     { "blockchain",         "z_gettreestate",         &z_gettreestate,         true  },
+    { "blockchain",         "z_getsubtreesbyindex",   &z_getsubtreesbyindex,   true  },
     { "blockchain",         "getdifficulty",          &getdifficulty,          true  },
     { "blockchain",         "getmempoolinfo",         &getmempoolinfo,         true  },
     { "blockchain",         "getrawmempool",          &getrawmempool,          true  },

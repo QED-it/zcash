@@ -6,12 +6,14 @@
 #include "consensus/validation.h"
 #include "transaction_builder.h"
 #include "gtest/utils.h"
+#include "test/test_util.h"
 #include "util/test.h"
 #include "zcash/JoinSplit.hpp"
+#include "Asset.h"
 
 #include <librustzcash.h>
+#include <rust/bridge.h>
 #include <rust/ed25519.h>
-#include <rust/sapling.h>
 #include <rust/orchard.h>
 
 // Subclass of CTransaction which doesn't call UpdateHash when constructing
@@ -106,8 +108,8 @@ CMutableTransaction GetValidTransaction(uint32_t consensusBranchId=SPROUT_BRANCH
 
 void CreateJoinSplitSignature(CMutableTransaction& mtx, uint32_t consensusBranchId) {
     // Generate an ephemeral keypair.
-    Ed25519SigningKey joinSplitPrivKey;
-    ed25519_generate_keypair(&joinSplitPrivKey, &mtx.joinSplitPubKey);
+    ed25519::SigningKey joinSplitPrivKey;
+    ed25519::generate_keypair(joinSplitPrivKey, mtx.joinSplitPubKey);
 
     // Compute the correct hSig.
     // TODO: #966.
@@ -125,10 +127,10 @@ void CreateJoinSplitSignature(CMutableTransaction& mtx, uint32_t consensusBranch
     }
 
     // Add the signature
-    assert(ed25519_sign(
-        &joinSplitPrivKey,
-        dataToBeSigned.begin(), 32,
-        &mtx.joinSplitSig));
+    ed25519::sign(
+        joinSplitPrivKey,
+        {dataToBeSigned.begin(), 32},
+        mtx.joinSplitSig);
 }
 
 TEST(ChecktransactionTests, ValidTransaction) {
@@ -325,8 +327,8 @@ TEST(ChecktransactionTests, BadTxnsTxouttotalToolargeOutputs) {
 }
 
 TEST(ChecktransactionTests, ValueBalanceNonZero) {
-    CMutableTransaction mtx = GetValidTransaction();
-    mtx.valueBalanceSapling = 10;
+    CMutableTransaction mtx = GetValidTransaction(NetworkUpgradeInfo[Consensus::UPGRADE_SAPLING].nBranchId);
+    mtx.saplingBundle = sapling::test_only_invalid_bundle(0, 0, 10);
 
     CTransaction tx(mtx);
 
@@ -335,35 +337,10 @@ TEST(ChecktransactionTests, ValueBalanceNonZero) {
     CheckTransactionWithoutProofVerification(tx, state);
 }
 
-TEST(ChecktransactionTests, PositiveValueBalanceTooLarge) {
-    CMutableTransaction mtx = GetValidTransaction();
-    mtx.vShieldedSpend.resize(1);
-    mtx.valueBalanceSapling = MAX_MONEY + 1;
-
-    CTransaction tx(mtx);
-
-    MockCValidationState state;
-    EXPECT_CALL(state, DoS(100, false, REJECT_INVALID, "bad-txns-valuebalance-toolarge", false, "")).Times(1);
-    CheckTransactionWithoutProofVerification(tx, state);
-}
-
-TEST(ChecktransactionTests, NegativeValueBalanceTooLarge) {
-    CMutableTransaction mtx = GetValidTransaction();
-    mtx.vShieldedSpend.resize(1);
-    mtx.valueBalanceSapling = -(MAX_MONEY + 1);
-
-    CTransaction tx(mtx);
-
-    MockCValidationState state;
-    EXPECT_CALL(state, DoS(100, false, REJECT_INVALID, "bad-txns-valuebalance-toolarge", false, "")).Times(1);
-    CheckTransactionWithoutProofVerification(tx, state);
-}
-
 TEST(ChecktransactionTests, ValueBalanceOverflowsTotal) {
-    CMutableTransaction mtx = GetValidTransaction();
-    mtx.vShieldedSpend.resize(1);
+    CMutableTransaction mtx = GetValidTransaction(NetworkUpgradeInfo[Consensus::UPGRADE_SAPLING].nBranchId);
     mtx.vout[0].nValue = 1;
-    mtx.valueBalanceSapling = -MAX_MONEY;
+    mtx.saplingBundle = sapling::test_only_invalid_bundle(1, 0, -MAX_MONEY);
 
     CTransaction tx(mtx);
 
@@ -536,7 +513,7 @@ TEST(ContextualCheckShieldedInputsTest, BadTxnsInvalidJoinsplitSignature) {
     SelectParams(CBaseChainParams::REGTEST);
     auto consensus = Params().GetConsensus();
     std::optional<rust::Box<sapling::BatchValidator>> saplingAuth = std::nullopt;
-    auto orchardAuth = orchard::AuthValidator::Disabled();
+    std::optional<rust::Box<orchard::BatchValidator>> orchardAuth = std::nullopt;
 
     CMutableTransaction mtx = GetValidTransaction();
     mtx.joinSplitSig.bytes[0] += 1;
@@ -568,7 +545,7 @@ TEST(ContextualCheckShieldedInputsTest, JoinsplitSignatureDetectsOldBranchId) {
     SelectParams(CBaseChainParams::REGTEST);
     auto consensus = Params().GetConsensus();
     std::optional<rust::Box<sapling::BatchValidator>> saplingAuth = std::nullopt;
-    auto orchardAuth = orchard::AuthValidator::Disabled();
+    std::optional<rust::Box<orchard::BatchValidator>> orchardAuth = std::nullopt;
 
     auto saplingBranchId = NetworkUpgradeInfo[Consensus::UPGRADE_SAPLING].nBranchId;
     auto blossomBranchId = NetworkUpgradeInfo[Consensus::UPGRADE_BLOSSOM].nBranchId;
@@ -618,7 +595,7 @@ TEST(ContextualCheckShieldedInputsTest, NonCanonicalEd25519Signature) {
     SelectParams(CBaseChainParams::REGTEST);
     auto consensus = Params().GetConsensus();
     std::optional<rust::Box<sapling::BatchValidator>> saplingAuth = std::nullopt;
-    auto orchardAuth = orchard::AuthValidator::Disabled();
+    std::optional<rust::Box<orchard::BatchValidator>> orchardAuth = std::nullopt;
 
     AssumeShieldedInputsExistAndAreSpendable baseView;
     CCoinsViewCache view(&baseView);
@@ -855,7 +832,7 @@ TEST(ChecktransactionTests, SaplingSproutInputSumsTooLarge) {
     {
         // create JSDescription
         uint256 rt;
-        Ed25519VerificationKey joinSplitPubKey;
+        ed25519::VerificationKey joinSplitPubKey;
         std::array<libzcash::JSInput, ZC_NUM_JS_INPUTS> inputs = {
             libzcash::JSInput(),
             libzcash::JSInput()
@@ -878,7 +855,7 @@ TEST(ChecktransactionTests, SaplingSproutInputSumsTooLarge) {
         mtx.vJoinSplit.push_back(jsdesc);
     }
 
-    mtx.vShieldedSpend.push_back(SpendDescription());
+    mtx.saplingBundle = sapling::test_only_invalid_bundle(1, 0, 0);
 
     mtx.vJoinSplit[0].vpub_new = (MAX_MONEY / 2) + 10;
 
@@ -888,7 +865,7 @@ TEST(ChecktransactionTests, SaplingSproutInputSumsTooLarge) {
         EXPECT_TRUE(CheckTransactionWithoutProofVerification(tx, state));
     }
 
-    mtx.valueBalanceSapling = (MAX_MONEY / 2) + 10;
+    mtx.saplingBundle = sapling::test_only_invalid_bundle(1, 0, (MAX_MONEY / 2) + 10);
 
     {
         UNSAFE_CTransaction tx(mtx);
@@ -1150,7 +1127,7 @@ TEST(ChecktransactionTests, InvalidSaplingShieldedCoinbase) {
     // Make it an invalid shielded coinbase (no ciphertexts or commitments).
     mtx.vin.resize(1);
     mtx.vin[0].prevout.SetNull();
-    mtx.vShieldedOutput.resize(1);
+    mtx.saplingBundle = sapling::test_only_invalid_bundle(0, 1, 0);
     mtx.vJoinSplit.resize(0);
 
     CTransaction tx(mtx);
@@ -1176,13 +1153,12 @@ TEST(ChecktransactionTests, HeartwoodAcceptsSaplingShieldedCoinbase) {
     RegtestActivateHeartwood(false, Consensus::NetworkUpgrade::ALWAYS_ACTIVE);
     auto chainparams = Params();
 
-    uint256 ovk;
-    auto note = libzcash::SaplingNote(
-        libzcash::SaplingSpendingKey::random().default_address(), CAmount(123456), libzcash::Zip212Enabled::BeforeZip212);
-    auto output = OutputDescriptionInfo(ovk, note, {{0xF6}});
-
-    auto ctx = sapling::init_prover();
-    auto odesc = output.Build(ctx).value();
+    auto builder = sapling::new_builder(*chainparams.RustNetwork(), 10);
+    builder->add_recipient(
+        uint256().GetRawBytes(),
+        libzcash::SaplingSpendingKey::random().default_address().GetRawBytes(),
+        123456,
+        libzcash::Memo::ToBytes(std::nullopt));
 
     CMutableTransaction mtx = GetValidTransaction();
     mtx.fOverwintered = true;
@@ -1192,52 +1168,66 @@ TEST(ChecktransactionTests, HeartwoodAcceptsSaplingShieldedCoinbase) {
     mtx.vin.resize(1);
     mtx.vin[0].prevout.SetNull();
     mtx.vJoinSplit.resize(0);
-    mtx.vShieldedOutput.push_back(odesc);
+    mtx.saplingBundle = sapling::apply_bundle_signatures(sapling::build_bundle(std::move(builder), 10), {});
+    auto outputs = mtx.saplingBundle.GetDetails().outputs();
+    auto& odesc = outputs[0];
 
     // Transaction should fail with a bad public cmu.
     {
-        auto cmOrig = mtx.vShieldedOutput[0].cmu;
-        mtx.vShieldedOutput[0].cmu = uint256S("1234");
+        sapling::test_only_replace_output_parts(
+            mtx.saplingBundle.GetDetailsMut(),
+            0,
+            uint256S("1234").GetRawBytes(),
+            odesc.enc_ciphertext(),
+            odesc.out_ciphertext());
         CTransaction tx(mtx);
         EXPECT_TRUE(tx.IsCoinBase());
 
         MockCValidationState state;
         EXPECT_CALL(state, DoS(100, false, REJECT_INVALID, "bad-cb-output-desc-invalid-outct", false, "")).Times(1);
         ContextualCheckTransaction(tx, state, chainparams, 10, 57);
-
-        mtx.vShieldedOutput[0].cmu = cmOrig;
     }
 
     // Transaction should fail with a bad outCiphertext.
     {
-        auto outCtOrig = mtx.vShieldedOutput[0].outCiphertext;
-        mtx.vShieldedOutput[0].outCiphertext = {{}};
+        sapling::test_only_replace_output_parts(
+            mtx.saplingBundle.GetDetailsMut(),
+            0,
+            odesc.cmu(),
+            odesc.enc_ciphertext(),
+            {{}});
         CTransaction tx(mtx);
         EXPECT_TRUE(tx.IsCoinBase());
 
         MockCValidationState state;
         EXPECT_CALL(state, DoS(100, false, REJECT_INVALID, "bad-cb-output-desc-invalid-outct", false, "")).Times(1);
         ContextualCheckTransaction(tx, state, chainparams, 10, 57);
-
-        mtx.vShieldedOutput[0].outCiphertext = outCtOrig;
     }
 
     // Transaction should fail with a bad encCiphertext.
     {
-        auto encCtOrig = mtx.vShieldedOutput[0].encCiphertext;
-        mtx.vShieldedOutput[0].encCiphertext = {{}};
+        sapling::test_only_replace_output_parts(
+            mtx.saplingBundle.GetDetailsMut(),
+            0,
+            odesc.cmu(),
+            {{}},
+            odesc.out_ciphertext());
         CTransaction tx(mtx);
         EXPECT_TRUE(tx.IsCoinBase());
 
         MockCValidationState state;
         EXPECT_CALL(state, DoS(100, false, REJECT_INVALID, "bad-cb-output-desc-invalid-encct", false, "")).Times(1);
         ContextualCheckTransaction(tx, state, chainparams, 10, 57);
-
-        mtx.vShieldedOutput[0].encCiphertext = encCtOrig;
     }
 
     // Test the success case.
     {
+        sapling::test_only_replace_output_parts(
+            mtx.saplingBundle.GetDetailsMut(),
+            0,
+            odesc.cmu(),
+            odesc.enc_ciphertext(),
+            odesc.out_ciphertext());
         CTransaction tx(mtx);
         EXPECT_TRUE(tx.IsCoinBase());
 
@@ -1257,11 +1247,6 @@ TEST(ChecktransactionTests, HeartwoodEnforcesSaplingRulesOnShieldedCoinbase) {
     RegtestActivateHeartwood(false, Consensus::NetworkUpgrade::ALWAYS_ACTIVE);
     auto chainparams = Params();
 
-    uint256 ovk;
-    auto note = libzcash::SaplingNote(
-        libzcash::SaplingSpendingKey::random().default_address(), CAmount(123456), libzcash::Zip212Enabled::BeforeZip212);
-    auto output = OutputDescriptionInfo(ovk, note, {{0xF6}});
-
     CMutableTransaction mtx = GetValidTransaction();
     mtx.fOverwintered = true;
     mtx.nVersionGroupId = SAPLING_VERSION_GROUP_ID;
@@ -1271,7 +1256,7 @@ TEST(ChecktransactionTests, HeartwoodEnforcesSaplingRulesOnShieldedCoinbase) {
     mtx.vin[0].prevout.SetNull();
     mtx.vin[0].scriptSig << 123;
     mtx.vJoinSplit.resize(0);
-    mtx.valueBalanceSapling = -1000;
+    mtx.saplingBundle = sapling::test_only_invalid_bundle(0, 0, -1000);
 
     // Coinbase transaction should fail non-contextual checks with no shielded
     // outputs and non-zero valueBalanceSapling.
@@ -1285,34 +1270,14 @@ TEST(ChecktransactionTests, HeartwoodEnforcesSaplingRulesOnShieldedCoinbase) {
     }
 
     // Add a Sapling output.
-    auto ctx = sapling::init_prover();
-    auto odesc = output.Build(ctx).value();
-    mtx.vShieldedOutput.push_back(odesc);
+    auto builder = sapling::new_builder(*chainparams.RustNetwork(), 10);
+    builder->add_recipient(
+        uint256().GetRawBytes(),
+        libzcash::SaplingSpendingKey::random().default_address().GetRawBytes(),
+        1000,
+        libzcash::Memo::ToBytes(std::nullopt));
+    mtx.saplingBundle = sapling::apply_bundle_signatures(sapling::build_bundle(std::move(builder), 10), {});
 
-    // Coinbase transaction should fail non-contextual checks with valueBalanceSapling
-    // out of range.
-    {
-        mtx.valueBalanceSapling = MAX_MONEY + 1;
-        EXPECT_THROW((CTransaction(mtx)), std::ios_base::failure);
-        UNSAFE_CTransaction tx(mtx);
-        EXPECT_TRUE(tx.IsCoinBase());
-
-        MockCValidationState state;
-        EXPECT_CALL(state, DoS(100, false, REJECT_INVALID, "bad-txns-valuebalance-toolarge", false, "")).Times(1);
-        EXPECT_FALSE(CheckTransactionWithoutProofVerification(tx, state));
-    }
-    {
-        mtx.valueBalanceSapling = -MAX_MONEY - 1;
-        EXPECT_THROW((CTransaction(mtx)), std::ios_base::failure);
-        UNSAFE_CTransaction tx(mtx);
-        EXPECT_TRUE(tx.IsCoinBase());
-
-        MockCValidationState state;
-        EXPECT_CALL(state, DoS(100, false, REJECT_INVALID, "bad-txns-valuebalance-toolarge", false, "")).Times(1);
-        EXPECT_FALSE(CheckTransactionWithoutProofVerification(tx, state));
-    }
-
-    mtx.valueBalanceSapling = -1000;
     CTransaction tx(mtx);
     EXPECT_TRUE(tx.IsCoinBase());
 
@@ -1324,7 +1289,7 @@ TEST(ChecktransactionTests, HeartwoodEnforcesSaplingRulesOnShieldedCoinbase) {
     EXPECT_TRUE(ContextualCheckTransaction(tx, state, chainparams, 10, 57));
 
     std::optional<rust::Box<sapling::BatchValidator>> saplingAuth = sapling::init_batch_validator(false);
-    auto orchardAuth = orchard::AuthValidator::Disabled();
+    std::optional<rust::Box<orchard::BatchValidator>> orchardAuth = std::nullopt;
     auto heartwoodBranchId = NetworkUpgradeInfo[Consensus::UPGRADE_HEARTWOOD].nBranchId;
 
     // Coinbase transaction does not pass shielded input checks, as bindingSig
@@ -1414,7 +1379,7 @@ TEST(ChecktransactionTests, InvalidOrchardShieldedCoinbase) {
     mtx.vin.resize(1);
     mtx.vin[0].prevout.SetNull();
     mtx.orchardBundle = orchard::Builder(false, true, uint256())
-        .Build().value()
+        .Build().value() // TODO this build can never succeed because of empty actions list
         .ProveAndSign({}, uint256()).value();
 
     CTransaction tx(mtx);
@@ -1450,14 +1415,14 @@ TEST(ChecktransactionTests, NU5AcceptsOrchardShieldedCoinbase) {
         .ToIncomingViewingKey()
         .Address(0);
     uint256 ovk;
-    builder.AddOutput(ovk, to, CAmount(123456), std::nullopt);
+    builder.AddOutput(ovk, to, CAmount(123456), std::nullopt, Asset::Native());
 
     // orchard::Builder pads to two Actions, but does so using a "no OVK" policy for
     // dummy outputs, which violates coinbase rules requiring all shielded outputs to
     // be recoverable. We manually add a dummy output to sidestep this issue.
     // TODO: If/when we have funding streams going to Orchard recipients, this dummy
     // output can be removed.
-    builder.AddOutput(ovk, to, 0, std::nullopt);
+    builder.AddOutput(ovk, to, 0, std::nullopt, Asset::Native());
 
     auto bundle = builder
         .Build().value()
@@ -1489,7 +1454,7 @@ TEST(ChecktransactionTests, NU5AcceptsOrchardShieldedCoinbase) {
     const size_t ORCHARD_CMX_SIZE = 32;
 
     // Verify the transaction is the expected size.
-    size_t txsize = ORCHARD_BUNDLE_START + ZC_ZIP225_ORCHARD_BASE_SIZE + ZC_ZIP225_ORCHARD_MARGINAL_SIZE * 2;
+    size_t txsize = ORCHARD_BUNDLE_START + ZC_ZIP225_ORCHARD_BASE_SIZE + ZC_ZIP225_ORCHARD_MARGINAL_SIZE * 2 + ZC_ISSUE_BASE_SIZE;
     EXPECT_EQ(ss.size(), txsize);
 
     // Transaction should fail with a bad public cmx.
@@ -1511,7 +1476,7 @@ TEST(ChecktransactionTests, NU5AcceptsOrchardShieldedCoinbase) {
     // Transaction should fail with a bad encCiphertext.
     {
         std::vector<char> txBytes(ss.begin(), ss.end());
-        for (int i = 0; i < ZC_SAPLING_ENCCIPHERTEXT_SIZE; i++) {
+        for (int i = 0; i < libzcash::SAPLING_ENCCIPHERTEXT_SIZE; i++) {
             txBytes[ORCHARD_BUNDLE_CMX_OFFSET + ORCHARD_CMX_SIZE + i] = 0;
         }
 
@@ -1528,8 +1493,10 @@ TEST(ChecktransactionTests, NU5AcceptsOrchardShieldedCoinbase) {
     // Transaction should fail with a bad outCiphertext.
     {
         std::vector<char> txBytes(ss.begin(), ss.end());
-        for (int i = 0; i < ZC_SAPLING_OUTCIPHERTEXT_SIZE; i++) {
-            txBytes[ORCHARD_BUNDLE_CMX_OFFSET + ORCHARD_CMX_SIZE + ZC_SAPLING_ENCCIPHERTEXT_SIZE + i] = 0;
+        auto byteOffset =
+            ORCHARD_BUNDLE_CMX_OFFSET + ORCHARD_CMX_SIZE + libzcash::SAPLING_ENCCIPHERTEXT_SIZE;
+        for (int i = 0; i < libzcash::SAPLING_OUTCIPHERTEXT_SIZE; i++) {
+            txBytes[byteOffset + i] = 0;
         }
 
         CDataStream ssBad(txBytes, SER_DISK, PROTOCOL_VERSION);
@@ -1570,14 +1537,14 @@ TEST(ChecktransactionTests, NU5EnforcesOrchardRulesOnShieldedCoinbase) {
         .ToIncomingViewingKey()
         .Address(0);
     uint256 ovk;
-    builder.AddOutput(ovk, to, CAmount(1000), std::nullopt);
+    builder.AddOutput(ovk, to, CAmount(1000), std::nullopt, Asset::Native());
 
     // orchard::Builder pads to two Actions, but does so using a "no OVK" policy for
     // dummy outputs, which violates coinbase rules requiring all shielded outputs to
     // be recoverable. We manually add a dummy output to sidestep this issue.
     // TODO: If/when we have funding streams going to Orchard recipients, this dummy
     // output can be removed.
-    builder.AddOutput(ovk, to, 0, std::nullopt);
+    builder.AddOutput(ovk, to, 0, std::nullopt, Asset::Native());
 
     auto bundle = builder
         .Build().value()
@@ -1613,7 +1580,7 @@ TEST(ChecktransactionTests, NU5EnforcesOrchardRulesOnShieldedCoinbase) {
         ZC_ZIP225_ORCHARD_FLAGS_SIZE);
 
     // Verify the transaction is the expected size.
-    size_t txsize = ORCHARD_BUNDLE_START + ZC_ZIP225_ORCHARD_BASE_SIZE + ZC_ZIP225_ORCHARD_MARGINAL_SIZE * 2;
+    size_t txsize = ORCHARD_BUNDLE_START + ZC_ZIP225_ORCHARD_BASE_SIZE + ZC_ZIP225_ORCHARD_MARGINAL_SIZE * 2 + ZC_ISSUE_BASE_SIZE;
     EXPECT_EQ(ss.size(), txsize);
 
     // Coinbase transaction should fail non-contextual checks with valueBalanceSapling

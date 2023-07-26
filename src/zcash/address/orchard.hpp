@@ -1,4 +1,4 @@
-// Copyright (c) 2021-2022 The Zcash developers
+// Copyright (c) 2021-2023 The Zcash developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or https://www.opensource.org/licenses/mit-license.php .
 
@@ -16,6 +16,8 @@ namespace orchard {
     class Builder;
     class UnauthorizedBundle;
 }
+
+class IssueBundle;
 
 namespace libzcash {
 
@@ -35,6 +37,7 @@ private:
     friend class OrchardIncomingViewingKey;
     friend class ::OrchardWallet;
     friend class ::orchard::Builder;
+    friend class ::IssueBundle;
 public:
     static OrchardRawAddress KeyIoOnlyFromReceiver(OrchardRawAddressPtr* ptr) {
         return OrchardRawAddress(ptr);
@@ -318,7 +321,6 @@ public:
         return *this;
     }
 };
-
 } // namespace libzcash
 
 #endif // ZCASH_ADDRESS_ORCHARD_H

@@ -1,6 +1,6 @@
 // Copyright (c) 2009-2010 Satoshi Nakamoto
 // Copyright (c) 2009-2014 The Bitcoin Core developers
-// Copyright (c) 2016-2022 The Zcash developers
+// Copyright (c) 2016-2023 The Zcash developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or https://www.opensource.org/licenses/mit-license.php .
 
@@ -1110,20 +1110,21 @@ uint256 GetJoinSplitsHash(const CTransaction& txTo) {
 
 uint256 GetShieldedSpendsHash(const CTransaction& txTo) {
     CBLAKE2bWriter ss(SER_GETHASH, 0, ZCASH_SHIELDED_SPENDS_HASH_PERSONALIZATION);
-    for (unsigned int n = 0; n < txTo.vShieldedSpend.size(); n++) {
-        ss << txTo.vShieldedSpend[n].cv;
-        ss << txTo.vShieldedSpend[n].anchor;
-        ss << txTo.vShieldedSpend[n].nullifier;
-        ss << txTo.vShieldedSpend[n].rk;
-        ss << txTo.vShieldedSpend[n].zkproof;
+    for (const auto& spend : txTo.GetSaplingSpends()) {
+        ss << spend.cv();
+        ss << spend.anchor();
+        ss << spend.nullifier();
+        ss << spend.rk();
+        ss << spend.zkproof();
     }
     return ss.GetHash();
 }
 
 uint256 GetShieldedOutputsHash(const CTransaction& txTo) {
     CBLAKE2bWriter ss(SER_GETHASH, 0, ZCASH_SHIELDED_OUTPUTS_HASH_PERSONALIZATION);
-    for (unsigned int n = 0; n < txTo.vShieldedOutput.size(); n++) {
-        ss << txTo.vShieldedOutput[n];
+    auto ssRs = ToRustStream(ss);
+    for (const auto& output : txTo.GetSaplingOutputs()) {
+        output.serialize_v4(*ssRs);
     }
     return ss.GetHash();
 }
@@ -1302,11 +1303,11 @@ uint256 SignatureHash(
             hashJoinSplits = txdata.hashJoinSplits;
         }
 
-        if (!txTo.vShieldedSpend.empty()) {
+        if (txTo.GetSaplingSpendsCount() > 0) {
             hashShieldedSpends = txdata.hashShieldedSpends;
         }
 
-        if (!txTo.vShieldedOutput.empty()) {
+        if (txTo.GetSaplingOutputsCount() > 0) {
             hashShieldedOutputs = txdata.hashShieldedOutputs;
         }
 

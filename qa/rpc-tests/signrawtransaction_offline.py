@@ -1,7 +1,15 @@
 #!/usr/bin/env python3
 
 from test_framework.test_framework import BitcoinTestFramework
-from test_framework.util import assert_equal, assert_true, initialize_chain_clean, start_node, DEFAULT_FEE
+from test_framework.util import (
+    BLOSSOM_BRANCH_ID,
+    LEGACY_DEFAULT_FEE,
+    assert_equal,
+    assert_true,
+    initialize_chain_clean,
+    nuparams,
+    start_node,
+)
 from test_framework.authproxy import JSONRPCException
 
 from decimal import Decimal
@@ -14,7 +22,10 @@ class SignOfflineTest (BitcoinTestFramework):
         initialize_chain_clean(self.options.tmpdir, 2)
 
     def setup_network(self):
-        self.nodes = [ start_node(0, self.options.tmpdir, ["-nuparams=2bb40e60:10"]) ]
+        self.nodes = [ start_node(0, self.options.tmpdir, [
+            nuparams(BLOSSOM_BRANCH_ID, 10),
+            '-allowdeprecated=getnewaddress',
+        ]) ]
         self.is_network_split = False
         self.sync_all()
 
@@ -38,7 +49,7 @@ class SignOfflineTest (BitcoinTestFramework):
         create_inputs = [{'txid': txid, 'vout': 0}]
         sign_inputs = [{'txid': txid, 'vout': 0, 'scriptPubKey': scriptpubkey, 'amount': 10}]
 
-        create_hex = self.nodes[0].createrawtransaction(create_inputs, {taddr: Decimal('10.0') - DEFAULT_FEE})
+        create_hex = self.nodes[0].createrawtransaction(create_inputs, {taddr: Decimal('10.0') - LEGACY_DEFAULT_FEE})
 
         # An offline regtest node does not rely on the approx release height of the software
         # to determine the consensus rules to be used for signing.

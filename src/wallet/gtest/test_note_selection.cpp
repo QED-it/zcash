@@ -5,6 +5,7 @@
 #include "zcash/Note.hpp"
 #include "zcash/address/sapling.hpp"
 #include "zcash/address/sprout.hpp"
+#include "Asset.h"
 
 using namespace libzcash;
 
@@ -39,7 +40,7 @@ SpendableInputs FakeSpendableInputs(
         for (int i = 0; i < 10; i++) {
             OrchardOutPoint op;
             inputs.orchardNoteMetadata.push_back(OrchardNoteMetadata{
-                op, address, 1, {}});
+                op, address, 1, Asset::Native(), {}});
         }
     }
 
@@ -55,8 +56,7 @@ SpendableInputs FakeSpendableInputs(
 
     if (available.count(OutputPool::Transparent)) {
         for (int i = 0; i < 10; i++) {
-            COutput utxo(wtx, 0, 100, true);
-            inputs.utxos.push_back(utxo);
+            inputs.utxos.emplace_back(wtx, 0, std::nullopt, 100, true);
         }
     }
 
@@ -444,7 +444,7 @@ const std::vector<OutputPool> VEC_TO({OutputPool::Transparent, OutputPool::Orcha
 const std::vector<OutputPool> VEC_SO({OutputPool::Sapling, OutputPool::Orchard});
 const std::vector<OutputPool> VEC_TSO({OutputPool::Transparent, OutputPool::Sapling, OutputPool::Orchard});
 
-INSTANTIATE_TEST_CASE_P(
+INSTANTIATE_TEST_SUITE_P(
     ExhaustiveCases,
     SpendableInputsTest,
     ::testing::Values(

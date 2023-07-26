@@ -79,6 +79,10 @@ def get_dependency_list():
             GithubTagReleaseLister("llvm", "llvm-project", "^llvmorg-(\d+)\.(\d+).(\d+)$",
                 { "llvmorg-11.0.0": (11, 0, 0), "llvmorg-9.0.1-rc3": None}),
             DependsVersionGetter("native_clang")),
+        Dependency("native_cmake",
+            GithubTagReleaseLister("Kitware", "CMake", "^v?(\d+)\.(\d+)(?:\.(\d+))?$",
+                { "v3.21.2": (3, 21, 2), "v3.20.0-rc4": None}),
+            DependsVersionGetter("native_cmake")),
         Dependency("native_cxxbridge",
             GithubTagReleaseLister("dtolnay", "cxx", "^(\d+)\.(\d+)\.(\d+)$",
                 { "1.0.17": (1, 0, 17) }),
@@ -87,6 +91,10 @@ def get_dependency_list():
             GithubTagReleaseLister("rust-lang", "rust", "^(\d+)\.(\d+)(?:\.(\d+))?$",
                 { "1.33.0": (1, 33, 0), "0.9": (0, 9) }),
             DependsVersionGetter("native_rust")),
+        Dependency("native_zstd",
+            GithubTagReleaseLister("facebook", "zstd", "^v?(\d+)\.(\d+)(?:\.(\d+))?$",
+                { "v1.5.0": (1, 5, 0), "zstd-0.4.2": None}),
+            DependsVersionGetter("native_zstd")),
         # rustcxx matches the cxxbridge version
         Dependency("rustcxx",
             GithubTagReleaseLister("dtolnay", "cxx", "^(\d+)\.(\d+)\.(\d+)$",
@@ -97,9 +105,13 @@ def get_dependency_list():
                 { "v4.3.1": (4, 3, 1), "v4.2.0-rc1": None }),
             DependsVersionGetter("zeromq")),
         Dependency("leveldb",
-            GithubTagReleaseLister("google", "leveldb", "^v(\d+)\.(\d+)$",
-                { "v1.13": (1, 13) }),
+            GithubTagReleaseLister("google", "leveldb", "^v?(\d+)\.(\d+)$",
+                { "v1.13": (1, 13), "1.23": (1, 23) }),
             LevelDbVersionGetter()),
+        Dependency("tl_expected",
+            GithubTagReleaseLister("TartanLlama", "expected", "^v(\d+)\.(\d+)(?:\.(\d+))?$",
+                { "v0.3": (0, 3), "v1.0.0": (1, 0, 0) }),
+            DependsVersionGetter("tl_expected")),
         Dependency("univalue",
             GithubTagReleaseLister("bitcoin-core", "univalue", "^v(\d+)\.(\d+)\.(\d+)$",
                 { "v1.0.1": (1, 0, 1) }),
@@ -143,6 +155,21 @@ class Version(list):
 
     def __hash__(self):
         return hash(tuple(self))
+
+    def __gt__(self, other):
+        if type(self) != type(other):
+            raise TypeError
+
+        # If one of the versions is a commit hash and the other is not, treat the commit
+        # hash as being newer (as it indicates we are pinning a specific revision).
+        self_is_commit_hash = len(self) == 1 and len(self[0]) == 40
+        other_is_commit_hash = len(other) == 1 and len(other[0]) == 40
+        if other_is_commit_hash:
+            return False
+        if self_is_commit_hash:
+            return True
+
+        return super().__gt__(other)
 
 class Dependency:
     def __init__(self, name, release_lister, current_getter):
@@ -243,12 +270,12 @@ class DependsVersionGetter:
         mk_file = open(mk_file_path, 'r', encoding='utf8').read()
 
         regexp_whitelist = [
+            "package\)_default_version=(\d+)\.(\d+)\.(\d+)$",
             "package\)_version=(\d+)\.(\d+)\.(\d+)$",
             "package\)_version=(\d+)\.(\d+)$",
             "package\)_version=(\d+)_(\d+)_(\d+)$",
             "package\)_version=(\d+)\.(\d+)\.(\d+)([a-z])$",
-            # Workaround for wasi 0.9.0 preview
-            "package\)_version=(\d+)\.(\d+)\.(\d+)\+wasi-snapshot-preview1$",
+            "package\)_version=([0-9a-f]{40})$",
         ]
 
         current_version = None
@@ -259,7 +286,9 @@ class DependsVersionGetter:
                 current_version = Version(match.groups())
 
         if not current_version:
-            raise RuntimeError("Couldn't parse version number from depends .mk file.")
+            raise RuntimeError(
+                "Couldn't parse version number from depends %s.mk file." % (safe_depends(self.name),)
+            )
 
         return current_version
 

@@ -1,5 +1,5 @@
 // Copyright (c) 2016 Jack Grigg
-// Copyright (c) 2016-2022 The Zcash developers
+// Copyright (c) 2016-2023 The Zcash developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or https://www.opensource.org/licenses/mit-license.php .
 
@@ -127,7 +127,7 @@ void EhIndexToArray(const eh_index i, unsigned char* array)
     memcpy(array, &bei, sizeof(eh_index));
 }
 
-std::vector<unsigned char> GetMinimalFromIndices(std::vector<eh_index> indices,
+std::vector<unsigned char> GetMinimalFromIndices(const std::vector<eh_index>& indices,
                                                  size_t cBitLen)
 {
     assert(((cBitLen+1)+7)/8 <= sizeof(eh_index));

@@ -9,8 +9,13 @@
 #
 
 from test_framework.test_framework import BitcoinTestFramework
-from test_framework.util import assert_equal, connect_nodes, \
-    sync_blocks, gather_inputs
+from test_framework.util import (
+    assert_equal,
+    connect_nodes,
+    start_nodes,
+    sync_blocks,
+    gather_inputs,
+)
 
 
 class TxnMallTest(BitcoinTestFramework):
@@ -18,6 +23,12 @@ class TxnMallTest(BitcoinTestFramework):
     def add_options(self, parser):
         parser.add_option("--mineblock", dest="mine_block", default=False, action="store_true",
                           help="Test double-spend of 1-confirmed transaction")
+
+    def setup_nodes(self):
+        return start_nodes(self.num_nodes, self.options.tmpdir, extra_args=[[
+            '-minrelaytxfee=0',
+            '-allowdeprecated=getnewaddress',
+        ]] * self.num_nodes)
 
     def setup_network(self):
         # Start with split network:
@@ -34,7 +45,7 @@ class TxnMallTest(BitcoinTestFramework):
         # Coins are sent to node1_address
         node1_address = self.nodes[1].getnewaddress("")
 
-        # First: use raw transaction API to send (starting_balance - (mining_reward - 2)) BTC to node1_address,
+        # First: use raw transaction API to send (starting_balance - (mining_reward - 2)) ZEC to node1_address,
         # but don't broadcast:
         (total_in, inputs) = gather_inputs(self.nodes[0], (starting_balance - (mining_reward - 2)))
         change_address = self.nodes[0].getnewaddress("")

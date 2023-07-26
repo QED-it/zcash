@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2022 The Zcash developers
+// Copyright (c) 2016-2023 The Zcash developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or https://www.opensource.org/licenses/mit-license.php .
 
@@ -40,8 +40,8 @@ CMutableTransaction GetValidSproutReceiveTransaction(
     allPrevOutputs.resize(mtx.vin.size());
 
     // Generate an ephemeral keypair.
-    Ed25519SigningKey joinSplitPrivKey;
-    ed25519_generate_keypair(&joinSplitPrivKey, &mtx.joinSplitPubKey);
+    ed25519::SigningKey joinSplitPrivKey;
+    ed25519::generate_keypair(joinSplitPrivKey, mtx.joinSplitPubKey);
 
     std::array<libzcash::JSInput, 2> inputs = {
         libzcash::JSInput(), // dummy input
@@ -64,8 +64,7 @@ CMutableTransaction GetValidSproutReceiveTransaction(
     // depend on this happening.
     if (version >= 4) {
         // Shielded Output
-        OutputDescription od;
-        mtx.vShieldedOutput.push_back(od);
+        mtx.saplingBundle = sapling::test_only_invalid_bundle(0, 1, 0);
     }
 
     // Empty output script.
@@ -76,10 +75,10 @@ CMutableTransaction GetValidSproutReceiveTransaction(
     uint256 dataToBeSigned = SignatureHash(scriptCode, signTx, NOT_AN_INPUT, SIGHASH_ALL, 0, consensusBranchId, txdata);
 
     // Add the signature
-    assert(ed25519_sign(
-        &joinSplitPrivKey,
-        dataToBeSigned.begin(), 32,
-        &mtx.joinSplitSig));
+    ed25519::sign(
+        joinSplitPrivKey,
+        {dataToBeSigned.begin(), 32},
+        mtx.joinSplitSig);
 
     return mtx;
 }
@@ -143,8 +142,8 @@ CWalletTx GetValidSproutSpend(const libzcash::SproutSpendingKey& sk,
     mtx.vout[1].nValue = 0;
 
     // Generate an ephemeral keypair.
-    Ed25519SigningKey joinSplitPrivKey;
-    ed25519_generate_keypair(&joinSplitPrivKey, &mtx.joinSplitPubKey);
+    ed25519::SigningKey joinSplitPrivKey;
+    ed25519::generate_keypair(joinSplitPrivKey, mtx.joinSplitPubKey);
 
     // Fake tree for the unused witness
     SproutMerkleTree tree;
@@ -193,10 +192,10 @@ CWalletTx GetValidSproutSpend(const libzcash::SproutSpendingKey& sk,
     uint256 dataToBeSigned = SignatureHash(scriptCode, signTx, NOT_AN_INPUT, SIGHASH_ALL, 0, consensusBranchId, txdata);
 
     // Add the signature
-    assert(ed25519_sign(
-        &joinSplitPrivKey,
-        dataToBeSigned.begin(), 32,
-        &mtx.joinSplitSig));
+    ed25519::sign(
+        joinSplitPrivKey,
+        {dataToBeSigned.begin(), 32},
+        mtx.joinSplitSig);
     CTransaction tx {mtx};
     CWalletTx wtx {NULL, tx};
     return wtx;
@@ -343,7 +342,7 @@ TestSaplingNote GetTestSaplingNote(const libzcash::SaplingPaymentAddress& pa, CA
     return { note, tree };
 }
 
-CWalletTx GetValidSaplingReceive(const Consensus::Params& consensusParams,
+CWalletTx GetValidSaplingReceive(const CChainParams& params,
                                  CBasicKeyStore& keyStore,
                                  const libzcash::SaplingExtendedSpendingKey &sk,
                                  CAmount value) {
@@ -354,7 +353,7 @@ CWalletTx GetValidSaplingReceive(const Consensus::Params& consensusParams,
     auto fvk = sk.expsk.full_viewing_key();
     auto pa = sk.ToXFVK().DefaultAddress();
 
-    auto builder = TransactionBuilder(consensusParams, 1, std::nullopt, &keyStore);
+    auto builder = TransactionBuilder(params, 1, std::nullopt, &keyStore);
     builder.SetFee(0);
     builder.AddTransparentInput(COutPoint(), scriptPubKey, value);
     builder.AddSaplingOutput(fvk.ovk, pa, value, {});

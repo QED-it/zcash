@@ -155,6 +155,25 @@ def orchard_auth_digest(orchardBundle):
 
     return digest.digest()
 
+def issue_digest(tx):
+    digest = blake2b(digest_size=32, person=b'ZTxIdOrcZSAIssue')
+
+    # if tx.issueBundle is not None:
+    # Add all fields
+    # So far we only need digests for empty bundle here for pre-ZSA tests
+
+    return digest.digest()
+
+
+def issue_auth_digest(tx):
+    digest = blake2b(digest_size=32, person=b'ZTxIdOrcZSAIssue')
+
+    # if tx.issueBundle is not None:
+    # Add all fields
+    # So far we only need digests for empty bundle here for pre-ZSA tests
+
+    return digest.digest()
+
 # - Actions
 
 def orchard_actions_compact_digest(orchardBundle):
@@ -163,13 +182,13 @@ def orchard_actions_compact_digest(orchardBundle):
         digest.update(ser_uint256(desc.nullifier))
         digest.update(ser_uint256(desc.cmx))
         digest.update(ser_uint256(desc.ephemeralKey))
-        digest.update(desc.encCiphertext[:52])
+        digest.update(desc.encCiphertext[:84])
     return digest.digest()
 
 def orchard_actions_memos_digest(orchardBundle):
     digest = blake2b(digest_size=32, person=b'ZTxIdOrcActMHash')
     for desc in orchardBundle.actions:
-        digest.update(desc.encCiphertext[52:564])
+        digest.update(desc.encCiphertext[84:596])
     return digest.digest()
 
 def orchard_actions_noncompact_digest(orchardBundle):
@@ -177,7 +196,7 @@ def orchard_actions_noncompact_digest(orchardBundle):
     for desc in orchardBundle.actions:
         digest.update(ser_uint256(desc.cv))
         digest.update(ser_uint256(desc.rk))
-        digest.update(desc.encCiphertext[564:])
+        digest.update(desc.encCiphertext[596:])
         digest.update(desc.outCiphertext)
     return digest.digest()
 
@@ -204,6 +223,7 @@ def txid_digest(tx):
     digest.update(transparent_digest(tx))
     digest.update(sapling_digest(tx.saplingBundle))
     digest.update(orchard_digest(tx.orchardBundle))
+    digest.update(issue_digest(tx.issueBundle))
 
     return digest.digest()
 
@@ -218,6 +238,7 @@ def auth_digest(tx):
     digest.update(transparent_scripts_digest(tx))
     digest.update(sapling_auth_digest(tx.saplingBundle))
     digest.update(orchard_auth_digest(tx.orchardBundle))
+    digest.update(issue_auth_digest(tx.issueBundle))
 
     return digest.digest()
 
@@ -233,6 +254,7 @@ def signature_digest(tx, nHashType, txin):
     digest.update(transparent_sig_digest(tx, nHashType, txin))
     digest.update(sapling_digest(tx.saplingBundle))
     digest.update(orchard_digest(tx.orchardBundle))
+    digest.update(issue_digest(tx.issueBundle))
 
     return digest.digest()
 

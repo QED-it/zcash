@@ -1,6 +1,6 @@
 // Copyright (c) 2010 Satoshi Nakamoto
 // Copyright (c) 2009-2014 The Bitcoin Core developers
-// Copyright (c) 2019-2022 The Zcash developers
+// Copyright (c) 2019-2023 The Zcash developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or https://www.opensource.org/licenses/mit-license.php .
 
@@ -14,6 +14,7 @@
 #ifdef ENABLE_MINING
 #include "crypto/equihash.h"
 #endif
+#include "deprecation.h"
 #include "init.h"
 #include "key_io.h"
 #include "main.h"
@@ -220,7 +221,7 @@ UniValue generate(const UniValue& params, bool fHelp)
     unsigned int k = Params().GetConsensus().nEquihashK;
     while (nHeight < nHeightEnd)
     {
-        std::unique_ptr<CBlockTemplate> pblocktemplate(CreateNewBlock(Params(), minerAddress));
+        std::unique_ptr<CBlockTemplate> pblocktemplate(BlockAssembler(Params()).CreateNewBlock(minerAddress));
         if (!pblocktemplate.get())
             throw JSONRPCError(RPC_INTERNAL_ERROR, "Couldn't create new block");
         CBlock *pblock = &pblocktemplate->block;
@@ -371,20 +372,18 @@ UniValue getmininginfo(const UniValue& params, bool fHelp)
 }
 
 
-// NOTE: Unlike wallet RPC (which use BTC values), mining RPCs follow GBT (BIP 22) in using satoshi amounts
+// NOTE: Unlike wallet RPCs (which use ZEC values), mining RPCs follow GBT (BIP 22) in using zatoshi amounts.
 UniValue prioritisetransaction(const UniValue& params, bool fHelp)
 {
     if (fHelp || params.size() != 3)
-        throw runtime_error(
+        throw std::runtime_error(
             "prioritisetransaction <txid> <priority delta> <fee delta>\n"
             "Accepts the transaction into mined blocks at a higher (or lower) priority\n"
             "\nArguments:\n"
             "1. \"txid\"       (string, required) The transaction id.\n"
-            "2. priority delta (numeric, required) The priority to add or subtract.\n"
-            "                  The transaction selection algorithm considers the tx as it would have a higher priority.\n"
-            "                  (priority of a transaction is calculated: coinage * value_in_satoshis / txsize) \n"
-            "3. fee delta      (numeric, required) The fee value (in satoshis) to add (or subtract, if negative).\n"
-            "                  The fee is not actually paid, only the algorithm for selecting transactions into a block\n"
+            "2. priority_delta (numeric, optional) Fee-independent priority adjustment. Not supported, so must be zero or null.\n"
+            "3. fee_delta      (numeric, required) The fee value (in " + MINOR_CURRENCY_UNIT + ") to add (or subtract, if negative).\n"
+            "                  The modified fee is not actually paid, only the algorithm for selecting transactions into a block\n"
             "                  considers the transaction as it would have paid a higher (or lower) fee.\n"
             "\nResult\n"
             "true              (boolean) Returns true\n"
@@ -398,7 +397,11 @@ UniValue prioritisetransaction(const UniValue& params, bool fHelp)
     uint256 hash = ParseHashStr(params[0].get_str(), "txid");
     CAmount nAmount = params[2].get_int64();
 
-    mempool.PrioritiseTransaction(hash, params[0].get_str(), params[1].get_real(), nAmount);
+    if (!(params[1].isNull() || params[1].get_real() == 0)) {
+        throw JSONRPCError(RPC_INVALID_PARAMETER, "Priority is not supported, and adjustment thereof must be zero.");
+    }
+
+    mempool.PrioritiseTransaction(hash, params[0].get_str(), nAmount);
     return true;
 }
 
@@ -473,7 +476,7 @@ UniValue getblocktemplate(const UniValue& params, bool fHelp)
             "             n                       (numeric) transactions before this one (by 1-based index in 'transactions' list) that must be present in the final block if this one is\n"
             "             ,...\n"
             "         ],\n"
-            "         \"fee\": n,                   (numeric) difference in value between transaction inputs and outputs (in Satoshis); for coinbase transactions, this is a negative Number of the total collected block fees (ie, not including the block subsidy); if key is not present, fee is unknown and clients MUST NOT assume there isn't one\n"
+            "         \"fee\": n,                   (numeric) difference in value between transaction inputs and outputs (in " + MINOR_CURRENCY_UNIT + "); for coinbase transactions, this is a negative Number of the total collected block fees (i.e., not including the block subsidy); if key is not present, fee is unknown and clients MUST NOT assume there isn't one\n"
             "         \"sigops\" : n,               (numeric) total number of SigOps, as counted for purposes of block limits; if key is not present, sigop count is unknown and clients MUST NOT assume there aren't any\n"
             "         \"required\" : true|false     (boolean) if provided and true, this transaction must be in the final block\n"
             "      }\n"
@@ -482,7 +485,7 @@ UniValue getblocktemplate(const UniValue& params, bool fHelp)
 //            "  \"coinbaseaux\" : {                  (json object) data that should be included in the coinbase's scriptSig content\n"
 //            "      \"flags\" : \"flags\"            (string) \n"
 //            "  },\n"
-//            "  \"coinbasevalue\" : n,               (numeric) maximum allowable input to coinbase transaction, including the generation award and transaction fees (in Satoshis)\n"
+//            "  \"coinbasevalue\" : n,               (numeric) maximum allowable input to coinbase transaction, including the generation award and transaction fees (in " + MINOR_CURRENCY_UNIT + ")\n"
             "  \"coinbasetxn\" : { ... },           (json object) information for coinbase transaction\n"
             "  \"target\" : \"xxxx\",                 (string) The hash target\n"
             "  \"longpollid\" : \"str\",              (string) an id to include with a request to longpoll on an update to this template\n"
@@ -699,7 +702,7 @@ UniValue getblocktemplate(const UniValue& params, bool fHelp)
             throw JSONRPCError(RPC_INTERNAL_ERROR, "No miner address available (mining requires a wallet or -mineraddress)");
         }
 
-        pblocktemplate = CreateNewBlock(Params(), minerAddress, next_cb_mtx);
+        pblocktemplate = BlockAssembler(Params()).CreateNewBlock(minerAddress, next_cb_mtx);
         if (!pblocktemplate)
             throw JSONRPCError(RPC_OUT_OF_MEMORY, "Out of memory");
 
@@ -782,9 +785,11 @@ UniValue getblocktemplate(const UniValue& params, bool fHelp)
     result.pushKV("version", pblock->nVersion);
     result.pushKV("previousblockhash", pblock->hashPrevBlock.GetHex());
     // The following 3 are deprecated; remove in a future release.
-    result.pushKV("blockcommitmentshash", pblock->hashBlockCommitments.GetHex());
-    result.pushKV("lightclientroothash", pblock->hashBlockCommitments.GetHex());
-    result.pushKV("finalsaplingroothash", pblock->hashBlockCommitments.GetHex());
+    if (fEnableGbtOldHashes) {
+        result.pushKV("blockcommitmentshash", pblock->hashBlockCommitments.GetHex());
+        result.pushKV("lightclientroothash", pblock->hashBlockCommitments.GetHex());
+        result.pushKV("finalsaplingroothash", pblock->hashBlockCommitments.GetHex());
+    }
     {
         // These are items in the result object that are valid only if the
         // block template returned by this RPC is used unmodified. Otherwise,
@@ -905,66 +910,6 @@ UniValue submitblock(const UniValue& params, bool fHelp)
     return BIP22ValidationResult(state);
 }
 
-UniValue estimatefee(const UniValue& params, bool fHelp)
-{
-    if (fHelp || params.size() != 1)
-        throw runtime_error(
-            "estimatefee nblocks\n"
-            "\nEstimates the approximate fee per kilobyte\n"
-            "needed for a transaction to begin confirmation\n"
-            "within nblocks blocks.\n"
-            "\nArguments:\n"
-            "1. nblocks     (numeric)\n"
-            "\nResult:\n"
-            "n :    (numeric) estimated fee-per-kilobyte\n"
-            "\n"
-            "-1.0 is returned if not enough transactions and\n"
-            "blocks have been observed to make an estimate.\n"
-            "\nExample:\n"
-            + HelpExampleCli("estimatefee", "6")
-            );
-
-    RPCTypeCheck(params, boost::assign::list_of(UniValue::VNUM));
-
-    int nBlocks = params[0].get_int();
-    if (nBlocks < 1)
-        nBlocks = 1;
-
-    CFeeRate feeRate = mempool.estimateFee(nBlocks);
-    if (feeRate == CFeeRate(0))
-        return -1.0;
-
-    return ValueFromAmount(feeRate.GetFeePerK());
-}
-
-UniValue estimatepriority(const UniValue& params, bool fHelp)
-{
-    if (fHelp || params.size() != 1)
-        throw runtime_error(
-            "estimatepriority nblocks\n"
-            "\nEstimates the approximate priority\n"
-            "a zero-fee transaction needs to begin confirmation\n"
-            "within nblocks blocks.\n"
-            "\nArguments:\n"
-            "1. nblocks     (numeric)\n"
-            "\nResult:\n"
-            "n :    (numeric) estimated priority\n"
-            "\n"
-            "-1.0 is returned if not enough transactions and\n"
-            "blocks have been observed to make an estimate.\n"
-            "\nExample:\n"
-            + HelpExampleCli("estimatepriority", "6")
-            );
-
-    RPCTypeCheck(params, boost::assign::list_of(UniValue::VNUM));
-
-    int nBlocks = params[0].get_int();
-    if (nBlocks < 1)
-        nBlocks = 1;
-
-    return mempool.estimatePriority(nBlocks);
-}
-
 UniValue getblocksubsidy(const UniValue& params, bool fHelp)
 {
     if (fHelp || params.size() > 1)
@@ -1069,9 +1014,6 @@ static const CRPCCommand commands[] =
     { "generating",         "setgenerate",            &setgenerate,            true  },
     { "generating",         "generate",               &generate,               true  },
 #endif
-
-    { "util",               "estimatefee",            &estimatefee,            true  },
-    { "util",               "estimatepriority",       &estimatepriority,       true  },
 };
 
 void RegisterMiningRPCCommands(CRPCTable &tableRPC)

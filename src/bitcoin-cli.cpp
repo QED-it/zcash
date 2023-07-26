@@ -1,6 +1,6 @@
 // Copyright (c) 2009-2010 Satoshi Nakamoto
 // Copyright (c) 2009-2013 The Bitcoin Core developers
-// Copyright (c) 2016-2022 The Zcash developers
+// Copyright (c) 2016-2023 The Zcash developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or https://www.opensource.org/licenses/mit-license.php .
 
@@ -9,6 +9,7 @@
 #include "fs.h"
 #include "rpc/client.h"
 #include "rpc/protocol.h"
+#include "util/match.h"
 #include "util/system.h"
 #include "util/strencodings.h"
 
@@ -39,7 +40,7 @@ std::string HelpMessageCli()
     std::string strUsage;
     strUsage += HelpMessageGroup(_("Options:"));
     strUsage += HelpMessageOpt("-?", _("This help message"));
-    strUsage += HelpMessageOpt("-conf=<file>", strprintf(_("Specify configuration file (default: %s)"), BITCOIN_CONF_FILENAME));
+    strUsage += HelpMessageOpt("-conf=<file>", strprintf(_("Specify configuration file. Relative paths will be prefixed by datadir location. (default: %s)"), BITCOIN_CONF_FILENAME));
     strUsage += HelpMessageOpt("-datadir=<dir>", _("Specify data directory (this path cannot use '~')"));
     strUsage += HelpMessageOpt("-stdin", _("Read extra arguments from standard input, one per line until EOF/Ctrl-D (recommended for sensitive information such as passphrases). If first extra argument is `walletpassphrase` then the first line(password) will not be echoed."));
     AppendParamsHelpMessages(strUsage);
@@ -197,7 +198,33 @@ static void http_error_cb(enum evhttp_request_error err, void *ctx)
 }
 #endif
 
-UniValue CallRPC(const std::string& strMethod, const UniValue& params)
+tl::expected<UniValue, UniValue> CallRPC(const std::string& strMethod, const UniValue& params);
+
+UniValue ConvertValues(const std::string &strMethod, const std::vector<std::string> &strParams)
+{
+    return RPCConvertValues(strMethod, strParams)
+        .map_error([&](auto failure) {
+            throw std::runtime_error(
+                    FormatConversionFailure(strMethod, failure)
+                    + examine(failure, match {
+                        [](const UnknownRPCMethod&) { return std::string{}; },
+                        [&](const auto&) {
+                            auto helpMsg = CallRPC("help", ConvertValues("help", {strMethod}));
+                            return "\n\n"
+                                + (helpMsg.has_value()
+                                   ? "Usage: " + helpMsg.value().get_str()
+                                   : strprintf(
+                                           "An error occurred while attempting to retrieve the "
+                                           "help text for %s: %s",
+                                           strMethod,
+                                           helpMsg.error().get_str()));
+                        }
+                    }));
+        })
+        .value();
+}
+
+tl::expected<UniValue, UniValue> CallRPC(const std::string& strMethod, const UniValue& params)
 {
     std::string host = GetArg("-rpcconnect", DEFAULT_RPCCONNECT);
     int port = GetArg("-rpcport", BaseParams().RPCPort());
@@ -269,7 +296,11 @@ UniValue CallRPC(const std::string& strMethod, const UniValue& params)
     if (reply.empty())
         throw std::runtime_error("expected reply to have result, error and id properties");
 
-    return reply;
+    const UniValue error = find_value(reply, "error");
+
+    return error.isNull()
+        ? tl::expected<UniValue, UniValue>(find_value(reply, "result"))
+        : tl::make_unexpected(error);
 }
 
 bool SetStdinEcho(bool enable = true)
@@ -340,19 +371,17 @@ int CommandLineRPC(int argc, char *argv[])
         if (args.size() < 1)
             throw std::runtime_error("too few parameters (need at least command)");
         std::string strMethod = args[0];
-        UniValue params = RPCConvertValues(strMethod, std::vector<std::string>(args.begin()+1, args.end()));
+        auto params =
+            ConvertValues(strMethod, std::vector<std::string>(args.begin()+1, args.end()));
 
         // Execute and handle connection failures with -rpcwait
         const bool fWait = GetBoolArg("-rpcwait", false);
         do {
             try {
-                const UniValue reply = CallRPC(strMethod, params);
+                auto reply = CallRPC(strMethod, params);
 
-                // Parse reply
-                const UniValue& result = find_value(reply, "result");
-                const UniValue& error  = find_value(reply, "error");
-
-                if (!error.isNull()) {
+                if (!reply.has_value()) {
+                    auto error = reply.error();
                     // Error
                     int code = error["code"].get_int();
                     if (fWait && code == RPC_IN_WARMUP)
@@ -369,6 +398,7 @@ int CommandLineRPC(int argc, char *argv[])
                             strPrint += "error message:\n"+errMsg.get_str();
                     }
                 } else {
+                    auto result = reply.value();
                     // Result
                     if (result.isNull())
                         strPrint = "";

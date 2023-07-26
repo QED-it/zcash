@@ -1,6 +1,6 @@
 // Copyright (c) 2009-2010 Satoshi Nakamoto
 // Copyright (c) 2009-2014 The Bitcoin Core developers
-// Copyright (c) 2016-2022 The Zcash developers
+// Copyright (c) 2016-2023 The Zcash developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or https://www.opensource.org/licenses/mit-license.php .
 
@@ -45,6 +45,9 @@ static const char DB_LAST_BLOCK = 'l';
 static const char DB_MMR_LENGTH = 'M';
 static const char DB_MMR_NODE = 'm';
 static const char DB_MMR_ROOT = 'r';
+
+static const char DB_SUBTREE_LATEST = 'e';
+static const char DB_SUBTREE_DATA = 'n';
 
 // insightexplorer
 static const char DB_ADDRESSINDEX = 'd';
@@ -207,6 +210,26 @@ uint256 CCoinsViewDB::GetHistoryRoot(uint32_t epochId) const {
     return root;
 }
 
+
+std::optional<libzcash::LatestSubtree> CCoinsViewDB::GetLatestSubtree(ShieldedType type) const {
+    libzcash::LatestSubtree latestSubtree;
+    if (!db.Read(make_pair(DB_SUBTREE_LATEST, (uint8_t) type), latestSubtree)) {
+        return std::nullopt;
+    }
+
+    return latestSubtree;
+}
+
+std::optional<libzcash::SubtreeData> CCoinsViewDB::GetSubtreeData(
+        ShieldedType type, libzcash::SubtreeIndex index) const
+{
+    libzcash::SubtreeData subtreeData;
+    if (!db.Read(make_pair(DB_SUBTREE_DATA, make_pair((uint8_t) type, index)), subtreeData)) {
+        return std::nullopt;
+    }
+    return subtreeData;
+}
+
 void BatchWriteNullifiers(CDBBatch& batch, CNullifiersMap& mapToUse, const char& dbChar)
 {
     for (CNullifiersMap::iterator it = mapToUse.begin(); it != mapToUse.end();) {
@@ -265,6 +288,66 @@ void BatchWriteHistory(CDBBatch& batch, CHistoryCacheMap& historyCacheMap) {
     }
 }
 
+void WriteSubtrees(
+    CDBBatch& batch,
+    ShieldedType type,
+    std::optional<libzcash::LatestSubtree> oldLatestSubtree,
+    std::optional<libzcash::LatestSubtree> newLatestSubtree,
+    const std::vector<libzcash::SubtreeData> &newSubtrees
+)
+{
+    // The number of subtrees we'll need to remove from the database
+    libzcash::SubtreeIndex pops;
+
+    if (!oldLatestSubtree.has_value()) {
+        // Nothing to remove
+        pops = 0;
+        assert(!newLatestSubtree.has_value());
+    } else {
+        if (!newLatestSubtree.has_value()) {
+            // Every subtree must be removed
+            pops = oldLatestSubtree.value().index + 1;
+        } else {
+            // Only remove what's necessary to get us to the
+            // correct index.
+            assert(newLatestSubtree.value().index <= oldLatestSubtree.value().index);
+            pops = oldLatestSubtree.value().index - newLatestSubtree.value().index;
+        }
+    }
+
+    for (libzcash::SubtreeIndex i = 0; i < pops; i++) {
+        batch.Erase(make_pair(DB_SUBTREE_DATA, make_pair((uint8_t) type, oldLatestSubtree.value().index - i)));
+    }
+
+    if (!newSubtrees.empty()) {
+        libzcash::SubtreeIndex cursor_index;
+        if (newLatestSubtree.has_value()) {
+            cursor_index = newLatestSubtree.value().index + 1;
+        } else {
+            cursor_index = 0;
+        }
+
+        for (const libzcash::SubtreeData& subtreeData : newSubtrees) {
+            batch.Write(make_pair(DB_SUBTREE_DATA, make_pair((uint8_t) type, cursor_index)), subtreeData);
+            cursor_index += 1;
+        }
+
+        libzcash::SubtreeData latestSubtreeData = newSubtrees.back();
+
+        // Note: the latest index will be cursor_index - 1 after the final iteration of the loop above.
+        libzcash::LatestSubtree latestSubtree(cursor_index - 1, latestSubtreeData.root, latestSubtreeData.nHeight);
+        batch.Write(make_pair(DB_SUBTREE_LATEST, (uint8_t) type), latestSubtree);
+    } else {
+        // There are no new subtrees from the cache, so newLatestSubtree is the (possibly new) best index.
+        if (newLatestSubtree.has_value()) {
+            batch.Write(make_pair(DB_SUBTREE_LATEST, (uint8_t) type), newLatestSubtree.value());
+        } else {
+            // Delete the entry if it's std::nullopt
+            batch.Erase(make_pair(DB_SUBTREE_LATEST, (uint8_t) type));
+        }
+    }
+}
+
 bool CCoinsViewDB::BatchWrite(CCoinsMap &mapCoins,
                               const uint256 &hashBlock,
                               const uint256 &hashSproutAnchor,
@@ -276,7 +359,12 @@ bool CCoinsViewDB::BatchWrite(CCoinsMap &mapCoins,
                               CNullifiersMap &mapSproutNullifiers,
                               CNullifiersMap &mapSaplingNullifiers,
                               CNullifiersMap &mapOrchardNullifiers,
-                              CHistoryCacheMap &historyCacheMap) {
+                              CHistoryCacheMap &historyCacheMap,
+                              SubtreeCache &cacheSaplingSubtrees,
+                              SubtreeCache &cacheOrchardSubtrees) {
+    auto latestSaplingSubtree = GetLatestSubtree(SAPLING);
+    auto latestOrchardSubtree = GetLatestSubtree(ORCHARD);
+
     CDBBatch batch(db);
     size_t count = 0;
     size_t changed = 0;
@@ -301,6 +389,12 @@ bool CCoinsViewDB::BatchWrite(CCoinsMap &mapCoins,
     ::BatchWriteNullifiers(batch, mapOrchardNullifiers, DB_ORCHARD_NULLIFIER);
 
     ::BatchWriteHistory(batch, historyCacheMap);
+
+    assert(cacheSaplingSubtrees.initialized);
+    assert(cacheOrchardSubtrees.initialized);
+
+    WriteSubtrees(batch, SAPLING, latestSaplingSubtree, cacheSaplingSubtrees.parentLatestSubtree, cacheSaplingSubtrees.newSubtrees);
+    WriteSubtrees(batch, ORCHARD, latestOrchardSubtree, cacheOrchardSubtrees.parentLatestSubtree, cacheOrchardSubtrees.newSubtrees);
 
     if (!hashBlock.IsNull())
         batch.Write(DB_BEST_BLOCK, hashBlock);
@@ -387,14 +481,14 @@ bool CCoinsViewDB::GetStats(CCoinsStats &stats) const {
 bool CBlockTreeDB::WriteBatchSync(const std::vector<std::pair<int, const CBlockFileInfo*> >& fileInfo, int nLastFile, const std::vector<CBlockIndex*>& blockinfo) {
     MetricsIncrementCounter("zcashd.debug.blocktree.write_batch");
     CDBBatch batch(*this);
-    for (std::vector<std::pair<int, const CBlockFileInfo*> >::const_iterator it=fileInfo.begin(); it != fileInfo.end(); it++) {
-        batch.Write(make_pair(DB_BLOCK_FILES, it->first), *it->second);
+    for (const auto& it : fileInfo) {
+        batch.Write(make_pair(DB_BLOCK_FILES, it.first), *it.second);
     }
     batch.Write(DB_LAST_BLOCK, nLastFile);
-    for (std::vector<const CBlockIndex*>::const_iterator it=blockinfo.begin(); it != blockinfo.end(); it++) {
-        std::pair<char, uint256> key = make_pair(DB_BLOCK_INDEX, (*it)->GetBlockHash());
+    for (const auto& it : blockinfo) {
+        std::pair<char, uint256> key = make_pair(DB_BLOCK_INDEX, it->GetBlockHash());
         try {
-            CDiskBlockIndex dbindex {*it, [this, &key]() {
+            CDiskBlockIndex dbindex {it, [this, &key]() {
                 MetricsIncrementCounter("zcashd.debug.blocktree.write_batch_read_dbindex");
                 // It can happen that the index entry is written, then the Equihash solution is cleared from memory,
                 // then the index entry is rewritten. In that case we must read the solution from the old entry.
@@ -626,6 +720,8 @@ bool CBlockTreeDB::LoadBlockIndexGuts(
                 pindexNew->nStatus        = diskindex.nStatus;
                 pindexNew->nCachedBranchId = diskindex.nCachedBranchId;
                 pindexNew->nTx            = diskindex.nTx;
+                pindexNew->nChainSupplyDelta = diskindex.nChainSupplyDelta;
+                pindexNew->nTransparentValue = diskindex.nTransparentValue;
                 pindexNew->nSproutValue   = diskindex.nSproutValue;
                 pindexNew->nSaplingValue  = diskindex.nSaplingValue;
                 pindexNew->nOrchardValue  = diskindex.nOrchardValue;
@@ -634,23 +730,9 @@ bool CBlockTreeDB::LoadBlockIndexGuts(
                 pindexNew->hashChainHistoryRoot = diskindex.hashChainHistoryRoot;
                 pindexNew->hashAuthDataRoot = diskindex.hashAuthDataRoot;
 
-                // Consistency checks
-                CBlockHeader header;
-                {
-                    LOCK(cs_main);
-                    try {
-                        header = pindexNew->GetBlockHeader();
-                    } catch (const runtime_error&) {
-                        return error("LoadBlockIndex(): failed to read index entry: diskindex hash = %s",
-                            diskindex.GetBlockHash().ToString());
-                    }
-                }
-                if (header.GetHash() != diskindex.GetBlockHash())
-                    return error("LoadBlockIndex(): inconsistent header vs diskindex hash: header hash = %s, diskindex hash = %s",
-                        header.GetHash().ToString(), diskindex.GetBlockHash().ToString());
-                if (header.GetHash() != pindexNew->GetBlockHash())
-                    return error("LoadBlockIndex(): block header inconsistency detected: on-disk = %s, in-memory = %s",
-                        diskindex.ToString(), pindexNew->ToString());
+                // Check the block hash against the required difficulty as encoded in the 
+                // nBits field. The probability of this succeeding randomly is low enough 
+                // that it is a useful check to detect logic or disk storage errors.
                 if (!CheckProofOfWork(pindexNew->GetBlockHash(), pindexNew->nBits, Params().GetConsensus()))
                     return error("LoadBlockIndex(): CheckProofOfWork failed: %s", pindexNew->ToString());
 

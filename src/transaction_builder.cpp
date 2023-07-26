@@ -1,4 +1,4 @@
-// Copyright (c) 2018-2022 The Zcash developers
+// Copyright (c) 2018-2023 The Zcash developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or https://www.opensource.org/licenses/mit-license.php .
 
@@ -11,25 +11,39 @@
 #include "script/sign.h"
 #include "util/moneystr.h"
 #include "zcash/Note.hpp"
+#include "Asset.h"
 
 #include <librustzcash.h>
+#include <rust/builder.h>
 #include <rust/ed25519.h>
 
-uint256 ProduceZip244SignatureHash(
+uint256 ProduceShieldedSignatureHash(
+    uint32_t consensusBranchId,
     const CTransaction& tx,
     const std::vector<CTxOut>& allPrevOutputs,
-    const orchard::UnauthorizedBundle& orchardBundle)
+    const sapling::UnauthorizedBundle& saplingBundle,
+    const std::optional<orchard::UnauthorizedBundle>& orchardBundle)
 {
-    uint256 dataToBeSigned;
-    PrecomputedTransactionData local(tx, allPrevOutputs);
-    if (!zcash_builder_zip244_shielded_signature_digest(
-        local.preTx.release(),
-        orchardBundle.inner.get(),
-        dataToBeSigned.begin()))
-    {
-        throw std::logic_error("ZIP 225 signature hash failed");
+    CDataStream sTx(SER_NETWORK, PROTOCOL_VERSION);
+    sTx << tx;
+
+    CDataStream sAllPrevOutputs(SER_NETWORK, PROTOCOL_VERSION);
+    sAllPrevOutputs << allPrevOutputs;
+
+    const OrchardUnauthorizedBundlePtr* orchardBundlePtr;
+    if (orchardBundle.has_value()) {
+        orchardBundlePtr = orchardBundle->inner.get();
+    } else {
+        orchardBundlePtr = nullptr;
     }
-    return dataToBeSigned;
+
+    auto dataToBeSigned = builder::shielded_signature_digest(
+        consensusBranchId,
+        {reinterpret_cast<const unsigned char*>(sTx.data()), sTx.size()},
+        {reinterpret_cast<const unsigned char*>(sAllPrevOutputs.data()), sAllPrevOutputs.size()},
+        saplingBundle,
+        orchardBundlePtr);
+    return uint256::FromRawBytes(dataToBeSigned);
 }
 
 namespace orchard {
@@ -63,18 +77,23 @@ void Builder::AddOutput(
     const std::optional<uint256>& ovk,
     const libzcash::OrchardRawAddress& to,
     CAmount value,
-    const std::optional<std::array<unsigned char, ZC_MEMO_SIZE>>& memo)
+    const std::optional<libzcash::Memo>& memo,
+    Asset asset)
 {
     if (!inner) {
         throw std::logic_error("orchard::Builder has already been used");
     }
+
+    // TODO implement multi-asset transfers
+    primaryAsset = asset;
 
     orchard_builder_add_recipient(
         inner.get(),
         ovk.has_value() ? ovk->begin() : nullptr,
         to.inner.get(),
         value,
-        memo.has_value() ? memo->data() : nullptr);
+        asset.id,
+        memo.has_value() ? memo.value().ToBytes().data() : nullptr);
 
     hasActions = true;
 }
@@ -115,64 +134,6 @@ std::optional<OrchardBundle> UnauthorizedBundle::ProveAndSign(
 }
 
 } // namespace orchard
-
-SpendDescriptionInfo::SpendDescriptionInfo(
-    libzcash::SaplingExpandedSpendingKey expsk,
-    libzcash::SaplingNote note,
-    uint256 anchor,
-    SaplingWitness witness) : expsk(expsk), note(note), anchor(anchor), witness(witness)
-{
-    librustzcash_sapling_generate_r(alpha.begin());
-}
-
-std::optional<OutputDescription> OutputDescriptionInfo::Build(rust::Box<sapling::Prover>& ctx) {
-    auto cmu = this->note.cmu();
-    if (!cmu) {
-        return std::nullopt;
-    }
-
-    libzcash::SaplingNotePlaintext notePlaintext(this->note, this->memo);
-
-    auto res = notePlaintext.encrypt(this->note.pk_d);
-    if (!res) {
-        return std::nullopt;
-    }
-    auto enc = res.value();
-    auto encryptor = enc.second;
-
-    libzcash::SaplingPaymentAddress address(this->note.d, this->note.pk_d);
-    CDataStream ss(SER_NETWORK, PROTOCOL_VERSION);
-    ss << address;
-    std::array<unsigned char, 43> addressBytes;
-    std::move(ss.begin(), ss.end(), addressBytes.begin());
-
-    std::array<unsigned char, 32> cvBytes;
-    OutputDescription odesc;
-    uint256 rcm = this->note.rcm();
-    if (!ctx->create_output_proof(
-            encryptor.get_esk().GetRawBytes(),
-            addressBytes,
-            rcm.GetRawBytes(),
-            this->note.value(),
-            cvBytes,
-            odesc.zkproof)) {
-        return std::nullopt;
-    }
-
-    odesc.cv = uint256::FromRawBytes(cvBytes);
-    odesc.cmu = *cmu;
-    odesc.ephemeralKey = encryptor.get_epk();
-    odesc.encCiphertext = enc.first;
-
-    libzcash::SaplingOutgoingPlaintext outPlaintext(this->note.pk_d, encryptor.get_esk());
-    odesc.outCiphertext = outPlaintext.encrypt(
-        this->ovk,
-        odesc.cv,
-        odesc.cmu,
-        encryptor);
-
-    return odesc;
-}
 
 JSDescription JSDescriptionInfo::BuildDeterministic(
     bool computeProof,
@@ -251,18 +212,19 @@ std::string TransactionBuilderResult::GetError() {
 }
 
 TransactionBuilder::TransactionBuilder(
-    const Consensus::Params& consensusParams,
+    const CChainParams& params,
     int nHeight,
     std::optional<uint256> orchardAnchor,
     const CKeyStore* keystore,
     const CCoinsViewCache* coinsView,
     CCriticalSection* cs_coinsView) :
-    consensusParams(consensusParams),
+    consensusParams(params.GetConsensus()),
     nHeight(nHeight),
     keystore(keystore),
     coinsView(coinsView),
     cs_coinsView(cs_coinsView),
-    orchardAnchor(orchardAnchor)
+    orchardAnchor(orchardAnchor),
+    saplingBuilder(sapling::new_builder(*params.RustNetwork(), nHeight))
 {
     mtx = CreateNewContextualCMutableTransaction(
             consensusParams, nHeight,
@@ -334,7 +296,8 @@ void TransactionBuilder::AddOrchardOutput(
     const std::optional<uint256>& ovk,
     const libzcash::OrchardRawAddress& to,
     CAmount value,
-    const std::optional<std::array<unsigned char, ZC_MEMO_SIZE>>& memo)
+    const std::optional<libzcash::Memo>& memo,
+    Asset asset)
 {
     if (!orchardBuilder.has_value()) {
         // Try to give a useful error.
@@ -346,15 +309,13 @@ void TransactionBuilder::AddOrchardOutput(
             throw std::runtime_error("TransactionBuilder cannot add Orchard output without Orchard anchor");
         }
     }
-
-    orchardBuilder.value().AddOutput(ovk, to, value, memo);
+    orchardBuilder.value().AddOutput(ovk, to, value, memo, asset);
     valueBalanceOrchard -= value;
 }
 
 void TransactionBuilder::AddSaplingSpend(
-    libzcash::SaplingExpandedSpendingKey expsk,
+    libzcash::SaplingExtendedSpendingKey extsk,
     libzcash::SaplingNote note,
-    uint256 anchor,
     SaplingWitness witness)
 {
     // Sanity check: cannot add Sapling spend to pre-Sapling transaction
@@ -362,35 +323,46 @@ void TransactionBuilder::AddSaplingSpend(
         throw std::runtime_error("TransactionBuilder cannot add Sapling spend to pre-Sapling transaction");
     }
 
-    // Consistency check: all anchors must equal the first one
-    if (spends.size() > 0 && spends[0].anchor != anchor) {
-        throw JSONRPCError(RPC_WALLET_ERROR, "Anchor does not match previously-added Sapling spends.");
-    }
+    CDataStream ssExtSk(SER_NETWORK, PROTOCOL_VERSION);
+    ssExtSk << extsk;
 
-    spends.emplace_back(expsk, note, anchor, witness);
-    mtx.valueBalanceSapling += note.value();
+    libzcash::SaplingPaymentAddress recipient(note.d, note.pk_d);
+
+    CDataStream ssPath(SER_NETWORK, PROTOCOL_VERSION);
+    ssPath << witness.path();
+    std::array<unsigned char, 1065> merkle_path;
+    std::move(ssPath.begin(), ssPath.end(), merkle_path.begin());
+
+    saplingBuilder->add_spend(
+        {reinterpret_cast<uint8_t*>(ssExtSk.data()), ssExtSk.size()},
+        note.d,
+        recipient.GetRawBytes(),
+        note.value(),
+        note.rcm().GetRawBytes(),
+        merkle_path);
+    if (!firstSaplingSpendAddr.has_value()) {
+        firstSaplingSpendAddr = std::make_pair(
+            extsk.ToXFVK().GetOVKs().first,
+            libzcash::SaplingPaymentAddress(note.d, note.pk_d));
+    }
+    valueBalanceSapling += note.value();
 }
 
 void TransactionBuilder::AddSaplingOutput(
     uint256 ovk,
-    libzcash::SaplingPaymentAddress to,
+    const libzcash::SaplingPaymentAddress& to,
     CAmount value,
-    std::array<unsigned char, ZC_MEMO_SIZE> memo)
+    const std::optional<libzcash::Memo>& memo)
 {
     // Sanity check: cannot add Sapling output to pre-Sapling transaction
     if (mtx.nVersion < SAPLING_TX_VERSION) {
         throw std::runtime_error("TransactionBuilder cannot add Sapling output to pre-Sapling transaction");
     }
 
-    libzcash::Zip212Enabled zip_212_enabled = libzcash::Zip212Enabled::BeforeZip212;
-    // We use nHeight = chainActive.Height() + 1 since the output will be included in the next block
-    if (consensusParams.NetworkUpgradeActive(nHeight, Consensus::UPGRADE_CANOPY)) {
-        zip_212_enabled = libzcash::Zip212Enabled::AfterZip212;
-    }
+    auto memoBytes = libzcash::Memo::ToBytes(memo);
 
-    auto note = libzcash::SaplingNote(to, value, zip_212_enabled);
-    outputs.emplace_back(ovk, note, memo);
-    mtx.valueBalanceSapling -= value;
+    saplingBuilder->add_recipient(ovk.GetRawBytes(), to.GetRawBytes(), value, memoBytes);
+    valueBalanceSapling -= value;
 }
 
 void TransactionBuilder::AddSproutInput(
@@ -411,9 +383,9 @@ void TransactionBuilder::AddSproutInput(
 }
 
 void TransactionBuilder::AddSproutOutput(
-    libzcash::SproutPaymentAddress to,
+    const libzcash::SproutPaymentAddress& to,
     CAmount value,
-    std::array<unsigned char, ZC_MEMO_SIZE> memo)
+    const std::optional<libzcash::Memo>& memo)
 {
     CheckOrSetUsingSprout();
 
@@ -457,7 +429,7 @@ void TransactionBuilder::SendChangeTo(
     saplingChangeAddr = std::nullopt;
     sproutChangeAddr = std::nullopt;
 
-    std::visit(match {
+    examine(changeAddr, match {
         [&](const CKeyID& keyId) {
             tChangeAddr = keyId;
         },
@@ -470,7 +442,7 @@ void TransactionBuilder::SendChangeTo(
         [&](const libzcash::OrchardRawAddress& changeDest) {
             orchardChangeAddr = std::make_pair(ovk, changeDest);
         }
-    }, changeAddr);
+    });
 }
 
 void TransactionBuilder::SendChangeToSprout(const libzcash::SproutPaymentAddress& zaddr) {
@@ -487,7 +459,7 @@ TransactionBuilderResult TransactionBuilder::Build()
     //
 
     // Valid change
-    CAmount change = mtx.valueBalanceSapling + valueBalanceOrchard - fee;
+    CAmount change = valueBalanceSapling + valueBalanceOrchard - fee;
     for (auto jsInput : jsInputs) {
         change += jsInput.note.value();
     }
@@ -501,7 +473,8 @@ TransactionBuilderResult TransactionBuilder::Build()
         change -= tOut.nValue;
     }
     if (change < 0) {
-        return TransactionBuilderResult("Change cannot be negative");
+        return TransactionBuilderResult(
+                strprintf("Change cannot be negative: %s", DisplayMoney(change)));
     }
 
     //
@@ -509,30 +482,31 @@ TransactionBuilderResult TransactionBuilder::Build()
     //
 
     if (change > 0) {
+        auto asset = orchardBuilder.value().primaryAsset.value();
         // Send change to the specified change address. If no change address
         // was set, send change to the first Sapling address given as input
         // if any; otherwise the first Sprout address given as input.
         // (A t-address can only be used as the change address if explicitly set.)
         if (orchardChangeAddr) {
-            AddOrchardOutput(orchardChangeAddr->first, orchardChangeAddr->second, change, std::nullopt);
+            AddOrchardOutput(orchardChangeAddr->first, orchardChangeAddr->second, change, std::nullopt, asset);
         } else if (saplingChangeAddr) {
-            AddSaplingOutput(saplingChangeAddr->first, saplingChangeAddr->second, change);
+            AddSaplingOutput(saplingChangeAddr->first, saplingChangeAddr->second, change, std::nullopt);
         } else if (sproutChangeAddr) {
-            AddSproutOutput(sproutChangeAddr.value(), change);
+            AddSproutOutput(sproutChangeAddr.value(), change, std::nullopt);
         } else if (tChangeAddr) {
             // tChangeAddr has already been validated.
             AddTransparentOutput(tChangeAddr.value(), change);
         } else if (firstOrchardSpendAddr.has_value()) {
             auto ovk = orchardSpendingKeys[0].ToFullViewingKey().ToInternalOutgoingViewingKey();
-            AddOrchardOutput(ovk, firstOrchardSpendAddr.value(), change, std::nullopt);
-        } else if (!spends.empty()) {
-            auto fvk = spends[0].expsk.full_viewing_key();
-            auto note = spends[0].note;
-            libzcash::SaplingPaymentAddress changeAddr(note.d, note.pk_d);
-            AddSaplingOutput(fvk.ovk, changeAddr, change);
+            AddOrchardOutput(ovk, firstOrchardSpendAddr.value(), change, std::nullopt, asset);
+        } else if (firstSaplingSpendAddr.has_value()) {
+            uint256 ovk;
+            libzcash::SaplingPaymentAddress changeAddr;
+            std::tie(ovk, changeAddr) = firstSaplingSpendAddr.value();
+            AddSaplingOutput(ovk, changeAddr, change, std::nullopt);
         } else if (!jsInputs.empty()) {
             auto changeAddr = jsInputs[0].key.address();
-            AddSproutOutput(changeAddr, change);
+            AddSproutOutput(changeAddr, change, std::nullopt);
         } else {
             return TransactionBuilderResult("Could not determine change address");
         }
@@ -556,69 +530,20 @@ TransactionBuilderResult TransactionBuilder::Build()
     // Sapling spends and outputs
     //
 
-    auto ctx = sapling::init_prover();
-
-    // Create Sapling SpendDescriptions
-    for (auto spend : spends) {
-        auto cm = spend.note.cmu();
-        auto nf = spend.note.nullifier(
-            spend.expsk.full_viewing_key(), spend.witness.position());
-        if (!cm || !nf) {
-            return TransactionBuilderResult("Spend is invalid");
-        }
-
-        CDataStream ss(SER_NETWORK, PROTOCOL_VERSION);
-        ss << spend.witness.path();
-        std::array<unsigned char, 1065> witness;
-        std::move(ss.begin(), ss.end(), witness.begin());
-
-        std::array<unsigned char, 32> cv;
-        std::array<unsigned char, 32> rk;
-        SpendDescription sdesc;
-        uint256 rcm = spend.note.rcm();
-        if (!ctx->create_spend_proof(
-                spend.expsk.full_viewing_key().ak.GetRawBytes(),
-                spend.expsk.nsk.GetRawBytes(),
-                spend.note.d,
-                rcm.GetRawBytes(),
-                spend.alpha.GetRawBytes(),
-                spend.note.value(),
-                spend.anchor.GetRawBytes(),
-                witness,
-                cv,
-                rk,
-                sdesc.zkproof)) {
-            return TransactionBuilderResult("Spend proof failed");
-        }
-
-        sdesc.cv = uint256::FromRawBytes(cv);
-        sdesc.rk = uint256::FromRawBytes(rk);
-        sdesc.anchor = spend.anchor;
-        sdesc.nullifier = *nf;
-        mtx.vShieldedSpend.push_back(sdesc);
+    std::optional<rust::Box<sapling::UnauthorizedBundle>> maybeSaplingBundle;
+    try {
+        maybeSaplingBundle = sapling::build_bundle(std::move(saplingBuilder), nHeight);
+    } catch (rust::Error e) {
+        return TransactionBuilderResult("Failed to build Sapling bundle: " + std::string(e.what()));
     }
-
-    // Create Sapling OutputDescriptions
-    for (auto output : outputs) {
-        // Check this out here as well to provide better logging.
-        if (!output.note.cmu()) {
-            return TransactionBuilderResult("Output is invalid");
-        }
-
-        auto odesc = output.Build(ctx);
-        if (!odesc) {
-            return TransactionBuilderResult("Failed to create output description");
-        }
-
-        mtx.vShieldedOutput.push_back(odesc.value());
-    }
+    auto saplingBundle = std::move(maybeSaplingBundle.value());
 
     //
     // Sprout JoinSplits
     //
 
-    Ed25519SigningKey joinSplitPrivKey;
-    ed25519_generate_keypair(&joinSplitPrivKey, &mtx.joinSplitPubKey);
+    ed25519::SigningKey joinSplitPrivKey;
+    ed25519::generate_keypair(joinSplitPrivKey, mtx.joinSplitPubKey);
 
     // Create Sprout JSDescriptions
     if (!jsInputs.empty() || !jsOutputs.empty()) {
@@ -638,9 +563,14 @@ TransactionBuilderResult TransactionBuilder::Build()
     // Empty output script.
     uint256 dataToBeSigned;
     try {
-        if (orchardBundle.has_value()) {
-            // Orchard is only usable with v5+ transactions.
-            dataToBeSigned = ProduceZip244SignatureHash(mtx, tIns, orchardBundle.value());
+        if (mtx.fOverwintered) {
+            // ProduceShieldedSignatureHash is only usable with v3+ transactions.
+            dataToBeSigned = ProduceShieldedSignatureHash(
+                consensusBranchId,
+                mtx,
+                tIns,
+                *saplingBundle,
+                orchardBundle);
         } else {
             CScript scriptCode;
             const PrecomputedTransactionData txdata(mtx, tIns);
@@ -663,32 +593,24 @@ TransactionBuilderResult TransactionBuilder::Build()
     }
 
     // Create Sapling spendAuth and binding signatures
-    for (size_t i = 0; i < spends.size(); i++) {
-        librustzcash_sapling_spend_sig(
-            spends[i].expsk.ask.begin(),
-            spends[i].alpha.begin(),
-            dataToBeSigned.begin(),
-            mtx.vShieldedSpend[i].spendAuthSig.data());
+    try {
+        mtx.saplingBundle = sapling::apply_bundle_signatures(
+            std::move(saplingBundle), dataToBeSigned.GetRawBytes());
+    } catch (rust::Error e) {
+        return TransactionBuilderResult(e.what());
     }
-    ctx->binding_sig(
-        mtx.valueBalanceSapling,
-        dataToBeSigned.GetRawBytes(),
-        mtx.bindingSig);
 
     // Create Sprout joinSplitSig
-    if (!ed25519_sign(
-        &joinSplitPrivKey,
-        dataToBeSigned.begin(), 32,
-        &mtx.joinSplitSig))
-    {
-        return TransactionBuilderResult("Failed to create Sprout joinSplitSig");
-    }
+    ed25519::sign(
+        joinSplitPrivKey,
+        {dataToBeSigned.begin(), 32},
+        mtx.joinSplitSig);
 
     // Sanity check Sprout joinSplitSig
-    if (!ed25519_verify(
-        &mtx.joinSplitPubKey,
-        &mtx.joinSplitSig,
-        dataToBeSigned.begin(), 32))
+    if (!ed25519::verify(
+        mtx.joinSplitPubKey,
+        mtx.joinSplitSig,
+        {dataToBeSigned.begin(), 32}))
     {
         return TransactionBuilderResult("Sprout joinSplitSig sanity check failed");
     }

@@ -7,11 +7,16 @@
 #include "NoteEncryption.hpp"
 #include "consensus/params.h"
 #include "consensus/consensus.h"
+#include "zcash/memo.h"
 
 #include <array>
 #include <optional>
 
+#include <rust/bridge.h>
+
 namespace libzcash {
+
+typedef std::array<uint8_t, 32> nullifier_t;
 
 class BaseNote {
 protected:
@@ -94,15 +99,17 @@ public:
 class BaseNotePlaintext {
 protected:
     uint64_t value_ = 0;
-    std::array<unsigned char, ZC_MEMO_SIZE> memo_;
+    /// This needs to hold the `Memo::Bytes` directly because we encrypt the in-memory
+    /// representation of this class.
+    Memo::Bytes memo_;
 public:
     BaseNotePlaintext() {}
-    BaseNotePlaintext(const BaseNote& note, std::array<unsigned char, ZC_MEMO_SIZE> memo)
-        : value_(note.value()), memo_(memo) {}
+    BaseNotePlaintext(const BaseNote& note, const std::optional<Memo>& memo)
+        : value_(note.value()), memo_(Memo::ToBytes(memo)) {}
     virtual ~BaseNotePlaintext() {}
 
     inline uint64_t value() const { return value_; }
-    inline const std::array<unsigned char, ZC_MEMO_SIZE> & memo() const { return memo_; }
+    inline std::optional<Memo> memo() const { return Memo::FromBytes(memo_); }
 };
 
 class SproutNotePlaintext : public BaseNotePlaintext {
@@ -112,7 +119,7 @@ public:
 
     SproutNotePlaintext() {}
 
-    SproutNotePlaintext(const SproutNote& note, std::array<unsigned char, ZC_MEMO_SIZE> memo);
+    SproutNotePlaintext(const SproutNote& note, const std::optional<Memo>& memo);
 
     SproutNote note(const SproutPaymentAddress& addr) const;
 
@@ -158,29 +165,10 @@ public:
 
     SaplingNotePlaintext() {}
 
-    SaplingNotePlaintext(const SaplingNote& note, std::array<unsigned char, ZC_MEMO_SIZE> memo);
+    SaplingNotePlaintext(const SaplingNote& note, const std::optional<Memo>& memo);
 
-    static std::optional<SaplingNotePlaintext> decrypt(
-        const Consensus::Params& params,
-        int height,
-        const SaplingEncCiphertext &ciphertext,
-        const uint256 &ivk,
-        const uint256 &epk,
-        const uint256 &cmu
-    );
-
-    static std::optional<SaplingNotePlaintext> plaintext_checks_without_height(
-        const SaplingNotePlaintext &plaintext,
-        const uint256 &ivk,
-        const uint256 &epk,
-        const uint256 &cmu
-    );
-
-    static std::optional<SaplingNotePlaintext> attempt_sapling_enc_decryption_deserialization(
-        const SaplingEncCiphertext &ciphertext,
-        const uint256 &ivk,
-        const uint256 &epk
-    );
+    static std::pair<SaplingNotePlaintext, SaplingPaymentAddress> from_rust(
+        rust::Box<wallet::DecryptedSaplingOutput> decrypted);
 
     static std::optional<SaplingNotePlaintext> decrypt(
         const Consensus::Params& params,
@@ -193,7 +181,6 @@ public:
     );
 
     static std::optional<SaplingNotePlaintext> plaintext_checks_without_height(
-        bool zip216Enabled,
         const SaplingNotePlaintext &plaintext,
         const uint256 &epk,
         const uint256 &esk,
@@ -202,7 +189,6 @@ public:
     );
 
     static std::optional<SaplingNotePlaintext> attempt_sapling_enc_decryption_deserialization(
-        bool zip216Enabled,
         const SaplingEncCiphertext &ciphertext,
         const uint256 &epk,
         const uint256 &esk,
@@ -228,8 +214,6 @@ public:
         READWRITE(rseed);       // 32 bytes
         READWRITE(memo_);       // 512 bytes
     }
-
-    std::optional<SaplingNotePlaintextEncryptionResult> encrypt(const uint256& pk_d) const;
 
     uint256 rcm() const;
     uint256 generate_or_derive_esk() const;
@@ -263,13 +247,6 @@ public:
         const uint256& cm,
         const uint256& epk
     );
-
-    SaplingOutCiphertext encrypt(
-        const uint256& ovk,
-        const uint256& cv,
-        const uint256& cm,
-        SaplingNoteEncryption& enc
-    ) const;
 };
 
 
