@@ -75,28 +75,6 @@ class IssueTest(BitcoinTestFramework):
             self.nodes[nx].generate(int(n))
             counter += 1
 
-        # Issue assets to an address on node 0
-#        self.nodes[0].issue(0, ua0_alice, "WBTC", 4001, True)
-
-        # Issue assets to an address on node 1
-#        self.nodes[0].issue(0, ua0_felix, "WBTC", 42, True)
-
-#        self.sync_all()
-#        self.nodes[0].generate(1)
-#        self.sync_all()
-
-#        walletinfo0 = self.nodes[0].getwalletinfo()
-#        print(walletinfo0)
-#        assert_equal(len(walletinfo0['asset_balances'].items()), 1)
-#        for key, value in walletinfo0['asset_balances'].items():
-#            assert_equal(value['confirmed_balance'], 4001)
-
-
-#        walletinfo1 = self.nodes[1].getwalletinfo()
-#        print(walletinfo1)
-#        assert_equal(len(walletinfo1['asset_balances'].items()), 1)
-#        for key, value in walletinfo1['asset_balances'].items():
-#            assert_equal(value['confirmed_balance'], 42)
 
 if __name__ == '__main__':
     IssueTest().main()
