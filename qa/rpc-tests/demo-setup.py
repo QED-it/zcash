@@ -12,7 +12,8 @@ from test_framework.util import (
     rpc_url,
 )
 
-import time
+import time, json, os, re
+from decimal import Decimal
 
 class IssueTest(BitcoinTestFramework):
     def __init__(self):
@@ -47,26 +48,66 @@ class IssueTest(BitcoinTestFramework):
         self.nodes[0].generate(5)
         self.sync_all()
 
-        # Print details post account setup:
+        # Save necessary details to files for use in demo shell script (store in ./testfiles directory)
+        
+        os.makedirs(os.path.join(os.path.dirname(__file__),'testfiles'), exist_ok=True)
+
+        with open(os.path.join(os.path.dirname(__file__),'testfiles','ua0_alice.txt'), 'wt') as f:
+            f.write(ua0_alice)
+
+        with open(os.path.join(os.path.dirname(__file__),'testfiles','ua1_alice.txt'), 'wt') as f:
+            f.write(ua1_alice)
+
+        with open(os.path.join(os.path.dirname(__file__),'testfiles','ua0_felix.txt'), 'wt') as f:
+            f.write(ua0_felix)
+
+        with open(os.path.join(os.path.dirname(__file__),'testfiles','ua0_mfg.txt'), 'wt') as f:
+            f.write(ua0_mfg)
+
+        with open(os.path.join(os.path.dirname(__file__),'testfiles','port_alice.txt'), 'wt') as f:
+            f.write(rpc_url(0).split(":")[3])
+
+        with open(os.path.join(os.path.dirname(__file__),'testfiles','port_felix.txt'), 'wt') as f:
+            f.write(rpc_url(1).split(":")[3])
+
+        with open(os.path.join(os.path.dirname(__file__),'testfiles','port_mfg.txt'), 'wt') as f:
+            f.write(rpc_url(2).split(":")[3])
+
+        with open(os.path.join(os.path.dirname(__file__),'testfiles','auth_alice.txt'), 'wt') as f:
+            f.write(rpc_url(0).split("@")[0].split("//")[1])
+
+        with open(os.path.join(os.path.dirname(__file__),'testfiles','auth_felix.txt'), 'wt') as f:
+            f.write(rpc_url(1).split("@")[0].split("//")[1])
+
+        with open(os.path.join(os.path.dirname(__file__),'testfiles','auth_mfg.txt'), 'wt') as f:
+            f.write(rpc_url(2).split("@")[0].split("//")[1])
+
+        # Print details post account setup
 
         #Alice:
-        print("\n\nAlice's port is:", rpc_url(0))
+        print("\n\n -------------- ALICE --------------\n")
+        print("\nAlice's port is:", rpc_url(0))
         print("\nAlice's Unified Address on Account 0 is:", ua0_alice)
         print("\nAlice's Unified Address on Account 1 is:", ua1_alice)
         print("\nAlice's wallet details:\n")
-        print(self.nodes[0].getwalletinfo())
+        print(json.dumps(self.nodes[0].getwalletinfo(), default=str, indent=4))
+        print("\n --------------  --------------\n")
 
         #Felix:
-        print("\n\nFelix's port is:", rpc_url(1))
+        print("\n\n -------------- FELIX --------------\n")
+        print("\nFelix's port is:", rpc_url(1))
         print("\nFelix's Unified Address on Account 0 is:", ua0_felix)
         print("\nFelix's wallet details:\n")
-        print(self.nodes[1].getwalletinfo())
+        print(json.dumps(self.nodes[1].getwalletinfo(), default=str, indent=4))
+        print("\n --------------  --------------\n")
 
         #Manufacturer:
-        print("\n\nThe manufacturer's port is:", rpc_url(2))
+        print("\n\n -------------- MANUFACTURER --------------\n")
+        print("\nThe manufacturer's port is:", rpc_url(2))
         print("\nThe manufacturer's Unified Address on Account 0 is:", ua0_mfg)
         print("\nThe manufacturer's wallet details:\n")
-        print(self.nodes[2].getwalletinfo())
+        print(json.dumps(self.nodes[2].getwalletinfo(), default=str, indent=4))
+        print("\n --------------  --------------\n")
 
         counter = 0
         while True: 
