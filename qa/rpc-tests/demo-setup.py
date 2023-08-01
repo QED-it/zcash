@@ -85,35 +85,38 @@ class IssueTest(BitcoinTestFramework):
         # Print details post account setup
 
         #Alice:
-        print("\n\n -------------- ALICE --------------\n")
+        print("\n\n ======================== ALICE ======================== \n")
         print("\nAlice's port is:", rpc_url(0))
         print("\nAlice's Unified Address on Account 0 is:", ua0_alice)
         print("\nAlice's Unified Address on Account 1 is:", ua1_alice)
         print("\nAlice's wallet details:\n")
         print(json.dumps(self.nodes[0].getwalletinfo(), default=str, indent=4))
-        print("\n --------------  --------------\n")
+        print("\n =======================================================\n")
 
         #Felix:
-        print("\n\n -------------- FELIX --------------\n")
+        print("\n\n ======================== FELIX =========================\n")
         print("\nFelix's port is:", rpc_url(1))
         print("\nFelix's Unified Address on Account 0 is:", ua0_felix)
         print("\nFelix's wallet details:\n")
         print(json.dumps(self.nodes[1].getwalletinfo(), default=str, indent=4))
-        print("\n --------------  --------------\n")
+        print("\n ======================================================= \n")
+
 
         #Manufacturer:
-        print("\n\n -------------- MANUFACTURER --------------\n")
+        print("\n\n ======================== MANUFACTURER ========================\n")
         print("\nThe manufacturer's port is:", rpc_url(2))
         print("\nThe manufacturer's Unified Address on Account 0 is:", ua0_mfg)
         print("\nThe manufacturer's wallet details:\n")
         print(json.dumps(self.nodes[2].getwalletinfo(), default=str, indent=4))
-        print("\n --------------  --------------\n")
+        print("\n ============================================================= \n")
 
         counter = 0
         while True: 
             n = input("\n\nPlease input the number of blocks to generate and press Enter, or press Ctrl+C to exit: ")
             nx = counter % self.num_nodes
+            self.sync_all()
             self.nodes[nx].generate(int(n))
+            self.sync_all()
             counter += 1
 
 
