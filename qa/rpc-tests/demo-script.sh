@@ -176,7 +176,8 @@ echo "..........................................................................
 
 curl --user `cat qa/rpc-tests/testfiles/auth_mfg.txt` --data-binary '{"jsonrpc": "1.0", "id":"curltest", "method": "getwalletinfo", "params": [] }' -H 'content-type: text/plain;' http://127.0.0.1:`cat qa/rpc-tests/testfiles/port_mfg.txt`/ | jq
 
-echo "This successfully demonstrates transfer of the Asset from Felix to the manufacturer."
+echo "This successfully demonstrates transfer of the Asset from Felix to"
+echo "the manufacturer.\n"
 
 echo "============================================================================"
 echo "THANK YOU!                                                                  "
