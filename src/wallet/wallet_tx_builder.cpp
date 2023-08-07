@@ -535,7 +535,8 @@ AddChangePayment(
         CAmount targetAmount)
 {
     // TODO: This is a hack to get the asset from the first spendable input. We need to implement transaction with multiple assets
-    auto asset = spendable.orchardNoteMetadata[0].GetAsset();
+    // TODO: FIXME: Is this a correct fix?
+    auto asset = spendable.orchardNoteMetadata.empty() ? Asset::Native() : spendable.orchardNoteMetadata[0].GetAsset();
 
     assert(changeAmount > 0);
 
