@@ -482,7 +482,10 @@ TransactionBuilderResult TransactionBuilder::Build()
     //
 
     if (change > 0) {
-        auto asset = orchardBuilder.value().primaryAsset.value();
+        // FIXME: orchardBuilder is not set in TransactionBuilder::TransactionBuilder as orchardAnchor passed as nullopt
+        auto asset = orchardBuilder.has_value() && orchardBuilder.value().primaryAsset.has_value()
+            ? orchardBuilder.value().primaryAsset.value()
+            : Asset::Native();
         // Send change to the specified change address. If no change address
         // was set, send change to the first Sapling address given as input
         // if any; otherwise the first Sprout address given as input.

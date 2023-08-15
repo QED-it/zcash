@@ -28,7 +28,7 @@ pub extern "C" fn issuance_key_free(key: *mut IssuanceKey) {
 #[no_mangle]
 pub extern "C" fn issuance_key_clone(key: *const IssuanceKey) -> *mut IssuanceKey {
     unsafe { key.as_ref() }
-        .map(|key| Box::into_raw(Box::new(key.clone())))
+        .map(|key| Box::into_raw(Box::new(*key)))
         .unwrap_or(std::ptr::null_mut())
 }
 
