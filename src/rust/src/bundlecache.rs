@@ -113,7 +113,7 @@ pub(crate) fn init(cache_bytes: usize) {
         )));
         ISSUE_BUNDLE_VALIDITY_CACHE = Some(RwLock::new(BundleValidityCache::new(
             "Issue",
-            b"IssueVeriCache",
+            b"Issue__VeriCache",
             cache_bytes,
         )));
     });

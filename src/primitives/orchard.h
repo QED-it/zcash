@@ -135,10 +135,6 @@ public:
     bool CoinbaseOutputsAreValid() const {
         return inner->coinbase_outputs_are_valid();
     }
-
-    bool CoinbaseOutputsAreValid() const {
-        return inner->coinbase_outputs_are_valid();
-    }
 };
 
 #endif // ZCASH_PRIMITIVES_ORCHARD_H

@@ -1,6 +1,5 @@
 use std::convert::TryInto;
 
-use rand_core::OsRng;
 use tracing::{debug, error};
 
 use crate::{
@@ -13,10 +12,10 @@ struct BatchValidatorInner {
     queued_entries: CacheEntries,
 }
 
-pub(crate) struct BatchValidator(Option<BatchValidatorInner>);
+pub struct BatchValidator(Option<BatchValidatorInner>);
 
 /// Creates an Issue bundle batch validation context.
-pub(crate) fn issue_batch_validation_init(cache_store: bool) -> Box<BatchValidator> {
+pub fn issue_batch_validation_init(cache_store: bool) -> Box<BatchValidator> {
     Box::new(BatchValidator(Some(BatchValidatorInner {
         validator: orchard::issuance::BatchValidator::new(),
         queued_entries: CacheEntries::new(cache_store),
@@ -25,7 +24,7 @@ pub(crate) fn issue_batch_validation_init(cache_store: bool) -> Box<BatchValidat
 
 impl BatchValidator {
     /// Adds an Issue bundle to this batch.
-    pub(crate) fn add_bundle(&mut self, bundle: Box<IsssueBundle>, sighash: [u8; 32]) {
+    pub(crate) fn add_bundle(&mut self, bundle: Box<IssueBundle>, sighash: [u8; 32]) {
         let batch = self.0.as_mut();
         let bundle = bundle.inner();
 
@@ -68,8 +67,9 @@ impl BatchValidator {
     /// The batch validation context is freed by this function.
     pub(crate) fn validate(&mut self) -> bool {
         if let Some(inner) = self.0.take() {
-            let vk = unsafe { crate::ISSUE_VK.as_ref() }
-                .expect("Parameters not loaded: ISSUE_VK should have been initialized");
+            // FIXME: TODO: consider uncommenting this and adding ISSUE_VK
+            //let vk = unsafe { crate::ISSUE_VK.as_ref() }
+            //    .expect("Parameters not loaded: ISSUE_VK should have been initialized");
             if inner.validator.validate() {
                 // `BatchValidator::validate()` is only called if every
                 // `BatchValidator::check_bundle()` returned `true`, so at this point
