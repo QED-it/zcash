@@ -415,6 +415,7 @@ bool ContextualCheckShieldedInputs(
         const CCoinsViewCache &view,
         std::optional<rust::Box<sapling::BatchValidator>>& saplingAuth,
         std::optional<rust::Box<orchard::BatchValidator>>& orchardAuth,
+        std::optional<rust::Box<issue_bundle::BatchValidator>>& issueAuth,
         const Consensus::Params& consensus,
         uint32_t consensusBranchId,
         bool nu5Active,

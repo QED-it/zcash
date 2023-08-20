@@ -1293,6 +1293,7 @@ bool ContextualCheckShieldedInputs(
         const CCoinsViewCache &view,
         std::optional<rust::Box<sapling::BatchValidator>>& saplingAuth,
         std::optional<rust::Box<orchard::BatchValidator>>& orchardAuth,
+        std::optional<rust::Box<issue_bundle::BatchValidator>>& issueAuth,
         const Consensus::Params& consensus,
         uint32_t consensusBranchId,
         bool nu5Active,
@@ -1373,6 +1374,11 @@ bool ContextualCheckShieldedInputs(
     // Queue Orchard bundle to be batch-validated.
     if (orchardAuth.has_value()) {
         tx.GetOrchardBundle().QueueAuthValidation(*orchardAuth.value(), dataToBeSigned);
+    }
+
+    // Queue Issue bundle to be batch-validated.
+    if (issueAuth.has_value()) {
+        tx.GetIssueBundle().QueueAuthValidation(*issueAuth.value(), dataToBeSigned);
     }
 
     return true;
@@ -1980,6 +1986,9 @@ bool AcceptToMemoryPool(
         // Orchard bundle contains at least two signatures.
         std::optional<rust::Box<orchard::BatchValidator>> orchardAuth = orchard::init_batch_validator(true);
 
+        // This will be a single-transaction batch for IssueAuth
+        std::optional<rust::Box<issue_bundle::BatchValidator>> issueAuth = issue_bundle::init_batch_validator(true);
+
         // Check shielded input signatures.
         if (!ContextualCheckShieldedInputs(
             tx,
@@ -1988,6 +1997,7 @@ bool AcceptToMemoryPool(
             view,
             saplingAuth,
             orchardAuth,
+            issueAuth,
             chainparams.GetConsensus(),
             consensusBranchId,
             chainparams.GetConsensus().NetworkUpgradeActive(nextBlockHeight, Consensus::UPGRADE_NU5),
@@ -1996,13 +2006,17 @@ bool AcceptToMemoryPool(
             return false;
         }
 
-        // Check Sapling and Orchard bundle authorizations.
+        // Check Sapling, Orchard and Issue bundle authorizations.
         // `saplingAuth` and `orchardAuth` are known here to be non-null.
         if (!saplingAuth.value()->validate()) {
             return state.DoS(100, false, REJECT_INVALID, "bad-sapling-bundle-authorization");
         }
         if (!orchardAuth.value()->validate()) {
             return state.DoS(100, false, REJECT_INVALID, "bad-orchard-bundle-authorization");
+        }
+        // FIXME: should the error text be "bad-issue-bundle" as it's not only about authorization?
+        if (!issueAuth.value()->validate()) {
+            return state.DoS(100, false, REJECT_INVALID, "bad-issue-bundle-authorization");
         }
 
         {
@@ -3103,11 +3117,13 @@ bool ConnectBlock(const CBlock& block, CValidationState& state, CBlockIndex* pin
     // proof verification is expensive, disable if possible
     auto verifier = fExpensiveChecks ? ProofVerifier::Strict() : ProofVerifier::Disabled();
 
-    // Disable Sapling and Orchard batch validation if possible.
+    // Disable Sapling, Orchard and Issue batch validation if possible.
     std::optional<rust::Box<sapling::BatchValidator>> saplingAuth = fExpensiveChecks ?
         std::optional(sapling::init_batch_validator(fCacheResults)) : std::nullopt;
     std::optional<rust::Box<orchard::BatchValidator>> orchardAuth = fExpensiveChecks ?
         std::optional(orchard::init_batch_validator(fCacheResults)) : std::nullopt;
+    std::optional<rust::Box<issue_bundle::BatchValidator>> issueAuth = fExpensiveChecks ?
+        std::optional(issue_bundle::init_batch_validator(fCacheResults)) : std::nullopt;
 
     // If in initial block download, and this block is an ancestor of a checkpoint,
     // and -ibdskiptxverification is set, disable all transaction checks.
@@ -3372,6 +3388,7 @@ bool ConnectBlock(const CBlock& block, CValidationState& state, CBlockIndex* pin
             view,
             saplingAuth,
             orchardAuth,
+            issueAuth,
             chainparams.GetConsensus(),
             consensusBranchId,
             chainparams.GetConsensus().NetworkUpgradeActive(pindex->nHeight, Consensus::UPGRADE_NU5),
@@ -3680,6 +3697,15 @@ bool ConnectBlock(const CBlock& block, CValidationState& state, CBlockIndex* pin
     if (orchardAuth.has_value() && !orchardAuth.value()->validate()) {
         return state.DoS(100,
             error("ConnectBlock(): an Orchard bundle within the block is invalid"),
+            REJECT_INVALID, "bad-orchard-bundle-authorization");
+    }
+
+    // Ensure Issue bundle is valid (if we are checking it)
+    if (issueAuth.has_value() && !issueAuth.value()->validate()) {
+        // FIXME: should the error text be "bad-issue-bundle" as it's not only about authorization?
+        // FIXME: add validation errotr message ....
+        return state.DoS(100,
+            error("ConnectBlock(): an Issue bundle within the block is invalid"),
             REJECT_INVALID, "bad-orchard-bundle-authorization");
     }
 

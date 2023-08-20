@@ -514,6 +514,7 @@ TEST(ContextualCheckShieldedInputsTest, BadTxnsInvalidJoinsplitSignature) {
     auto consensus = Params().GetConsensus();
     std::optional<rust::Box<sapling::BatchValidator>> saplingAuth = std::nullopt;
     std::optional<rust::Box<orchard::BatchValidator>> orchardAuth = std::nullopt;
+    std::optional<rust::Box<issue_bundle::BatchValidator>> issueAuth = std::nullopt;
 
     CMutableTransaction mtx = GetValidTransaction();
     mtx.joinSplitSig.bytes[0] += 1;
@@ -530,22 +531,25 @@ TEST(ContextualCheckShieldedInputsTest, BadTxnsInvalidJoinsplitSignature) {
     // during initial block download, for transactions being accepted into the
     // mempool (and thus not mined), DoS ban score should be zero, else 10
     EXPECT_CALL(state, DoS(0, false, REJECT_INVALID, "bad-txns-invalid-joinsplit-signature", false, "")).Times(1);
-    ContextualCheckShieldedInputs(tx, txdata, state, view, saplingAuth, orchardAuth, consensus, 0, false, false, [](const Consensus::Params&) { return true; });
+    ContextualCheckShieldedInputs(tx, txdata, state, view, saplingAuth, orchardAuth, issueAuth, consensus, 0, false, false, [](const Consensus::Params&) { return true; });
     EXPECT_CALL(state, DoS(10, false, REJECT_INVALID, "bad-txns-invalid-joinsplit-signature", false, "")).Times(1);
-    ContextualCheckShieldedInputs(tx, txdata, state, view, saplingAuth, orchardAuth, consensus, 0, false, false, [](const Consensus::Params&) { return false; });
+    ContextualCheckShieldedInputs(tx, txdata, state, view, saplingAuth, orchardAuth, issueAuth, consensus, 0, false, false, [](const Consensus::Params&) { return false; });
     // for transactions that have been mined in a block, DoS ban score should
     // always be 100.
     EXPECT_CALL(state, DoS(100, false, REJECT_INVALID, "bad-txns-invalid-joinsplit-signature", false, "")).Times(1);
-    ContextualCheckShieldedInputs(tx, txdata, state, view, saplingAuth, orchardAuth, consensus, 0, false, true, [](const Consensus::Params&) { return true; });
+    ContextualCheckShieldedInputs(tx, txdata, state, view, saplingAuth, orchardAuth, issueAuth, consensus, 0, false, true, [](const Consensus::Params&) { return true; });
     EXPECT_CALL(state, DoS(100, false, REJECT_INVALID, "bad-txns-invalid-joinsplit-signature", false, "")).Times(1);
-    ContextualCheckShieldedInputs(tx, txdata, state, view, saplingAuth, orchardAuth, consensus, 0, false, true, [](const Consensus::Params&) { return false; });
+    ContextualCheckShieldedInputs(tx, txdata, state, view, saplingAuth, orchardAuth, issueAuth, consensus, 0, false, true, [](const Consensus::Params&) { return false; });
 }
+
+// FIXME: add tests for issueAuth like orchardAuth
 
 TEST(ContextualCheckShieldedInputsTest, JoinsplitSignatureDetectsOldBranchId) {
     SelectParams(CBaseChainParams::REGTEST);
     auto consensus = Params().GetConsensus();
     std::optional<rust::Box<sapling::BatchValidator>> saplingAuth = std::nullopt;
     std::optional<rust::Box<orchard::BatchValidator>> orchardAuth = std::nullopt;
+    std::optional<rust::Box<issue_bundle::BatchValidator>> issueAuth = std::nullopt;
 
     auto saplingBranchId = NetworkUpgradeInfo[Consensus::UPGRADE_SAPLING].nBranchId;
     auto blossomBranchId = NetworkUpgradeInfo[Consensus::UPGRADE_BLOSSOM].nBranchId;
@@ -565,7 +569,7 @@ TEST(ContextualCheckShieldedInputsTest, JoinsplitSignatureDetectsOldBranchId) {
     CCoinsViewCache view(&baseView);
     // Ensure that the transaction validates against Sapling.
     EXPECT_TRUE(ContextualCheckShieldedInputs(
-        tx, txdata, state, view, saplingAuth, orchardAuth, consensus, saplingBranchId, false, false,
+        tx, txdata, state, view, saplingAuth, orchardAuth, issueAuth, consensus, saplingBranchId, false, false,
         [](const Consensus::Params&) { return false; }));
 
     // Attempt to validate the inputs against Blossom. We should be notified
@@ -577,7 +581,7 @@ TEST(ContextualCheckShieldedInputsTest, JoinsplitSignatureDetectsOldBranchId) {
             HexInt(saplingBranchId)),
         false, "")).Times(1);
     EXPECT_FALSE(ContextualCheckShieldedInputs(
-        tx, txdata, state, view, saplingAuth, orchardAuth, consensus, blossomBranchId, false, false,
+        tx, txdata, state, view, saplingAuth, orchardAuth, issueAuth, consensus, blossomBranchId, false, false,
         [](const Consensus::Params&) { return false; }));
 
     // Attempt to validate the inputs against Heartwood. All we should learn is
@@ -587,7 +591,7 @@ TEST(ContextualCheckShieldedInputsTest, JoinsplitSignatureDetectsOldBranchId) {
         10, false, REJECT_INVALID,
         "bad-txns-invalid-joinsplit-signature", false, "")).Times(1);
     EXPECT_FALSE(ContextualCheckShieldedInputs(
-        tx, txdata, state, view, saplingAuth, orchardAuth, consensus, heartwoodBranchId, false, false,
+        tx, txdata, state, view, saplingAuth, orchardAuth, issueAuth, consensus, heartwoodBranchId, false, false,
         [](const Consensus::Params&) { return false; }));
 }
 
@@ -596,6 +600,7 @@ TEST(ContextualCheckShieldedInputsTest, NonCanonicalEd25519Signature) {
     auto consensus = Params().GetConsensus();
     std::optional<rust::Box<sapling::BatchValidator>> saplingAuth = std::nullopt;
     std::optional<rust::Box<orchard::BatchValidator>> orchardAuth = std::nullopt;
+    std::optional<rust::Box<issue_bundle::BatchValidator>> issueAuth = std::nullopt;
 
     AssumeShieldedInputsExistAndAreSpendable baseView;
     CCoinsViewCache view(&baseView);
@@ -612,7 +617,7 @@ TEST(ContextualCheckShieldedInputsTest, NonCanonicalEd25519Signature) {
         CTransaction tx(mtx);
         const PrecomputedTransactionData txdata(tx, allPrevOutputs);
         MockCValidationState state;
-        EXPECT_TRUE(ContextualCheckShieldedInputs(tx, txdata, state, view, saplingAuth, orchardAuth, consensus, saplingBranchId, false, true));
+        EXPECT_TRUE(ContextualCheckShieldedInputs(tx, txdata, state, view, saplingAuth, orchardAuth, issueAuth, consensus, saplingBranchId, false, true));
     }
 
     // Copied from libsodium/crypto_sign/ed25519/ref10/open.c
@@ -636,15 +641,15 @@ TEST(ContextualCheckShieldedInputsTest, NonCanonicalEd25519Signature) {
     // during initial block download, for transactions being accepted into the
     // mempool (and thus not mined), DoS ban score should be zero, else 10
     EXPECT_CALL(state, DoS(0, false, REJECT_INVALID, "bad-txns-invalid-joinsplit-signature", false, "")).Times(1);
-    ContextualCheckShieldedInputs(tx, txdata, state, view, saplingAuth, orchardAuth, consensus, saplingBranchId, false, false, [](const Consensus::Params&) { return true; });
+    ContextualCheckShieldedInputs(tx, txdata, state, view, saplingAuth, orchardAuth, issueAuth, consensus, saplingBranchId, false, false, [](const Consensus::Params&) { return true; });
     EXPECT_CALL(state, DoS(10, false, REJECT_INVALID, "bad-txns-invalid-joinsplit-signature", false, "")).Times(1);
-    ContextualCheckShieldedInputs(tx, txdata, state, view, saplingAuth, orchardAuth, consensus, saplingBranchId, false, false, [](const Consensus::Params&) { return false; });
+    ContextualCheckShieldedInputs(tx, txdata, state, view, saplingAuth, orchardAuth, issueAuth, consensus, saplingBranchId, false, false, [](const Consensus::Params&) { return false; });
     // for transactions that have been mined in a block, DoS ban score should
     // always be 100.
     EXPECT_CALL(state, DoS(100, false, REJECT_INVALID, "bad-txns-invalid-joinsplit-signature", false, "")).Times(1);
-    ContextualCheckShieldedInputs(tx, txdata, state, view, saplingAuth, orchardAuth, consensus, saplingBranchId, false, true, [](const Consensus::Params&) { return true; });
+    ContextualCheckShieldedInputs(tx, txdata, state, view, saplingAuth, orchardAuth, issueAuth, consensus, saplingBranchId, false, true, [](const Consensus::Params&) { return true; });
     EXPECT_CALL(state, DoS(100, false, REJECT_INVALID, "bad-txns-invalid-joinsplit-signature", false, "")).Times(1);
-    ContextualCheckShieldedInputs(tx, txdata, state, view, saplingAuth, orchardAuth, consensus, saplingBranchId, false, true, [](const Consensus::Params&) { return false; });
+    ContextualCheckShieldedInputs(tx, txdata, state, view, saplingAuth, orchardAuth, issueAuth, consensus, saplingBranchId, false, true, [](const Consensus::Params&) { return false; });
 }
 
 TEST(ChecktransactionTests, OverwinterConstructors) {
@@ -1290,6 +1295,7 @@ TEST(ChecktransactionTests, HeartwoodEnforcesSaplingRulesOnShieldedCoinbase) {
 
     std::optional<rust::Box<sapling::BatchValidator>> saplingAuth = sapling::init_batch_validator(false);
     std::optional<rust::Box<orchard::BatchValidator>> orchardAuth = std::nullopt;
+    std::optional<rust::Box<issue_bundle::BatchValidator>> issueAuth = std::nullopt;
     auto heartwoodBranchId = NetworkUpgradeInfo[Consensus::UPGRADE_HEARTWOOD].nBranchId;
 
     // Coinbase transaction does not pass shielded input checks, as bindingSig
@@ -1303,7 +1309,7 @@ TEST(ChecktransactionTests, HeartwoodEnforcesSaplingRulesOnShieldedCoinbase) {
     AssumeShieldedInputsExistAndAreSpendable baseView;
     CCoinsViewCache view(&baseView);
     EXPECT_TRUE(ContextualCheckShieldedInputs(
-        tx, txdata, state, view, saplingAuth, orchardAuth, chainparams.GetConsensus(), heartwoodBranchId, false, true));
+        tx, txdata, state, view, saplingAuth, orchardAuth, issueAuth, chainparams.GetConsensus(), heartwoodBranchId, false, true));
     EXPECT_FALSE(saplingAuth.value()->validate());
 
     RegtestDeactivateHeartwood();

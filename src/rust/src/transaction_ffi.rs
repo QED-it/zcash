@@ -150,6 +150,7 @@ impl Authorization for PrecomputedAuth {
     type TransparentAuth = TransparentAuth;
     type SaplingAuth = sapling::Authorized;
     type OrchardAuth = orchard::bundle::Authorized;
+    // FIXME: add IssueAuth?
 }
 
 pub struct PrecomputedTxParts {

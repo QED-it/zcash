@@ -14,6 +14,7 @@ use crate::{
         create_issue_bundle, issue_bundle_from_raw_box, none_issue_bundle, parse_issue_bundle,
         IssueAction, IssueBundle, IssueNote,
     },
+    issue_ffi::{issue_batch_validation_init, BatchValidator as IssueBatchValidator},
     merkle_frontier::{new_orchard, orchard_empty_root, parse_orchard, Orchard, OrchardWallet},
     note_encryption::{
         try_sapling_note_decryption, try_sapling_output_recovery, DecryptedSaplingOutput,
@@ -353,6 +354,16 @@ pub(crate) mod ffi {
         fn num_actions(self: &IssueBundle) -> usize;
         fn num_notes(self: &IssueBundle) -> usize;
         fn authorization(self: &IssueBundle) -> [u8; 64]; // Assumption is that we only need auth for IssueBundle<Signed> here, ignoring empty for Unauthorized and sighash for Prepared
+    }
+
+    #[namespace = "issue_bundle"]
+    extern "Rust" {
+        #[cxx_name = "BatchValidator"]
+        type IssueBatchValidator;
+        #[cxx_name = "init_batch_validator"]
+        fn issue_batch_validation_init(cache_store: bool) -> Box<IssueBatchValidator>;
+        fn add_bundle(self: &mut IssueBatchValidator, bundle: Box<IssueBundle>, sighash: [u8; 32]);
+        fn validate(self: &mut IssueBatchValidator) -> bool;
     }
 
     #[namespace = "orchard"]

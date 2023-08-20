@@ -357,6 +357,7 @@ void test_simple_joinsplit_invalidity(uint32_t consensusBranchId, CMutableTransa
     auto verifier = ProofVerifier::Strict();
     std::optional<rust::Box<sapling::BatchValidator>> saplingAuth = std::nullopt;
     std::optional<rust::Box<orchard::BatchValidator>> orchardAuth = std::nullopt;
+    std::optional<rust::Box<issue_bundle::BatchValidator>> issueAuth = std::nullopt;
     {
         // Ensure that empty vin/vout remain invalid without
         // joinsplits.
@@ -393,7 +394,7 @@ void test_simple_joinsplit_invalidity(uint32_t consensusBranchId, CMutableTransa
         BOOST_CHECK(!ContextualCheckShieldedInputs(
             newTx, txdata,
             state, view,
-            saplingAuth, orchardAuth,
+            saplingAuth, orchardAuth, issueAuth,
             Params().GetConsensus(),
             consensusBranchId,
             false, true));
@@ -415,7 +416,7 @@ void test_simple_joinsplit_invalidity(uint32_t consensusBranchId, CMutableTransa
         BOOST_CHECK(ContextualCheckShieldedInputs(
             newTx, txdata,
             state, view,
-            saplingAuth, orchardAuth,
+            saplingAuth, orchardAuth, issueAuth,
             Params().GetConsensus(),
             consensusBranchId,
             false, true));

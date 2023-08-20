@@ -181,6 +181,15 @@
         const size_t GetNumActions() const {
             return inner->num_actions();
         }
+
+        /// Queues this bundle's authorization for validation.
+        ///
+        /// `sighash` must be for the transaction this bundle is within.
+        void QueueAuthValidation(
+            issue_bundle::BatchValidator& batch, const uint256& sighash) const
+        {
+            batch.add_bundle(inner->box_clone(), sighash.GetRawBytes());
+        }
     };
 
 #endif // ZCASH_PRIMITIVES_ISSUE_H

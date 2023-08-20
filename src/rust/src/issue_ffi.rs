@@ -10,6 +10,10 @@ use std::{ptr, slice};
 use tracing::error;
 use zcash_primitives::transaction::components::issuance as issuance_serialization;
 
+mod batch_validator;
+
+pub use batch_validator::{issue_batch_validation_init, BatchValidator};
+
 #[no_mangle]
 pub extern "C" fn issuance_key_to_issuance_authorizing_key(
     key: *const IssuanceKey,

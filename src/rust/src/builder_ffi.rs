@@ -240,6 +240,7 @@ pub(crate) fn shielded_signature_digest(
         type TransparentAuth = TransparentAuth;
         type SaplingAuth = sapling::builder::Unauthorized;
         type OrchardAuth = InProgress<Unproven, Unauthorized>;
+        // FIXME: add IssueAuth?
     }
 
     let txdata: TransactionData<Signable> = tx.into_data().map_bundles(
